@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { Radio } from "lucide-react";
 
 const linkClass =
-  "font-display text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:text-foreground";
+  "font-display text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:text-foreground data-[status=active]:text-primary";
 
 export function TopNav() {
   return (
@@ -12,10 +12,10 @@ export function TopNav() {
           Fungo <span className="text-primary">Disco</span>
         </Link>
         <nav className="flex items-center gap-5">
-          <Link to="/" className={linkClass} activeProps={{ className: "text-primary" }} activeOptions={{ exact: true }}>
+          <Link to="/" className={linkClass} activeOptions={{ exact: true }}>
             Personagens
           </Link>
-          <Link to="/mestre" className={linkClass} activeProps={{ className: "text-primary" }}>
+          <Link to="/mestre" className={linkClass}>
             Painel do mestre
           </Link>
           <span className="hidden items-center gap-1.5 text-xs text-success sm:flex" title="Tudo atualiza ao vivo para todos">
