@@ -85,31 +85,40 @@ export type Database = {
         Row: {
           concept: string
           created_at: string
+          fisico: number
           id: string
           intelecto: number
+          motor: number
           name: string
           notes: string
           player_name: string
+          psique: number
           updated_at: string
         }
         Insert: {
           concept?: string
           created_at?: string
+          fisico?: number
           id?: string
           intelecto?: number
+          motor?: number
           name: string
           notes?: string
           player_name?: string
+          psique?: number
           updated_at?: string
         }
         Update: {
           concept?: string
           created_at?: string
+          fisico?: number
           id?: string
           intelecto?: number
+          motor?: number
           name?: string
           notes?: string
           player_name?: string
+          psique?: number
           updated_at?: string
         }
         Relationships: []
