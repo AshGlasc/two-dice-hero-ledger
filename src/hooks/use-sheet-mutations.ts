@@ -11,7 +11,10 @@ import {
 } from "@/lib/rpg-queries";
 
 type CharacterPatch = Partial<
-  Pick<Character, "name" | "player_name" | "concept" | "notes" | "intelecto">
+  Pick<
+    Character,
+    "name" | "player_name" | "concept" | "notes" | "intelecto" | "psique" | "fisico" | "motor"
+  >
 >;
 type WeaponInput = Pick<Weapon, "name" | "weapon_type" | "damage" | "ammo" | "notes">;
 type BackpackInput = Pick<BackpackItem, "name" | "quantity" | "notes">;
@@ -41,7 +44,10 @@ export function useSheetMutations(characterId: string) {
       onSaveError(e);
       refresh();
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["characters"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["characters"] });
+      qc.invalidateQueries({ queryKey: ["group"] });
+    },
   });
 
   const setSkillBonus = useMutation({
