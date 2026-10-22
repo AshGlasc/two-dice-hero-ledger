@@ -20,6 +20,12 @@ const buttonVariants = cva(
           "bg-primary text-primary-foreground font-display uppercase tracking-[0.14em] font-semibold shadow-paint hover:shadow-glow hover:brightness-110",
         intellect:
           "bg-intellect text-intellect-foreground font-display uppercase tracking-[0.12em] font-semibold hover:brightness-110",
+        psyche:
+          "bg-psyche text-psyche-foreground font-display uppercase tracking-[0.12em] font-semibold hover:brightness-110",
+        physique:
+          "bg-physique text-physique-foreground font-display uppercase tracking-[0.12em] font-semibold hover:brightness-110",
+        motorics:
+          "bg-motorics text-motorics-foreground font-display uppercase tracking-[0.12em] font-semibold hover:brightness-110",
         stepper:
           "border border-border bg-secondary text-secondary-foreground font-display text-base hover:border-primary hover:text-primary",
       },
