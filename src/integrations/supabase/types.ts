@@ -14,7 +14,147 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      backpack_items: {
+        Row: {
+          character_id: string
+          created_at: string
+          id: string
+          name: string
+          notes: string
+          quantity: number
+        }
+        Insert: {
+          character_id: string
+          created_at?: string
+          id?: string
+          name: string
+          notes?: string
+          quantity?: number
+        }
+        Update: {
+          character_id?: string
+          created_at?: string
+          id?: string
+          name?: string
+          notes?: string
+          quantity?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "backpack_items_character_id_fkey"
+            columns: ["character_id"]
+            isOneToOne: false
+            referencedRelation: "characters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      character_skills: {
+        Row: {
+          bonus: number
+          character_id: string
+          id: string
+          skill_key: string
+          updated_at: string
+        }
+        Insert: {
+          bonus?: number
+          character_id: string
+          id?: string
+          skill_key: string
+          updated_at?: string
+        }
+        Update: {
+          bonus?: number
+          character_id?: string
+          id?: string
+          skill_key?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "character_skills_character_id_fkey"
+            columns: ["character_id"]
+            isOneToOne: false
+            referencedRelation: "characters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      characters: {
+        Row: {
+          concept: string
+          created_at: string
+          id: string
+          intelecto: number
+          name: string
+          notes: string
+          player_name: string
+          updated_at: string
+        }
+        Insert: {
+          concept?: string
+          created_at?: string
+          id?: string
+          intelecto?: number
+          name: string
+          notes?: string
+          player_name?: string
+          updated_at?: string
+        }
+        Update: {
+          concept?: string
+          created_at?: string
+          id?: string
+          intelecto?: number
+          name?: string
+          notes?: string
+          player_name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      weapons: {
+        Row: {
+          ammo: string
+          character_id: string
+          created_at: string
+          damage: string
+          id: string
+          name: string
+          notes: string
+          weapon_type: string
+        }
+        Insert: {
+          ammo?: string
+          character_id: string
+          created_at?: string
+          damage?: string
+          id?: string
+          name: string
+          notes?: string
+          weapon_type?: string
+        }
+        Update: {
+          ammo?: string
+          character_id?: string
+          created_at?: string
+          damage?: string
+          id?: string
+          name?: string
+          notes?: string
+          weapon_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "weapons_character_id_fkey"
+            columns: ["character_id"]
+            isOneToOne: false
+            referencedRelation: "characters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
