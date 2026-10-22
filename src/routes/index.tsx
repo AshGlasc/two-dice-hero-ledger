@@ -4,21 +4,24 @@ import { ChevronRight, Users } from "lucide-react";
 
 import heroImage from "@/assets/hero-harbor.jpg";
 import { NewCharacterDialog } from "@/components/rpg/NewCharacterDialog";
+import { ATTRIBUTE_THEME } from "@/lib/attribute-theme";
 import { charactersQuery } from "@/lib/rpg-queries";
+import { ATTRIBUTES } from "@/lib/skills";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Arquivo de Personagens — Fichas de RPG" },
+      { title: "Fungo Disco — Fichas de RPG" },
       {
         name: "description",
         content:
-          "Fichas de RPG no estilo Disco Elysium: atributos, skills com rolagem 2d6, arsenal de armas e mochila de cada jogador.",
+          "Fungo Disco: fichas de RPG no estilo Disco Elysium com skills, rolagem 2d6, corpo, armas e mochila, tudo ao vivo para a mesa.",
       },
-      { property: "og:title", content: "Arquivo de Personagens — Fichas de RPG" },
+      { property: "og:title", content: "Fungo Disco — Fichas de RPG" },
       {
         property: "og:description",
-        content: "Guarde personagens, skills, armas e mochila de cada jogador da mesa.",
+        content: "Personagens, skills, armas e mochila de cada jogador, sincronizados ao vivo.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -42,13 +45,14 @@ function Index() {
           className="absolute inset-0 -z-10 h-full w-full object-cover"
         />
         <div className="absolute inset-0 -z-10 bg-hero-fade" />
-        <div className="mx-auto flex min-h-[460px] max-w-6xl flex-col justify-end px-6 pb-12 pt-24">
-          <p className="label-caps text-primary">Mesa de RPG</p>
-          <h1 className="mt-2 max-w-3xl text-6xl font-bold uppercase leading-[0.9] md:text-8xl">
-            Arquivo de personagens
+        <div className="mx-auto flex min-h-[440px] max-w-6xl flex-col justify-end px-6 pb-12 pt-20">
+          <p className="label-caps text-primary">Arquivo de personagens</p>
+          <h1 className="mt-2 max-w-3xl text-7xl font-bold uppercase leading-[0.85] md:text-9xl">
+            Fungo Disco
           </h1>
           <p className="mt-4 max-w-xl text-lg text-foreground/85">
-            Cada ficha guarda atributos, skills, armas e a mochila do jogador.
+            Cada ficha guarda atributos, skills, corpo, armas e a mochila do jogador — ao vivo
+            para toda a mesa.
           </p>
           <div className="mt-8">
             <NewCharacterDialog />
@@ -88,10 +92,24 @@ function Index() {
                       <p className="mt-2 text-sm italic text-muted-foreground">{c.concept}</p>
                     )}
                   </div>
-                  <div className="mt-6 flex items-center justify-between">
-                    <span className="rounded-sm bg-intellect-soft px-2 py-1 font-display text-sm font-semibold uppercase tracking-wider text-intellect">
-                      Intelecto {c.intelecto}
-                    </span>
+                  <div className="mt-6 flex items-end justify-between gap-2">
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {ATTRIBUTES.map((a) => {
+                        const theme = ATTRIBUTE_THEME[a.key];
+                        return (
+                          <span
+                            key={a.key}
+                            title={a.name}
+                            className={cn("rounded-sm px-2 py-1 text-center font-display font-semibold", theme.soft, theme.text)}
+                          >
+                            <span className="block text-[10px] uppercase tracking-wider">
+                              {a.name.slice(0, 3)}
+                            </span>
+                            <span className="tabular text-lg leading-none">{c[a.key]}</span>
+                          </span>
+                        );
+                      })}
+                    </div>
                     <ChevronRight className="size-5 text-muted-foreground transition-transform group-hover:translate-x-1 group-hover:text-primary" />
                   </div>
                 </Link>

@@ -10,11 +10,17 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as MestreRouteImport } from './routes/mestre'
 import { Route as PersonagemIdRouteImport } from './routes/personagem.$id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MestreRoute = MestreRouteImport.update({
+  id: '/mestre',
+  path: '/mestre',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PersonagemIdRoute = PersonagemIdRouteImport.update({
@@ -25,27 +31,31 @@ const PersonagemIdRoute = PersonagemIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/mestre': typeof MestreRoute
   '/personagem/$id': typeof PersonagemIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/mestre': typeof MestreRoute
   '/personagem/$id': typeof PersonagemIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/mestre': typeof MestreRoute
   '/personagem/$id': typeof PersonagemIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/personagem/$id'
+  fullPaths: '/' | '/mestre' | '/personagem/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/personagem/$id'
-  id: '__root__' | '/' | '/personagem/$id'
+  to: '/' | '/mestre' | '/personagem/$id'
+  id: '__root__' | '/' | '/mestre' | '/personagem/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  MestreRoute: typeof MestreRoute
   PersonagemIdRoute: typeof PersonagemIdRoute
 }
 
@@ -56,6 +66,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/mestre': {
+      id: '/mestre'
+      path: '/mestre'
+      fullPath: '/mestre'
+      preLoaderRoute: typeof MestreRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/personagem/$id': {
@@ -70,6 +87,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  MestreRoute: MestreRoute,
   PersonagemIdRoute: PersonagemIdRoute,
 }
 export const routeTree = rootRouteImport

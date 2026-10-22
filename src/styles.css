@@ -43,6 +43,17 @@
   --color-intellect: var(--intellect);
   --color-intellect-foreground: var(--intellect-foreground);
   --color-intellect-soft: var(--intellect-soft);
+  --color-psyche: var(--psyche);
+  --color-psyche-foreground: var(--psyche-foreground);
+  --color-psyche-soft: var(--psyche-soft);
+  --color-physique: var(--physique);
+  --color-physique-foreground: var(--physique-foreground);
+  --color-physique-soft: var(--physique-soft);
+  --color-motorics: var(--motorics);
+  --color-motorics-foreground: var(--motorics-foreground);
+  --color-motorics-soft: var(--motorics-soft);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -97,6 +108,17 @@
   --intellect: oklch(0.7 0.11 230);
   --intellect-foreground: oklch(0.16 0.02 240);
   --intellect-soft: oklch(0.28 0.05 235);
+  --psyche: oklch(0.66 0.16 320);
+  --psyche-foreground: oklch(0.16 0.03 320);
+  --psyche-soft: oklch(0.28 0.06 320);
+  --physique: oklch(0.6 0.17 25);
+  --physique-foreground: oklch(0.96 0.02 85);
+  --physique-soft: oklch(0.28 0.06 25);
+  --motorics: oklch(0.82 0.14 92);
+  --motorics-foreground: oklch(0.18 0.03 90);
+  --motorics-soft: oklch(0.3 0.05 92);
+  --warning: oklch(0.84 0.16 95);
+  --warning-foreground: oklch(0.18 0.03 90);
   --border: oklch(0.33 0.016 60);
   --input: oklch(0.33 0.016 60);
   --ring: oklch(0.68 0.16 45);
@@ -169,6 +191,18 @@
 
 @utility bg-intellect-panel {
   background-image: var(--gradient-intellect);
+}
+
+@utility bg-psyche-panel {
+  background-image: linear-gradient(135deg, color-mix(in oklab, var(--psyche) 20%, var(--card)) 0%, var(--card) 70%);
+}
+
+@utility bg-physique-panel {
+  background-image: linear-gradient(135deg, color-mix(in oklab, var(--physique) 20%, var(--card)) 0%, var(--card) 70%);
+}
+
+@utility bg-motorics-panel {
+  background-image: linear-gradient(135deg, color-mix(in oklab, var(--motorics) 16%, var(--card)) 0%, var(--card) 70%);
 }
 
 @utility shadow-paint {

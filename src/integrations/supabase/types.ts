@@ -49,6 +49,38 @@ export type Database = {
           },
         ]
       }
+      body_parts: {
+        Row: {
+          character_id: string
+          id: string
+          part_key: string
+          state: number
+          updated_at: string
+        }
+        Insert: {
+          character_id: string
+          id?: string
+          part_key: string
+          state?: number
+          updated_at?: string
+        }
+        Update: {
+          character_id?: string
+          id?: string
+          part_key?: string
+          state?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "body_parts_character_id_fkey"
+            columns: ["character_id"]
+            isOneToOne: false
+            referencedRelation: "characters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       character_skills: {
         Row: {
           bonus: number
@@ -85,34 +117,114 @@ export type Database = {
         Row: {
           concept: string
           created_at: string
+          fisico: number
           id: string
           intelecto: number
+          motor: number
           name: string
           notes: string
           player_name: string
+          psique: number
           updated_at: string
         }
         Insert: {
           concept?: string
           created_at?: string
+          fisico?: number
           id?: string
           intelecto?: number
+          motor?: number
           name: string
           notes?: string
           player_name?: string
+          psique?: number
           updated_at?: string
         }
         Update: {
           concept?: string
           created_at?: string
+          fisico?: number
           id?: string
           intelecto?: number
+          motor?: number
           name?: string
           notes?: string
           player_name?: string
+          psique?: number
           updated_at?: string
         }
         Relationships: []
+      }
+      gm_notes: {
+        Row: {
+          content: string
+          id: number
+          updated_at: string
+        }
+        Insert: {
+          content?: string
+          id?: number
+          updated_at?: string
+        }
+        Update: {
+          content?: string
+          id?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      rolls: {
+        Row: {
+          character_id: string | null
+          character_name: string
+          created_at: string
+          die1: number
+          die2: number
+          difficulty: number | null
+          hidden: boolean
+          id: string
+          label: string
+          modifier: number
+          outcome: string
+          total: number
+        }
+        Insert: {
+          character_id?: string | null
+          character_name?: string
+          created_at?: string
+          die1: number
+          die2: number
+          difficulty?: number | null
+          hidden?: boolean
+          id?: string
+          label: string
+          modifier?: number
+          outcome: string
+          total: number
+        }
+        Update: {
+          character_id?: string | null
+          character_name?: string
+          created_at?: string
+          die1?: number
+          die2?: number
+          difficulty?: number | null
+          hidden?: boolean
+          id?: string
+          label?: string
+          modifier?: number
+          outcome?: string
+          total?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rolls_character_id_fkey"
+            columns: ["character_id"]
+            isOneToOne: false
+            referencedRelation: "characters"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       weapons: {
         Row: {

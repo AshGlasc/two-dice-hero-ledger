@@ -8,6 +8,20 @@
       "when": 1792633263716,
       "tag": "0000_migration",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792634224386,
+      "tag": "0001_add_attributes_and_realtime",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792634382138,
+      "tag": "0002_body_parts_rolls_gm_notes",
+      "breakpoints": true
     }
   ]
 }
