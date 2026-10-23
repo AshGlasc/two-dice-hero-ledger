@@ -138,7 +138,7 @@ export function SkillsSection({ sheet, mutations }: { sheet: CharacterSheet; mut
                         <h3 className="text-xl font-semibold uppercase text-foreground">
                           {skill.name}
                         </h3>
-                        <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                        <p className="mt-1 line-clamp-2 text-sm leading-relaxed text-muted-foreground md:line-clamp-none">
                           {skill.description}
                         </p>
                       </div>
