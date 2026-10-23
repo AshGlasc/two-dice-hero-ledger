@@ -155,6 +155,101 @@ export type Database = {
         }
         Relationships: []
       }
+      combat_state: {
+        Row: {
+          active: boolean
+          current_combatant_id: string | null
+          id: number
+          round: number
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          current_combatant_id?: string | null
+          id?: number
+          round?: number
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          current_combatant_id?: string | null
+          id?: number
+          round?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "combat_state_current_combatant_id_fkey"
+            columns: ["current_combatant_id"]
+            isOneToOne: false
+            referencedRelation: "combatants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      combatants: {
+        Row: {
+          attack_bonus: number
+          character_id: string | null
+          conditions: string[]
+          created_at: string
+          defense: number | null
+          hp_current: number | null
+          hp_max: number | null
+          id: string
+          initiative: number | null
+          initiative_bonus: number
+          kind: string
+          monster_id: string | null
+          name: string
+        }
+        Insert: {
+          attack_bonus?: number
+          character_id?: string | null
+          conditions?: string[]
+          created_at?: string
+          defense?: number | null
+          hp_current?: number | null
+          hp_max?: number | null
+          id?: string
+          initiative?: number | null
+          initiative_bonus?: number
+          kind: string
+          monster_id?: string | null
+          name: string
+        }
+        Update: {
+          attack_bonus?: number
+          character_id?: string | null
+          conditions?: string[]
+          created_at?: string
+          defense?: number | null
+          hp_current?: number | null
+          hp_max?: number | null
+          id?: string
+          initiative?: number | null
+          initiative_bonus?: number
+          kind?: string
+          monster_id?: string | null
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "combatants_character_id_fkey"
+            columns: ["character_id"]
+            isOneToOne: false
+            referencedRelation: "characters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "combatants_monster_id_fkey"
+            columns: ["monster_id"]
+            isOneToOne: false
+            referencedRelation: "monsters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       gm_notes: {
         Row: {
           content: string
@@ -170,6 +265,45 @@ export type Database = {
           content?: string
           id?: number
           updated_at?: string
+        }
+        Relationships: []
+      }
+      monsters: {
+        Row: {
+          abilities: string
+          attack_bonus: number
+          attacks: string
+          created_at: string
+          defense: number
+          description: string
+          hp_max: number
+          id: string
+          initiative_bonus: number
+          name: string
+        }
+        Insert: {
+          abilities?: string
+          attack_bonus?: number
+          attacks?: string
+          created_at?: string
+          defense?: number
+          description?: string
+          hp_max?: number
+          id?: string
+          initiative_bonus?: number
+          name: string
+        }
+        Update: {
+          abilities?: string
+          attack_bonus?: number
+          attacks?: string
+          created_at?: string
+          defense?: number
+          description?: string
+          hp_max?: number
+          id?: string
+          initiative_bonus?: number
+          name?: string
         }
         Relationships: []
       }

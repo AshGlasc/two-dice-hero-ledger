@@ -8,3 +8,6 @@
 - [x] Corpo do personagem com membros clicáveis (normal → amarelo → vermelho → normal), salvo e ao vivo
 - [x] Ferramentas do mestre: painel do mestre com visão do grupo, teste em grupo, rolagens ao vivo de todos, notas do mestre
 - [x] Descrição de Sugestão confirmada
+- [ ] Bestiário: criar/editar perfis de monstros (PV, defesa, ataque, iniciativa, ataques, habilidades)
+- [ ] Combate: montar encontro (jogadores + monstros), iniciativa, turnos/rodadas, ataques, dano, condições — ao vivo para todos
+- [ ] Rolagens visíveis para todos: aviso na tela de todo mundo + gaveta de rolagens em qualquer página

@@ -105,3 +105,42 @@ export const gmNotesQuery = queryOptions({
     return data?.content ?? "";
   },
 });
+
+export type Monster = Tables["monsters"]["Row"];
+export type Combatant = Tables["combatants"]["Row"];
+export type CombatState = Tables["combat_state"]["Row"];
+
+export const monstersQuery = queryOptions({
+  queryKey: ["monsters"],
+  queryFn: async () => {
+    const { data, error } = await supabase
+      .from("monsters")
+      .select("*")
+      .order("created_at", { ascending: true });
+    if (error) throw error;
+    return data;
+  },
+});
+
+export type CombatData = { state: CombatState; combatants: Combatant[] };
+
+export const EMPTY_COMBAT_STATE: CombatState = {
+  id: 1,
+  active: false,
+  round: 1,
+  current_combatant_id: null,
+  updated_at: "",
+};
+
+export const combatQuery = queryOptions({
+  queryKey: ["combat"],
+  queryFn: async (): Promise<CombatData> => {
+    const [state, combatants] = await Promise.all([
+      supabase.from("combat_state").select("*").eq("id", 1).maybeSingle(),
+      supabase.from("combatants").select("*").order("created_at", { ascending: true }),
+    ]);
+    if (state.error) throw state.error;
+    if (combatants.error) throw combatants.error;
+    return { state: state.data ?? EMPTY_COMBAT_STATE, combatants: combatants.data ?? [] };
+  },
+});
