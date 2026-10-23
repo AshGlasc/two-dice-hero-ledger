@@ -1,6 +1,21 @@
 import { describe, expect, it } from "vitest";
 
-import { resolveRoll, skillTotal } from "./skills";
+import { ALL_SKILLS, ATTRIBUTES, nextBodyState, resolveRoll, skillTotal } from "./skills";
+
+describe("corpo", () => {
+  it("clique: normal → amarelo → vermelho → normal", () => {
+    expect(nextBodyState(0)).toBe(1);
+    expect(nextBodyState(1)).toBe(2);
+    expect(nextBodyState(2)).toBe(0);
+  });
+});
+
+describe("atributos", () => {
+  it("tem Intelecto, Psique, Físico e Motor com 24 skills", () => {
+    expect(ATTRIBUTES.map((a) => a.key)).toEqual(["intelecto", "psique", "fisico", "motor"]);
+    expect(ALL_SKILLS).toHaveLength(24);
+  });
+});
 
 describe("skills", () => {
   it("base da subskill é igual ao atributo, somando pontos extras", () => {
