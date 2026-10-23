@@ -144,3 +144,23 @@ export const combatQuery = queryOptions({
     return { state: state.data ?? EMPTY_COMBAT_STATE, combatants: combatants.data ?? [] };
   },
 });
+
+export type BattleMap = Tables["battle_map"]["Row"];
+
+export const EMPTY_MAP: BattleMap = {
+  id: 1,
+  cols: 16,
+  rows: 12,
+  background_url: "",
+  terrain: {},
+  updated_at: "",
+};
+
+export const battleMapQuery = queryOptions({
+  queryKey: ["battle_map"],
+  queryFn: async (): Promise<BattleMap> => {
+    const { data, error } = await supabase.from("battle_map").select("*").eq("id", 1).maybeSingle();
+    if (error) throw error;
+    return data ?? EMPTY_MAP;
+  },
+});
