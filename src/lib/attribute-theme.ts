@@ -22,6 +22,8 @@ import velocidade_reacao from "@/assets/skills/velocidade_reacao.jpg";
 import percepcao from "@/assets/skills/percepcao.jpg";
 import interacao from "@/assets/skills/interacao.jpg";
 import compostura from "@/assets/skills/compostura.jpg";
+import autoridade from "@/assets/skills/autoridade.jpg";
+import mao_leve from "@/assets/skills/mao_leve.jpg";
 
 /** Retrato pintado de cada skill. Skills sem retrato usam um ícone desenhado. */
 export const SKILL_ICONS: Record<string, string | undefined> = {
@@ -47,6 +49,8 @@ export const SKILL_ICONS: Record<string, string | undefined> = {
   percepcao,
   interacao,
   compostura,
+  autoridade,
+  mao_leve,
 };
 
 type Theme = {
