@@ -1,12 +1,12 @@
 import { Link } from "@tanstack/react-router";
-import { Dices, Map, Radio, Skull, Theater, Users } from "lucide-react";
+import { Map as MapIcon, Radio, Skull, Theater, Users } from "lucide-react";
 
 import { RollDrawer } from "@/components/rpg/RollDrawer";
 
 const LINKS = [
   { to: "/", label: "Personagens", short: "Fichas", icon: Users, exact: true },
   { to: "/bestiario", label: "Bestiário", short: "Monstros", icon: Skull, exact: false },
-  { to: "/combate", label: "Combate", short: "Combate", icon: Map, exact: false },
+  { to: "/combate", label: "Combate", short: "Combate", icon: MapIcon, exact: false },
   { to: "/mestre", label: "Mestre", short: "Mestre", icon: Theater, exact: false },
 ] as const;
 
@@ -57,5 +57,3 @@ export function TopNav() {
     </>
   );
 }
-
-export { Dices };

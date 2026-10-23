@@ -11,6 +11,7 @@ import {
 import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
+import { RollBurst } from "@/components/rpg/RollBurst";
 import { TopNav } from "@/components/rpg/TopNav";
 import { Toaster } from "@/components/ui/sonner";
 import { useRealtimeSync } from "@/hooks/use-realtime-sync";
@@ -135,8 +136,11 @@ function RootComponent() {
       <RealtimeSync />
       <TopNav />
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <Outlet />
-      <Toaster position="bottom-center" theme="dark" />
+      <div className="pb-20 md:pb-0">
+        <Outlet />
+      </div>
+      <RollBurst />
+      <Toaster position="top-center" theme="dark" />
     </QueryClientProvider>
   );
 }
