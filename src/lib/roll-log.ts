@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { emitRoll } from "@/lib/roll-burst";
 import type { RollResult } from "@/lib/skills";
 
 // Rolagens feitas nesta aba: não mostramos aviso de novo para quem acabou de rolar.
@@ -33,6 +34,16 @@ export async function logRolls(
       signature(e.characterName, e.label, e.result.dice[0], e.result.dice[1], e.result.total),
       Date.now() + 15000,
     );
+    emitRoll({
+      name: e.characterName,
+      label: e.label,
+      die1: e.result.dice[0],
+      die2: e.result.dice[1],
+      modifier: e.result.modifier,
+      total: e.result.total,
+      difficulty: e.result.difficulty,
+      outcome: e.result.outcome,
+    });
   }
   const { error } = await supabase.from("rolls").insert(
     entries.map((e) => ({
