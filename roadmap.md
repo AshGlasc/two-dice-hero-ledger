@@ -7,4 +7,4 @@
 - [x] Renomear o app para "Fungo Disco"
 - [x] Corpo do personagem com membros clicáveis (normal → amarelo → vermelho → normal), salvo e ao vivo
 - [x] Ferramentas do mestre: painel do mestre com visão do grupo, teste em grupo, rolagens ao vivo de todos, notas do mestre
-- [ ] Confirmar descrição de Sugestão ("…ser manipulado") com o usuário
+- [x] Descrição de Sugestão confirmada
