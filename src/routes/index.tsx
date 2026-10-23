@@ -3,6 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { ChevronRight, Users } from "lucide-react";
 
 import heroImage from "@/assets/hero-harbor.jpg";
+import { Avatar } from "@/components/rpg/AvatarUpload";
 import { NewCharacterDialog } from "@/components/rpg/NewCharacterDialog";
 import { ATTRIBUTE_THEME } from "@/lib/attribute-theme";
 import { charactersQuery } from "@/lib/rpg-queries";
@@ -47,7 +48,7 @@ function Index() {
         <div className="absolute inset-0 -z-10 bg-hero-fade" />
         <div className="mx-auto flex min-h-[440px] max-w-6xl flex-col justify-end px-6 pb-12 pt-20">
           <p className="label-caps text-primary">Arquivo de personagens</p>
-          <h1 className="mt-2 max-w-3xl text-7xl font-bold uppercase leading-[0.85] md:text-9xl">
+          <h1 className="mt-2 max-w-3xl text-6xl font-bold uppercase leading-[0.85] md:text-9xl">
             Fungo Disco
           </h1>
           <p className="mt-4 max-w-xl text-lg text-foreground/85">
@@ -81,16 +82,19 @@ function Index() {
                   params={{ id: c.id }}
                   className="group flex h-full flex-col justify-between rounded-lg border border-border bg-card p-5 shadow-paint transition-colors hover:border-primary"
                 >
-                  <div>
+                  <div className="flex items-start gap-4">
+                  <Avatar src={c.avatar_url} name={c.name} className="size-14 text-lg" />
+                  <div className="min-w-0">
                     <p className="label-caps text-muted-foreground">
                       {c.player_name ? `Jogador: ${c.player_name}` : "Sem jogador"}
                     </p>
-                    <h3 className="mt-1 text-3xl font-bold uppercase leading-none group-hover:text-primary">
+                    <h3 className="mt-1 truncate text-3xl font-bold uppercase leading-none group-hover:text-primary">
                       {c.name}
                     </h3>
                     {c.concept && (
                       <p className="mt-2 text-sm italic text-muted-foreground">{c.concept}</p>
                     )}
+                  </div>
                   </div>
                   <div className="mt-6 flex items-end justify-between gap-2">
                     <div className="grid grid-cols-4 gap-1.5">
