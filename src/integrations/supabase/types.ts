@@ -49,6 +49,33 @@ export type Database = {
           },
         ]
       }
+      battle_map: {
+        Row: {
+          background_url: string
+          cols: number
+          id: number
+          rows: number
+          terrain: Json
+          updated_at: string
+        }
+        Insert: {
+          background_url?: string
+          cols?: number
+          id?: number
+          rows?: number
+          terrain?: Json
+          updated_at?: string
+        }
+        Update: {
+          background_url?: string
+          cols?: number
+          id?: number
+          rows?: number
+          terrain?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
       body_parts: {
         Row: {
           character_id: string
@@ -115,6 +142,7 @@ export type Database = {
       }
       characters: {
         Row: {
+          avatar_url: string
           concept: string
           created_at: string
           fisico: number
@@ -128,6 +156,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          avatar_url?: string
           concept?: string
           created_at?: string
           fisico?: number
@@ -141,6 +170,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          avatar_url?: string
           concept?: string
           created_at?: string
           fisico?: number
@@ -202,6 +232,8 @@ export type Database = {
           kind: string
           monster_id: string | null
           name: string
+          pos_x: number | null
+          pos_y: number | null
         }
         Insert: {
           attack_bonus?: number
@@ -217,6 +249,8 @@ export type Database = {
           kind: string
           monster_id?: string | null
           name: string
+          pos_x?: number | null
+          pos_y?: number | null
         }
         Update: {
           attack_bonus?: number
@@ -232,6 +266,8 @@ export type Database = {
           kind?: string
           monster_id?: string | null
           name?: string
+          pos_x?: number | null
+          pos_y?: number | null
         }
         Relationships: [
           {
@@ -273,37 +309,55 @@ export type Database = {
           abilities: string
           attack_bonus: number
           attacks: string
+          avatar_url: string
           created_at: string
           defense: number
           description: string
+          fisico: number
+          former_life: string
           hp_max: number
           id: string
           initiative_bonus: number
+          intelecto: number
+          motor: number
           name: string
+          psique: number
         }
         Insert: {
           abilities?: string
           attack_bonus?: number
           attacks?: string
+          avatar_url?: string
           created_at?: string
           defense?: number
           description?: string
+          fisico?: number
+          former_life?: string
           hp_max?: number
           id?: string
           initiative_bonus?: number
+          intelecto?: number
+          motor?: number
           name: string
+          psique?: number
         }
         Update: {
           abilities?: string
           attack_bonus?: number
           attacks?: string
+          avatar_url?: string
           created_at?: string
           defense?: number
           description?: string
+          fisico?: number
+          former_life?: string
           hp_max?: number
           id?: string
           initiative_bonus?: number
+          intelecto?: number
+          motor?: number
           name?: string
+          psique?: number
         }
         Relationships: []
       }

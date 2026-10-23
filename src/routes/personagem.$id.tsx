@@ -3,6 +3,7 @@ import { createFileRoute, Link, notFound, useNavigate } from "@tanstack/react-ro
 import { ArrowLeft, Backpack, Brain, Crosshair, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
+import { AvatarUpload } from "@/components/rpg/AvatarUpload";
 import { BackpackSection } from "@/components/rpg/BackpackSection";
 import { InlineField } from "@/components/rpg/InlineField";
 import { SkillsSection } from "@/components/rpg/SkillsSection";
@@ -85,7 +86,7 @@ function CharacterPage() {
   const { character } = sheet;
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-8 md:px-6">
+    <main className="mx-auto max-w-6xl px-4 py-6 md:px-6 md:py-8">
       <div className="mb-6 flex items-center justify-between">
         <Button asChild variant="ghost" size="sm">
           <Link to="/">
@@ -119,13 +120,23 @@ function CharacterPage() {
       </div>
 
       <header className="mb-8 border-b border-border pb-6">
-        <InlineField
-          label="Nome do personagem"
-          value={character.name}
-          required
-          onSave={(v) => mutations.updateCharacter.mutate({ name: v })}
-          className="h-auto px-1 font-display text-5xl font-bold uppercase leading-none md:text-7xl"
-        />
+        <div className="flex items-center gap-4 md:gap-6">
+          <AvatarUpload
+            src={character.avatar_url}
+            name={character.name}
+            onChange={(v) => mutations.updateCharacter.mutate({ avatar_url: v })}
+          />
+          <div className="min-w-0 flex-1">
+            <p className="label-caps px-1 text-muted-foreground">Rosto aparece no mapa de combate</p>
+            <InlineField
+              label="Nome do personagem"
+              value={character.name}
+              required
+              onSave={(v) => mutations.updateCharacter.mutate({ name: v })}
+              className="h-auto px-1 font-display text-4xl font-bold uppercase leading-none md:text-7xl"
+            />
+          </div>
+        </div>
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
           <label className="block">
             <span className="label-caps px-1 text-muted-foreground">Jogador</span>

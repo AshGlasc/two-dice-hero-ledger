@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import { changeHp, nextTurn, previousTurn, sortByInitiative, uniqueName } from "@/lib/combat";
+import {
+  canMoveTo,
+  changeHp,
+  findFreeCell,
+  nextTurn,
+  playerCombatStats,
+  previousTurn,
+  sortByInitiative,
+  uniqueName,
+} from "@/lib/combat";
 
 const c = (id: string, initiative: number | null, created_at = "2026-01-01T00:00:00Z") => ({
   id,
@@ -66,5 +75,28 @@ describe("nomes de monstros repetidos", () => {
     expect(uniqueName("Cão", [])).toBe("Cão");
     expect(uniqueName("Cão", ["Cão"])).toBe("Cão 2");
     expect(uniqueName("Cão", ["Cão", "Cão 2"])).toBe("Cão 3");
+  });
+});
+
+describe("mapa de batalha", () => {
+  it("parede e peça bloqueiam a casa; fora do mapa também", () => {
+    const occ = new Set(["2,2"]);
+    const terrain = { "1,1": "wall" as const, "3,3": "water" as const };
+    expect(canMoveTo(1, 1, 5, 5, terrain, occ)).toBe(false);
+    expect(canMoveTo(2, 2, 5, 5, terrain, occ)).toBe(false);
+    expect(canMoveTo(3, 3, 5, 5, terrain, occ)).toBe(true);
+    expect(canMoveTo(5, 0, 5, 5, terrain, occ)).toBe(false);
+  });
+
+  it("jogadores entram pela esquerda e monstros pela direita", () => {
+    const occ = new Set(["0,0"]);
+    expect(findFreeCell(6, 4, {}, occ, "left")).toEqual({ x: 0, y: 1 });
+    expect(findFreeCell(6, 4, {}, occ, "right")).toEqual({ x: 5, y: 0 });
+  });
+});
+
+describe("jogador entrando no combate", () => {
+  it("PV = 8 + 2×Físico e defesa = 7 + Motor", () => {
+    expect(playerCombatStats(3, 4)).toEqual({ hp: 14, defense: 11 });
   });
 });

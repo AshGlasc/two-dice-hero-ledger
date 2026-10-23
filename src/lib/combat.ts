@@ -105,3 +105,60 @@ export function skillValueFor(group: GroupData, characterId: string, skillKey: s
     group.skills.find((s) => s.character_id === characterId && s.skill_key === skillKey)?.bonus ?? 0;
   return skillTotal(character[skill.attribute], bonus);
 }
+
+/** PV e defesa iniciais de um jogador ao entrar no combate (editáveis depois). */
+export function playerCombatStats(fisico: number, motor: number) {
+  return { hp: 8 + 2 * fisico, defense: 7 + motor };
+}
+
+/** Skills que os jogadores usam para atacar. */
+export const ATTACK_SKILLS = [
+  { key: "ferramenta_fisica", name: "Ferramenta Física (corpo a corpo)" },
+  { key: "coordenacao_motora", name: "Coordenação Motora (à distância)" },
+] as const;
+
+// ---------- Mapa de batalha ----------
+
+export const TERRAINS = [
+  { key: "wall", name: "Parede", blocks: true },
+  { key: "cover", name: "Cobertura", blocks: false },
+  { key: "water", name: "Água", blocks: false },
+  { key: "grass", name: "Mato", blocks: false },
+  { key: "danger", name: "Perigo", blocks: false },
+] as const;
+export type TerrainKey = (typeof TERRAINS)[number]["key"];
+export type Terrain = Record<string, TerrainKey>;
+
+export const MAP_LIMITS = { min: 4, max: 40 } as const;
+
+export const cellKey = (x: number, y: number) => `${x},${y}`;
+
+/** Pode pisar aqui? Dentro do mapa, sem parede e sem outra peça. */
+export function canMoveTo(
+  x: number,
+  y: number,
+  cols: number,
+  rows: number,
+  terrain: Terrain,
+  occupied: Set<string>,
+) {
+  if (x < 0 || y < 0 || x >= cols || y >= rows) return false;
+  const t = terrain[cellKey(x, y)];
+  if (t && TERRAINS.find((d) => d.key === t)?.blocks) return false;
+  return !occupied.has(cellKey(x, y));
+}
+
+/** Primeira casa livre: jogadores entram pela esquerda, monstros pela direita. */
+export function findFreeCell(
+  cols: number,
+  rows: number,
+  terrain: Terrain,
+  occupied: Set<string>,
+  side: "left" | "right",
+) {
+  for (let i = 0; i < cols; i++) {
+    const x = side === "left" ? i : cols - 1 - i;
+    for (let y = 0; y < rows; y++) if (canMoveTo(x, y, cols, rows, terrain, occupied)) return { x, y };
+  }
+  return null;
+}
