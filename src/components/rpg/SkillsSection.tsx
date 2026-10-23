@@ -56,6 +56,25 @@ export function SkillsSection({ sheet, mutations }: { sheet: CharacterSheet; mut
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
       <div className="space-y-6">
+        {/* Celular: dificuldade sempre à mão, sem precisar descer até a mesa de dados */}
+        <div className="sticky top-14 z-30 -mx-4 flex items-center gap-2 border-b border-border bg-background/95 px-4 py-2 backdrop-blur lg:hidden">
+          <Select value={difficulty} onValueChange={setDifficulty}>
+            <SelectTrigger aria-label="Dificuldade" className="h-9 flex-1">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Sem dificuldade</SelectItem>
+              {DIFFICULTIES.map((d) => (
+                <SelectItem key={d.value} value={String(d.value)}>
+                  {d.name} — {d.value}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button variant="outline" size="sm" onClick={() => doRoll("2d6 puro", 0)}>
+            <Dices /> 2d6
+          </Button>
+        </div>
         <nav className="grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label="Atributos">
           {ATTRIBUTES.map((attr) => {
             const theme = ATTRIBUTE_THEME[attr.key];
@@ -112,7 +131,7 @@ export function SkillsSection({ sheet, mutations }: { sheet: CharacterSheet; mut
                   return (
                     <li
                       key={skill.key}
-                      className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-3 px-5 py-4 md:grid-cols-[auto_1fr_auto_auto_auto]"
+                      className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-3 px-4 py-4 md:grid-cols-[auto_1fr_auto_auto_auto] md:px-5"
                     >
                       <SkillIcon skillKey={skill.key} attribute={attr.key} name={skill.name} />
                       <div>
@@ -178,7 +197,7 @@ export function SkillsSection({ sheet, mutations }: { sheet: CharacterSheet; mut
       </div>
 
       <aside className="h-fit space-y-6 lg:sticky lg:top-20">
-        <div className="space-y-4 rounded-lg border border-border bg-card p-5 shadow-paint">
+        <div className="hidden space-y-4 rounded-lg border border-border bg-card p-5 shadow-paint lg:block">
           <div>
             <p className="label-caps text-primary">Mesa de dados</p>
             <h2 className="text-2xl font-bold uppercase">2d6 + skill</h2>
