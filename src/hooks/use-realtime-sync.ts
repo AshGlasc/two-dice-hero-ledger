@@ -1,24 +1,26 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
-import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
 import { isLocalRoll } from "@/lib/roll-log";
 import type { Roll } from "@/lib/rpg-queries";
-import { OUTCOME_TEXT, type RollOutcome } from "@/lib/skills";
+import { emitRoll } from "@/lib/roll-burst";
 
 type Row = { id?: string | number; character_id?: string | null } | null;
 
-/** Aviso na tela de todo mundo quando alguém da mesa rola os dados. */
+/** Aviso grande na tela de todo mundo quando alguém da mesa rola os dados. */
 function announceRoll(r: Roll) {
   if (r.hidden || isLocalRoll(r)) return;
-  const outcome = r.outcome as RollOutcome;
-  const text = outcome !== "none" ? ` · ${OUTCOME_TEXT[outcome]}` : "";
-  const message = `${r.character_name || "Alguém"} rolou ${r.label}: ${r.total}`;
-  const description = `${r.die1} + ${r.die2} + ${r.modifier}${text}`;
-  if (outcome === "critical-success" || outcome === "success") toast.success(message, { description });
-  else if (outcome === "critical-failure" || outcome === "failure") toast.error(message, { description });
-  else toast(message, { description });
+  emitRoll({
+    name: r.character_name,
+    label: r.label,
+    die1: r.die1,
+    die2: r.die2,
+    modifier: r.modifier,
+    total: r.total,
+    difficulty: r.difficulty,
+    outcome: r.outcome,
+  });
 }
 
 /**
@@ -89,6 +91,9 @@ export function useRealtimeSync() {
       )
       .on("postgres_changes", { event: "*", schema: "public", table: "combat_state" }, () =>
         queue(["combat"]),
+      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "battle_map" }, () =>
+        queue(["battle_map"]),
       )
       .subscribe();
 
