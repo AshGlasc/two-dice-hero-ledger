@@ -29,6 +29,13 @@
       "when": 1792720037789,
       "tag": "0003_combat_and_bestiary",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792797208922,
+      "tag": "0004_avatars_monster_attrs_battle_map",
+      "breakpoints": true
     }
   ]
 }
