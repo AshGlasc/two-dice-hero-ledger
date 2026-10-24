@@ -14,7 +14,7 @@ export function Avatar({
   src?: string | null;
   name: string;
   className?: string;
-  tone?: "player" | "monster";
+  tone?: "player" | "monster" | undefined;
 }) {
   return (
     <span

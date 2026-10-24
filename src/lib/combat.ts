@@ -47,7 +47,7 @@ export function nextTurn(order: TurnSlot[], currentId: string | null, round: num
   const alive = order.some((s) => !s.out);
   const start = order.findIndex((s) => s.id === currentId);
   if (start === -1) {
-    const first = order.find((s) => !s.out) ?? order[0];
+    const first = order.find((s) => !s.out) ?? order[0]!;
     return { currentId: first.id, round };
   }
   let idx = start;
@@ -58,9 +58,9 @@ export function nextTurn(order: TurnSlot[], currentId: string | null, round: num
       idx = 0;
       nextRound += 1;
     }
-    if (!alive || !order[idx].out) break;
+    if (!alive || !order[idx]!.out) break;
   }
-  return { currentId: order[idx].id, round: nextRound };
+  return { currentId: order[idx]!.id, round: nextRound };
 }
 
 /** Volta a vez para o anterior (sem nunca ir abaixo da rodada 1). */
@@ -68,19 +68,19 @@ export function previousTurn(order: TurnSlot[], currentId: string | null, round:
   if (order.length === 0) return { currentId: null, round };
   const alive = order.some((s) => !s.out);
   const start = order.findIndex((s) => s.id === currentId);
-  if (start === -1) return { currentId: order[0].id, round };
+  if (start === -1) return { currentId: order[0]!.id, round };
   let idx = start;
   let prevRound = round;
   for (let i = 0; i < order.length; i++) {
     idx -= 1;
     if (idx < 0) {
-      if (prevRound <= 1) return { currentId: order[start].id, round };
+      if (prevRound <= 1) return { currentId: order[start]!.id, round };
       idx = order.length - 1;
       prevRound -= 1;
     }
-    if (!alive || !order[idx].out) break;
+    if (!alive || !order[idx]!.out) break;
   }
-  return { currentId: order[idx].id, round: prevRound };
+  return { currentId: order[idx]!.id, round: prevRound };
 }
 
 /** Dano tira PV, cura devolve. Nunca abaixo de 0 nem acima do máximo. */
