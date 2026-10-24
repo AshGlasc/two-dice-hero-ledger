@@ -48,7 +48,8 @@ export const Route = createFileRoute("/combate")({
 });
 
 function CombatPage() {
-  const { data: combat } = useSuspenseQuery(combatQuery);
+  const { data: raw } = useSuspenseQuery(combatQuery);
+  const combat = { ...raw, combatants: raw.combatants.map((x) => ({ ...x, hp_current: x.hp_current ?? 0, hp_max: x.hp_max ?? 0 })) };
   const { data: group } = useSuspenseQuery(groupQuery);
   const { data: monsters } = useSuspenseQuery(monstersQuery);
   const { data: map } = useSuspenseQuery(battleMapQuery);
@@ -63,7 +64,7 @@ function CombatPage() {
   const occupied = () =>
     new Set(combat.combatants.filter((x) => x.pos_x != null && x.pos_y != null).map((x) => cellKey(x.pos_x!, x.pos_y!)));
 
-  const avatarOf = (x: Combatant) =>
+  const avatarOf = (x: Pick<Combatant, "kind" | "character_id" | "monster_id">) =>
     x.kind === "character"
       ? group.characters.find((ch) => ch.id === x.character_id)?.avatar_url ?? ""
       : monsters.find((m) => m.id === x.monster_id)?.avatar_url ?? "";
