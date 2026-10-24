@@ -8,6 +8,7 @@ import { BattleMap, type MapToken } from "@/components/rpg/BattleMap";
 import { Button } from "@/components/ui/button";
 import { useCombat } from "@/hooks/use-combat";
 import {
+  ATTACK_SKILLS,
   CONDITIONS,
   INITIATIVE_SKILL,
   changeHp,
@@ -82,6 +83,9 @@ function CombatPage() {
         hp_current: s.hp,
         hp_max: s.hp,
         defense: s.defense,
+        attack_bonus: Math.max(
+          ...ATTACK_SKILLS.map((a) => skillValueFor(group, ch.id, a.key)),
+        ),
         initiative_bonus: skillValueFor(group, ch.id, INITIATIVE_SKILL),
         pos_x: cell?.x ?? null,
         pos_y: cell?.y ?? null,
