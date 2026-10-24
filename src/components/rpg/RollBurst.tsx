@@ -85,7 +85,7 @@ export function RollBurst() {
         </div>
       ) : (
         <div className="relative w-full max-w-md animate-burst-in rounded-lg border border-border bg-card p-5 shadow-paint">
-          <p className="label-caps text-primary">{rolls[0].label}</p>
+          <p className="label-caps text-primary">{rolls[0]?.label}</p>
           <p className="font-display text-3xl font-bold uppercase">A mesa rolou!</p>
           <ol className="mt-3 divide-y divide-border">
             {[...rolls]
