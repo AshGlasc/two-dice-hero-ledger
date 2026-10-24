@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as CombateRouteImport } from './routes/combate'
 import { Route as MestreRouteImport } from './routes/mestre'
 import { Route as BestiarioIndexRouteImport } from './routes/bestiario.index'
 import { Route as BestiarioIdRouteImport } from './routes/bestiario.$id'
@@ -18,6 +19,11 @@ import { Route as PersonagemIdRouteImport } from './routes/personagem.$id'
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CombateRoute = CombateRouteImport.update({
+  id: '/combate',
+  path: '/combate',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MestreRoute = MestreRouteImport.update({
@@ -43,6 +49,7 @@ const PersonagemIdRoute = PersonagemIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/combate': typeof CombateRoute
   '/mestre': typeof MestreRoute
   '/bestiario/$id': typeof BestiarioIdRoute
   '/personagem/$id': typeof PersonagemIdRoute
@@ -50,6 +57,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/combate': typeof CombateRoute
   '/mestre': typeof MestreRoute
   '/bestiario/$id': typeof BestiarioIdRoute
   '/personagem/$id': typeof PersonagemIdRoute
@@ -58,6 +66,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/combate': typeof CombateRoute
   '/mestre': typeof MestreRoute
   '/bestiario/$id': typeof BestiarioIdRoute
   '/personagem/$id': typeof PersonagemIdRoute
@@ -66,12 +75,24 @@ export interface FileRoutesById {
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/mestre' | '/bestiario/$id' | '/personagem/$id' | '/bestiario/'
+    | '/'
+    | '/combate'
+    | '/mestre'
+    | '/bestiario/$id'
+    | '/personagem/$id'
+    | '/bestiario/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/mestre' | '/bestiario/$id' | '/personagem/$id' | '/bestiario'
+  to:
+    | '/'
+    | '/combate'
+    | '/mestre'
+    | '/bestiario/$id'
+    | '/personagem/$id'
+    | '/bestiario'
   id:
     | '__root__'
     | '/'
+    | '/combate'
     | '/mestre'
     | '/bestiario/$id'
     | '/personagem/$id'
@@ -80,6 +101,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  CombateRoute: typeof CombateRoute
   MestreRoute: typeof MestreRoute
   BestiarioIdRoute: typeof BestiarioIdRoute
   PersonagemIdRoute: typeof PersonagemIdRoute
@@ -93,6 +115,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/combate': {
+      id: '/combate'
+      path: '/combate'
+      fullPath: '/combate'
+      preLoaderRoute: typeof CombateRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/mestre': {
@@ -128,6 +157,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  CombateRoute: CombateRoute,
   MestreRoute: MestreRoute,
   BestiarioIdRoute: BestiarioIdRoute,
   PersonagemIdRoute: PersonagemIdRoute,
