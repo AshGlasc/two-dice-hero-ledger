@@ -27,4 +27,4 @@ npm run dev
 
 ## Celular da campanha
 
-O saldo e as transferências são exibidos em rupias indonésias (IDR). O arquivo compartilhado de fotos, as notícias e a agenda de contatos usam as tabelas da migração [`0006_phone_apps_contacts.sql`](./drizzle/migrations/0006_phone_apps_contacts.sql); aplique-a no Supabase antes de publicar a versão do app. O webhook do Discord é opcional e fica salvo apenas no navegador do Mestre.
+O saldo e as transferências são exibidos em rupias indonésias (IDR). O arquivo compartilhado de fotos, as notícias e a agenda de contatos usam as tabelas da migração [`0006_phone_apps_contacts.sql`](./drizzle/migrations/0006_phone_apps_contacts.sql); aplique o conteúdo desse arquivo no SQL Editor do projeto Supabase antes de publicar a versão do app. Sem essa migração, o celular continua abrindo e permite mensagens diretas, mas a agenda de contatos, notícias e galeria ficam indisponíveis. O webhook do Discord é opcional e fica salvo apenas no navegador do Mestre.

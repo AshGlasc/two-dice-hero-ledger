@@ -44,7 +44,6 @@ export const Route = createFileRoute("/celular")({
     Promise.all([
       context.queryClient.ensureQueryData(charactersQuery),
       context.queryClient.ensureQueryData(messagesQuery),
-      context.queryClient.ensureQueryData(phoneContactsQuery),
     ]),
   component: PhonePage,
 });
@@ -68,7 +67,11 @@ function PhonePage() {
   const [screen, setScreen] = useState<Screen>({ app: "home" });
   const { data: characters } = useSuspenseQuery(charactersQuery);
   const { data: messages } = useSuspenseQuery(messagesQuery);
-  const { data: contacts } = useSuspenseQuery(phoneContactsQuery);
+  const {
+    data: contacts = [],
+    error: contactsError,
+    isPending: contactsPending,
+  } = useQuery(phoneContactsQuery);
   const {
     data: clues = [],
     isPending: cluesPending,
@@ -96,6 +99,10 @@ function PhonePage() {
   const me = characters.find((c) => c.id === myId) ?? null;
   const npcMode = isMaster && asNpc;
   const selectedContact = contacts.find((contact) => contact.id === npcContactId) ?? null;
+  const phoneMigrationMissing =
+    contactsError?.message.includes("phone_contacts") ||
+    contactsError?.message.includes("schema cache") ||
+    contactsError?.message.includes("does not exist");
   const addContact = useMutation({
     mutationFn: async () => {
       const name = contactName.trim();
@@ -120,6 +127,27 @@ function PhonePage() {
 
   return (
     <main className="mx-auto max-w-md px-3 py-4 md:py-8">
+      {contactsError && (
+        <div
+          role="alert"
+          className="mb-3 space-y-2 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm"
+        >
+          <p className="font-semibold text-warning">Agenda do celular indisponível</p>
+          <p className="text-muted-foreground">
+            {phoneMigrationMissing
+              ? "A migração do celular ainda não foi aplicada no Supabase. No SQL Editor do projeto, execute drizzle/migrations/0006_phone_apps_contacts.sql."
+              : `Não foi possível carregar os contatos: ${contactsError.message}`}
+          </p>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => qc.invalidateQueries({ queryKey: ["phone_contacts"] })}
+          >
+            Tentar carregar de novo
+          </Button>
+        </div>
+      )}
       {isMaster && (
         <div className="mb-3 space-y-2 rounded-lg border border-primary/40 bg-primary/10 p-3 text-sm">
           <p className="label-caps text-primary">Mestre: usar o celular como</p>
@@ -263,6 +291,7 @@ function PhonePage() {
               other={screen.with}
               characters={characters}
               contacts={contacts}
+              contactsAvailable={!contactsPending && !contactsError}
               messages={messages}
               back={() => setScreen({ app: "chats" })}
             />
@@ -927,6 +956,7 @@ function Chat({
   other,
   characters,
   contacts,
+  contactsAvailable,
   messages,
   back,
 }: {
@@ -937,6 +967,7 @@ function Chat({
   other: string;
   characters: Character[];
   contacts: PhoneContact[];
+  contactsAvailable: boolean;
   messages: Message[];
   back: () => void;
 }) {
@@ -967,7 +998,7 @@ function Chat({
               other === GROUP
                 ? null
                 : (selectedContact?.target_character_id ?? (selectedContact ? null : other)),
-            contact_id: selectedContact?.id ?? null,
+            ...(contactsAvailable ? { contact_id: selectedContact?.id ?? null } : {}),
             body,
           }
         : {
@@ -976,14 +1007,14 @@ function Chat({
             // Resposta ao NPC fica endereçada a si mesmo (só o mestre e o jogador veem).
             to_character_id:
               other === GROUP ? null : other === NPC ? me!.id : selectedContact ? me!.id : other,
-            contact_id: selectedContact?.id ?? null,
+            ...(contactsAvailable ? { contact_id: selectedContact?.id ?? null } : {}),
             body,
           };
       const { error } = await supabase.from("messages").insert(row);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["messages"] }),
-    onError: () => toast.error("Mensagem não enviada."),
+    onError: (error) => toast.error(`Mensagem não enviada: ${error.message}`),
   });
 
   const isMine = (m: Message) =>
