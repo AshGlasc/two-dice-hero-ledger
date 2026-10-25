@@ -2,6 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 
 import { useMasterAuth } from "@/context/MasterAuthContext";
+import type { BattleMap } from "@/lib/rpg-queries";
 
 import { supabase } from "@/integrations/supabase/client";
 import { isLocalRoll } from "@/lib/roll-log";
@@ -14,6 +15,24 @@ import { formatMoney } from "@/lib/phone";
 import { postRollToDiscord } from "@/lib/discord-webhook";
 
 type Row = { id?: string | number; character_id?: string | null } | null;
+
+function isBattleMap(row: unknown): row is BattleMap {
+  if (!row || typeof row !== "object") return false;
+  const value = row as Record<string, unknown>;
+  return (
+    value["id"] === 1 &&
+    typeof value["cols"] === "number" &&
+    typeof value["rows"] === "number" &&
+    typeof value["background_url"] === "string" &&
+    typeof value["updated_at"] === "string" &&
+    typeof value["terrain"] === "object" &&
+    value["terrain"] !== null &&
+    typeof value["tile_images"] === "object" &&
+    value["tile_images"] !== null &&
+    typeof value["fog"] === "object" &&
+    value["fog"] !== null
+  );
+}
 
 /** Aviso grande na tela de todo mundo quando alguém da mesa rola os dados. */
 function announceRoll(r: Roll, viewerIsMaster: boolean, local: boolean) {
@@ -124,9 +143,14 @@ export function useRealtimeSync() {
       .on("postgres_changes", { event: "*", schema: "public", table: "combat_state" }, () =>
         queue(["combat"]),
       )
-      .on("postgres_changes", { event: "*", schema: "public", table: "battle_map" }, () =>
-        queue(["battle_map"]),
-      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "battle_map" }, (p) => {
+        if (p.eventType !== "DELETE" && isBattleMap(p.new)) {
+          if (qc.isMutating() > 0) queue(["battle_map"]);
+          else qc.setQueryData<BattleMap>(["battle_map"], p.new);
+          return;
+        }
+        queue(["battle_map"]);
+      })
       .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, (p) => {
         if (p.eventType === "INSERT") notifyMessage(p.new as Message);
         queue(["messages"], ["characters"], ["group"]);
@@ -140,7 +164,14 @@ export function useRealtimeSync() {
       .on("postgres_changes", { event: "*", schema: "public", table: "phone_gallery" }, () =>
         queue(["phone_gallery"]),
       )
-      .subscribe();
+      .subscribe((status, error) => {
+        if (status === "SUBSCRIBED") {
+          queue(["battle_map"]);
+        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          console.error("A sincronização em tempo real do mapa falhou.", error);
+          toast.error("O mapa pode não estar sincronizando. Verifique sua conexão.");
+        }
+      });
 
     return () => {
       if (timer) clearTimeout(timer);
