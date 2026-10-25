@@ -5,7 +5,9 @@ import { useMasterAuth } from "@/context/MasterAuthContext";
 
 import { supabase } from "@/integrations/supabase/client";
 import { isLocalRoll } from "@/lib/roll-log";
-import type { Roll } from "@/lib/rpg-queries";
+import { getPlayerCharacterId } from "@/lib/player-character";
+import type { Message, Roll } from "@/lib/rpg-queries";
+import { toast } from "sonner";
 import { emitRoll } from "@/lib/roll-burst";
 import { shouldAnnounce } from "@/lib/silent-roll";
 
@@ -25,6 +27,17 @@ function announceRoll(r: Roll, viewerIsMaster: boolean) {
     outcome: r.outcome,
     hidden: r.hidden,
   });
+}
+
+/** Aviso no topo quando chega mensagem ou Pix para o personagem deste aparelho. */
+function notifyMessage(m: Message) {
+  const me = getPlayerCharacterId();
+  if (!me || m.from_character_id === me) return;
+  if (m.kind === "pix" && m.to_character_id === me) {
+    toast.success(`💸 ${m.from_name} te enviou $${m.amount ?? 0}`);
+  } else if (m.to_character_id === me || m.to_character_id === null) {
+    toast(`📱 ${m.from_name || "Desconhecido"}: ${m.body.slice(0, 80)}`);
+  }
 }
 
 /**
@@ -102,9 +115,10 @@ export function useRealtimeSync() {
       .on("postgres_changes", { event: "*", schema: "public", table: "battle_map" }, () =>
         queue(["battle_map"]),
       )
-      .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, () =>
-        queue(["messages"]),
-      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, (p) => {
+        if (p.eventType === "INSERT") notifyMessage(p.new as Message);
+        queue(["messages"], ["characters"], ["group"]);
+      })
       .subscribe();
 
     return () => {
