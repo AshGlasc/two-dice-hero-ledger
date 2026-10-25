@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, notFound, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, Backpack, Brain, Crosshair, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { AvatarUpload } from "@/components/rpg/AvatarUpload";
@@ -71,7 +72,18 @@ function CharacterPage() {
   const mutations = useSheetMutations(id);
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const { isMaster } = useMasterAuth();
+  const { isMaster, isLoading: masterAuthLoading } = useMasterAuth();
+  const [playerCharacterId, setPlayerCharacterId] = useState<string | null>(null);
+  const ownsCharacter = playerCharacterId === id;
+
+  useEffect(() => {
+    const ownerId = getPlayerCharacterId();
+    setPlayerCharacterId(ownerId);
+    if (!masterAuthLoading && !isMaster && ownerId !== id) {
+      toast.error("Você só pode abrir a ficha do seu próprio personagem.");
+      navigate({ to: "/" });
+    }
+  }, [id, isMaster, masterAuthLoading, navigate, playerCharacterId]);
 
   const remove = useMutation({
     mutationFn: async () => {
@@ -90,6 +102,7 @@ function CharacterPage() {
   });
 
   if (!sheet) return null;
+  if (!isMaster && (!ownsCharacter || masterAuthLoading)) return null;
   const { character } = sheet;
 
   return (

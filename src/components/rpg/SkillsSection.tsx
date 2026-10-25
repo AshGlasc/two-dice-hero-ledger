@@ -57,7 +57,7 @@ export function SkillsSection({ sheet, mutations }: { sheet: CharacterSheet; mut
     <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
       <div className="space-y-6">
         {/* Celular: dificuldade sempre à mão, sem precisar descer até a mesa de dados */}
-        <div className="sticky top-14 z-30 -mx-4 flex items-center gap-2 border-b border-border bg-background/95 px-4 py-2 backdrop-blur lg:hidden">
+        <div className="sticky top-14 z-30 -mx-4 flex items-center gap-2 border-b border-border bg-background px-4 py-2 lg:hidden">
           <Select value={difficulty} onValueChange={setDifficulty}>
             <SelectTrigger aria-label="Dificuldade" className="h-9 flex-1">
               <SelectValue />

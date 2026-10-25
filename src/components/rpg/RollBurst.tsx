@@ -45,7 +45,7 @@ export function RollBurst() {
       role="status"
       aria-live="assertive"
       onClick={() => setShown(null)}
-      className="fixed inset-0 z-[100] grid cursor-pointer place-items-center bg-background/70 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[100] grid cursor-pointer place-items-center bg-background/90 p-4"
     >
       <div className={cn("pointer-events-none absolute inset-0 animate-flash", FLASH[outcome] ?? "")} />
       {single ? (

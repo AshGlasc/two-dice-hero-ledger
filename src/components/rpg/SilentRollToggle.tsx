@@ -11,7 +11,7 @@ export function SilentRollToggle() {
       aria-pressed={silent}
       title={silent ? "Rolagem silenciosa ligada: só você e o mestre veem" : "Ligar rolagem silenciosa"}
       className={cn(
-        "fixed bottom-20 left-3 z-40 flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider shadow-paint backdrop-blur transition-colors md:bottom-4",
+        "fixed bottom-20 left-3 z-40 flex items-center gap-1 rounded-full border bg-background px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider shadow-paint transition-colors md:bottom-4",
         silent
           ? "border-primary bg-primary/20 text-primary"
           : "border-border bg-background/80 text-muted-foreground hover:text-foreground",

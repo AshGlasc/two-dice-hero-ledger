@@ -107,7 +107,7 @@ export function TopNav() {
 
   return (
     <>
-      <header className="sticky top-0 z-40 border-b border-border bg-background/85 backdrop-blur">
+      <header className="sticky top-0 z-40 border-b border-border bg-background">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-4 px-4 md:px-6">
           <Link to="/" className="font-display text-2xl font-bold uppercase tracking-wide">
             Eco dos <span className="text-primary">Caídos</span>
@@ -125,7 +125,7 @@ export function TopNav() {
                 {l.restricted &&
                   (isMaster ? (
                     <span title="Mestre autenticado">
-                      <Crown className="size-3 text-primary animate-pulse" />
+                      <Crown className="size-3 text-primary" />
                     </span>
                   ) : (
                     <span title="Acesso restrito ao mestre">
@@ -210,7 +210,7 @@ export function TopNav() {
       {/* Barra de baixo no celular */}
       <nav
         aria-label="Navegação"
-        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-border bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-border bg-background pb-[env(safe-area-inset-bottom)] md:hidden"
       >
         {LINKS.map((l) => (
           <Link

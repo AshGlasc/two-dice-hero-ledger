@@ -1,11 +1,14 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ChevronRight, Users } from "lucide-react";
+import { useEffect, useState } from "react";
 
 import heroImage from "@/assets/hero-harbor.jpg";
 import { Avatar } from "@/components/rpg/AvatarUpload";
 import { NewCharacterDialog } from "@/components/rpg/NewCharacterDialog";
+import { useMasterAuth } from "@/context/MasterAuthContext";
 import { ATTRIBUTE_THEME } from "@/lib/attribute-theme";
+import { getPlayerCharacterId } from "@/lib/player-character";
 import { charactersQuery } from "@/lib/rpg-queries";
 import { ATTRIBUTES } from "@/lib/skills";
 import { cn } from "@/lib/utils";
@@ -34,6 +37,16 @@ export const Route = createFileRoute("/")({
 
 function Index() {
   const { data: characters } = useSuspenseQuery(charactersQuery);
+  const { isMaster } = useMasterAuth();
+  const [playerCharacterId, setPlayerCharacterId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setPlayerCharacterId(getPlayerCharacterId());
+  }, []);
+
+  const visibleCharacters = isMaster
+    ? characters
+    : characters.filter((character) => character.id === playerCharacterId);
 
   return (
     <main className="min-h-screen">
@@ -64,37 +77,45 @@ function Index() {
       <section className="mx-auto max-w-6xl px-6 py-12">
         <div className="mb-6 flex items-baseline justify-between border-b border-border pb-3">
           <h2 className="text-3xl font-bold uppercase">Jogadores</h2>
-          <span className="label-caps text-muted-foreground">{characters.length} fichas</span>
+          <span className="label-caps text-muted-foreground">
+            {isMaster ? `${characters.length} fichas` : "Minha ficha"}
+          </span>
         </div>
 
-        {characters.length === 0 ? (
+        {visibleCharacters.length === 0 ? (
           <div className="flex flex-col items-center gap-4 rounded-lg border border-dashed border-border py-16 text-center text-muted-foreground">
             <Users className="size-10" />
-            <p className="italic">Nenhum personagem ainda. Crie o primeiro da mesa.</p>
+            <p className="italic">
+              {isMaster
+                ? "Nenhum personagem ainda. Crie o primeiro da mesa."
+                : playerCharacterId
+                  ? "Sua ficha não está disponível. Crie um personagem para começar."
+                  : "Crie seu personagem para acessar sua ficha e seu celular."}
+            </p>
             <NewCharacterDialog />
           </div>
         ) : (
           <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {characters.map((c, i) => (
-              <li key={c.id} className="animate-fade-up" style={{ animationDelay: `${i * 50}ms` }}>
+            {visibleCharacters.map((c) => (
+              <li key={c.id}>
                 <Link
                   to="/personagem/$id"
                   params={{ id: c.id }}
                   className="group flex h-full flex-col justify-between rounded-lg border border-border bg-card p-5 shadow-paint transition-colors hover:border-primary"
                 >
                   <div className="flex items-start gap-4">
-                  <Avatar src={c.avatar_url} name={c.name} className="size-14 text-lg" />
-                  <div className="min-w-0">
-                    <p className="label-caps text-muted-foreground">
-                      {c.player_name ? `Jogador: ${c.player_name}` : "Sem jogador"}
-                    </p>
-                    <h3 className="mt-1 truncate text-3xl font-bold uppercase leading-none group-hover:text-primary">
-                      {c.name}
-                    </h3>
-                    {c.concept && (
-                      <p className="mt-2 text-sm italic text-muted-foreground">{c.concept}</p>
-                    )}
-                  </div>
+                    <Avatar src={c.avatar_url} name={c.name} className="size-14 text-lg" />
+                    <div className="min-w-0">
+                      <p className="label-caps text-muted-foreground">
+                        {c.player_name ? `Jogador: ${c.player_name}` : "Sem jogador"}
+                      </p>
+                      <h3 className="mt-1 truncate text-3xl font-bold uppercase leading-none group-hover:text-primary">
+                        {c.name}
+                      </h3>
+                      {c.concept && (
+                        <p className="mt-2 text-sm italic text-muted-foreground">{c.concept}</p>
+                      )}
+                    </div>
                   </div>
                   <div className="mt-6 flex items-end justify-between gap-2">
                     <div className="grid grid-cols-4 gap-1.5">
@@ -104,7 +125,11 @@ function Index() {
                           <span
                             key={a.key}
                             title={a.name}
-                            className={cn("rounded-sm px-2 py-1 text-center font-display font-semibold", theme.soft, theme.text)}
+                            className={cn(
+                              "rounded-sm px-2 py-1 text-center font-display font-semibold",
+                              theme.soft,
+                              theme.text,
+                            )}
                           >
                             <span className="block text-[10px] uppercase tracking-wider">
                               {a.name.slice(0, 3)}
