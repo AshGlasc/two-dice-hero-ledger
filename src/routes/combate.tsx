@@ -1,11 +1,13 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { ChevronLeft, ChevronRight, Dices, Minus, Plus, Swords, Trash2, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Crown, Dices, Lock, Minus, Plus, Swords, Trash2, X } from "lucide-react";
 import { useState } from "react";
 
 import { Avatar } from "@/components/rpg/AvatarUpload";
 import { BattleMap, type MapToken } from "@/components/rpg/BattleMap";
+import { MasterUnlockModal } from "@/components/rpg/MasterUnlockModal";
 import { Button } from "@/components/ui/button";
+import { useMasterAuth } from "@/context/MasterAuthContext";
 import { useCombat } from "@/hooks/use-combat";
 import {
   ATTACK_SKILLS,
@@ -54,6 +56,7 @@ function CombatPage() {
   const { data: group } = useSuspenseQuery(groupQuery);
   const { data: monsters } = useSuspenseQuery(monstersQuery);
   const { data: map } = useSuspenseQuery(battleMapQuery);
+  const { isMaster } = useMasterAuth();
   const c = useCombat();
   const [hpDelta, setHpDelta] = useState(1);
 
@@ -160,47 +163,70 @@ function CombatPage() {
   return (
     <div className="mx-auto max-w-7xl space-y-4 p-3 md:p-6">
       <header className="flex flex-wrap items-center gap-2">
-        <h1 className="font-display text-3xl font-bold uppercase">Combate</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="font-display text-3xl font-bold uppercase">Combate</h1>
+          {isMaster ? (
+            <span className="flex items-center gap-1 rounded bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase text-primary">
+              <Crown className="size-3" /> Mestre Ativo
+            </span>
+          ) : (
+            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+              <Lock className="size-3" /> Jogador
+            </span>
+          )}
+        </div>
         {state.active && <span className="label-caps text-primary">Rodada {state.round}</span>}
-        <div className="ml-auto flex flex-wrap gap-2">
-          <select
-            className="h-9 rounded-md border border-border bg-card px-2 text-sm"
-            value=""
-            onChange={(e) => addCharacter(e.target.value)}
-          >
-            <option value="">+ Jogador</option>
-            {group.characters
-              .filter((ch) => !inCombat.has(ch.id))
-              .map((ch) => (
-                <option key={ch.id} value={ch.id}>
-                  {ch.name}
-                </option>
-              ))}
-          </select>
-          <select
-            className="h-9 rounded-md border border-border bg-card px-2 text-sm"
-            value=""
-            onChange={(e) => addMonster(e.target.value)}
-          >
-            <option value="">+ Monstro</option>
-            {monsters.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-              </option>
-            ))}
-          </select>
-          <Button size="sm" onClick={rollInitiative} disabled={!combat.combatants.length}>
-            <Dices /> Iniciativa
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => { const p = previousTurn(slots, state.current_combatant_id, state.round); c.setState.mutate({ current_combatant_id: p.currentId, round: p.round }); }}>
-            <ChevronLeft />
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => { const n = nextTurn(slots, state.current_combatant_id, state.round); c.setState.mutate({ active: true, current_combatant_id: n.currentId, round: n.round }); }}>
-            Próximo <ChevronRight />
-          </Button>
-          <Button size="sm" variant="destructive" onClick={() => confirm("Encerrar combate?") && c.end.mutate()}>
-            <X /> Encerrar
-          </Button>
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          {isMaster ? (
+            <>
+              <select
+                className="h-9 rounded-md border border-border bg-card px-2 text-sm"
+                value=""
+                onChange={(e) => addCharacter(e.target.value)}
+              >
+                <option value="">+ Jogador</option>
+                {group.characters
+                  .filter((ch) => !inCombat.has(ch.id))
+                  .map((ch) => (
+                    <option key={ch.id} value={ch.id}>
+                      {ch.name}
+                    </option>
+                  ))}
+              </select>
+              <select
+                className="h-9 rounded-md border border-border bg-card px-2 text-sm"
+                value=""
+                onChange={(e) => addMonster(e.target.value)}
+              >
+                <option value="">+ Monstro</option>
+                {monsters.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
+              <Button size="sm" onClick={rollInitiative} disabled={!combat.combatants.length}>
+                <Dices /> Iniciativa
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => { const p = previousTurn(slots, state.current_combatant_id, state.round); c.setState.mutate({ current_combatant_id: p.currentId, round: p.round }); }}>
+                <ChevronLeft />
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => { const n = nextTurn(slots, state.current_combatant_id, state.round); c.setState.mutate({ active: true, current_combatant_id: n.currentId, round: n.round }); }}>
+                Próximo <ChevronRight />
+              </Button>
+              <Button size="sm" variant="destructive" onClick={() => confirm("Encerrar combate?") && c.end.mutate()}>
+                <X /> Encerrar
+              </Button>
+            </>
+          ) : (
+            <MasterUnlockModal
+              trigger={
+                <Button size="sm" variant="outline" className="gap-1.5 text-xs text-muted-foreground hover:text-foreground">
+                  <Lock className="size-3.5" /> Controle do Mestre
+                </Button>
+              }
+            />
+          )}
         </div>
       </header>
 

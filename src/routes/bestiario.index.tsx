@@ -1,9 +1,10 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { ChevronRight, Heart, Plus, Shield, Skull, Swords } from "lucide-react";
+import { ChevronRight, Crown, Heart, Lock, Plus, Shield, Skull, Swords } from "lucide-react";
 import { useState } from "react";
 
 import { Avatar } from "@/components/rpg/AvatarUpload";
+import { MasterUnlockModal } from "@/components/rpg/MasterUnlockModal";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -14,6 +15,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { useMasterAuth } from "@/context/MasterAuthContext";
 import { useMonsters } from "@/hooks/use-monsters";
 import { monstersQuery } from "@/lib/rpg-queries";
 
@@ -79,25 +81,57 @@ function NewMonsterDialog() {
 
 function BestiaryPage() {
   const { data: monsters } = useSuspenseQuery(monstersQuery);
+  const { isMaster } = useMasterAuth();
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 md:px-6">
       <header className="mb-6 flex flex-wrap items-end justify-between gap-4 border-b border-border pb-4">
         <div>
-          <p className="label-caps text-destructive">Os que se perderam</p>
+          <div className="flex items-center gap-2">
+            <span className="label-caps text-destructive">Os que se perderam</span>
+            {isMaster ? (
+              <span className="flex items-center gap-1 text-xs text-primary" title="Você tem permissão de mestre">
+                <Crown className="size-3" /> Mestre Ativo
+              </span>
+            ) : (
+              <span className="flex items-center gap-1 text-xs text-muted-foreground" title="Apenas o mestre pode criar e editar monstros">
+                <Lock className="size-3" /> Visualização
+              </span>
+            )}
+          </div>
           <h1 className="text-6xl font-bold uppercase leading-none md:text-7xl">Bestiário</h1>
           <p className="mt-2 max-w-xl text-muted-foreground">
             Cada monstro já foi alguém. Guarde quem eram, o que viraram e como lutam.
           </p>
         </div>
-        <NewMonsterDialog />
+        {isMaster ? (
+          <NewMonsterDialog />
+        ) : (
+          <MasterUnlockModal
+            trigger={
+              <Button variant="outline" className="gap-2">
+                <Lock className="size-4 text-muted-foreground" /> Novo monstro (Mestre)
+              </Button>
+            }
+          />
+        )}
       </header>
 
       {monsters.length === 0 ? (
         <div className="flex flex-col items-center gap-4 rounded-lg border border-dashed border-border py-16 text-center text-muted-foreground">
           <Skull className="size-10" />
           <p className="italic">Nenhum monstro ainda. Crie o primeiro para o combate.</p>
-          <NewMonsterDialog />
+          {isMaster ? (
+            <NewMonsterDialog />
+          ) : (
+            <MasterUnlockModal
+              trigger={
+                <Button variant="outline" className="gap-2">
+                  <Lock className="size-4 text-muted-foreground" /> Criar monstro (Mestre)
+                </Button>
+              }
+            />
+          )}
         </div>
       ) : (
         <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

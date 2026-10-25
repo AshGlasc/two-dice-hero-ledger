@@ -1,11 +1,13 @@
 import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Dices, Eraser, Swords, Users } from "lucide-react";
+import { Crown, Dices, Eraser, KeyRound, Lock, LogOut, Swords, Users } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
 import { BodyMap } from "@/components/rpg/BodyMap";
+import { ChangePinDialog } from "@/components/rpg/ChangePinDialog";
 import { InlineField } from "@/components/rpg/InlineField";
+import { MasterLockScreen } from "@/components/rpg/MasterLockScreen";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -16,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useMasterAuth } from "@/context/MasterAuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { ATTRIBUTE_THEME } from "@/lib/attribute-theme";
 import { logRolls } from "@/lib/roll-log";
@@ -73,16 +76,54 @@ function skillValueFor(group: GroupData, characterId: string, skillKey: string) 
 }
 
 function GmPage() {
+  const { isMaster, isLoading, lock } = useMasterAuth();
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <p className="font-display text-lg uppercase tracking-wider text-muted-foreground animate-pulse">
+          Verificando credenciais do mestre...
+        </p>
+      </div>
+    );
+  }
+
+  if (!isMaster) {
+    return <MasterLockScreen />;
+  }
+
+  return <GmPageContent onLock={lock} />;
+}
+
+function GmPageContent({ onLock }: { onLock: () => void }) {
   const { data: group } = useSuspenseQuery(groupQuery);
 
   return (
     <main className="mx-auto max-w-6xl space-y-8 px-4 py-8 md:px-6">
-      <header>
-        <p className="label-caps text-primary">Bastidores</p>
-        <h1 className="text-6xl font-bold uppercase leading-none">Painel do mestre</h1>
-        <p className="mt-2 text-muted-foreground">
-          Tudo aqui atualiza ao vivo quando qualquer jogador muda a ficha ou rola os dados.
-        </p>
+      <header className="flex flex-wrap items-start justify-between gap-4 border-b border-border pb-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="label-caps text-primary">Bastidores da mesa</span>
+            <span className="flex items-center gap-1 rounded bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary">
+              <Crown className="size-3" /> Mestre Ativo
+            </span>
+          </div>
+          <h1 className="mt-1 text-5xl font-bold uppercase leading-none md:text-6xl">Painel do mestre</h1>
+          <p className="mt-2 text-muted-foreground">
+            Tudo aqui atualiza ao vivo quando qualquer jogador muda a ficha ou rola os dados.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <ChangePinDialog />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onLock}
+            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+          >
+            <LogOut className="mr-1.5 size-3.5" /> Bloquear Mestre
+          </Button>
+        </div>
       </header>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_360px]">

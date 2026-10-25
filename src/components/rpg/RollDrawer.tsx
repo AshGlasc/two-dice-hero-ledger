@@ -1,9 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
-import { Dices, Volume2, VolumeX } from "lucide-react";
+import { Dices, Lock, Volume2, VolumeX } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { useMasterAuth } from "@/context/MasterAuthContext";
 import { setSoundEnabled, soundEnabled } from "@/lib/roll-burst";
 import { rollsQuery } from "@/lib/rpg-queries";
 import { OUTCOME_CLASS, OUTCOME_TEXT, type RollOutcome } from "@/lib/skills";
@@ -13,8 +14,10 @@ import { cn } from "@/lib/utils";
 export function RollDrawer({ trigger }: { trigger?: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const [sound, setSound] = useState(true);
+  const { isMaster } = useMasterAuth();
   useEffect(() => setSound(soundEnabled()), []);
   const { data: rolls = [] } = useQuery({ ...rollsQuery, enabled: open });
+  const visibleRolls = rolls.filter((r) => !r.hidden || isMaster);
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -41,15 +44,20 @@ export function RollDrawer({ trigger }: { trigger?: React.ReactNode }) {
         >
           {sound ? <Volume2 /> : <VolumeX />} Som dos dados: {sound ? "ligado" : "desligado"}
         </Button>
-        {rolls.length === 0 ? (
+        {visibleRolls.length === 0 ? (
           <p className="py-10 text-center text-sm italic text-muted-foreground">Ninguém rolou ainda.</p>
         ) : (
           <ul className="-mr-2 flex-1 space-y-1 overflow-y-auto pr-2 text-sm">
-            {rolls.map((r) => (
+            {visibleRolls.map((r) => (
               <li key={r.id} className="flex items-center justify-between gap-2 border-b border-border/60 py-2">
                 <span className="min-w-0">
-                  <span className="block truncate font-display text-base font-semibold uppercase">
-                    {r.character_name || "—"}
+                  <span className="flex items-center gap-1.5 font-display text-base font-semibold uppercase">
+                    <span className="truncate">{r.character_name || "—"}</span>
+                    {r.hidden && (
+                      <span className="flex items-center gap-0.5 rounded bg-destructive/15 px-1.5 py-0.2 text-[10px] font-bold text-destructive">
+                        <Lock className="size-2.5" /> Oculto
+                      </span>
+                    )}
                   </span>
                   <span className="block truncate text-xs text-muted-foreground">
                     {r.label} ·{" "}

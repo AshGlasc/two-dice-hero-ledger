@@ -11,6 +11,7 @@ import {
 import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
+import { MasterAuthProvider } from "@/context/MasterAuthContext";
 import { RollBurst } from "@/components/rpg/RollBurst";
 import { TopNav } from "@/components/rpg/TopNav";
 import { Toaster } from "@/components/ui/sonner";
@@ -133,14 +134,16 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <RealtimeSync />
-      <TopNav />
-      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <div className="pb-20 md:pb-0">
-        <Outlet />
-      </div>
-      <RollBurst />
-      <Toaster position="top-center" theme="dark" />
+      <MasterAuthProvider>
+        <RealtimeSync />
+        <TopNav />
+        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+        <div className="pb-20 md:pb-0">
+          <Outlet />
+        </div>
+        <RollBurst />
+        <Toaster position="top-center" theme="dark" />
+      </MasterAuthProvider>
     </QueryClientProvider>
   );
 }

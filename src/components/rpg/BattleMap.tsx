@@ -1,10 +1,12 @@
-import { Brush, Eraser, ImagePlus, LogOut, Paintbrush, X } from "lucide-react";
+import { Brush, Eraser, ImagePlus, Lock, LogOut, Paintbrush, X } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Avatar } from "@/components/rpg/AvatarUpload";
+import { MasterUnlockModal } from "@/components/rpg/MasterUnlockModal";
 import { Stepper } from "@/components/rpg/Stepper";
 import { Button } from "@/components/ui/button";
+import { useMasterAuth } from "@/context/MasterAuthContext";
 import { useBattleMap } from "@/hooks/use-battle-map";
 import { canMoveTo, cellKey, MAP_LIMITS, TERRAINS, type Terrain, type TerrainKey } from "@/lib/combat";
 import { fileToSmallImage } from "@/lib/image";
@@ -43,6 +45,7 @@ export function BattleMap({
   onMove: (id: string, x: number | null, y: number | null) => void;
 }) {
   const saveMap = useBattleMap();
+  const { isMaster } = useMasterAuth();
   const [selected, setSelected] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [brush, setBrush] = useState<TerrainKey | "erase">("wall");
@@ -111,9 +114,19 @@ export function BattleMap({
                 : "Toque num rosto e depois numa casa para andar."}
           </p>
         </div>
-        <Button variant={editing ? "paint" : "outline"} size="sm" onClick={() => setEditing((v) => !v)}>
-          <Paintbrush /> {editing ? "Pronto" : "Editar mapa"}
-        </Button>
+        {isMaster ? (
+          <Button variant={editing ? "paint" : "outline"} size="sm" onClick={() => setEditing((v) => !v)}>
+            <Paintbrush /> {editing ? "Pronto" : "Editar mapa"}
+          </Button>
+        ) : (
+          <MasterUnlockModal
+            trigger={
+              <Button variant="outline" size="sm" className="gap-1.5 opacity-80" title="Apenas o mestre pode alterar o terreno">
+                <Lock className="size-3.5 text-muted-foreground" /> Editar mapa (Mestre)
+              </Button>
+            }
+          />
+        )}
       </div>
 
       {editing && (

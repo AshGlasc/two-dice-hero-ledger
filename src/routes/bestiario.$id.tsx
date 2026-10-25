@@ -1,11 +1,13 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, notFound, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, Dices, Swords, Trash2 } from "lucide-react";
+import { ArrowLeft, Crown, Dices, Lock, Swords, Trash2 } from "lucide-react";
 
 import { AvatarUpload } from "@/components/rpg/AvatarUpload";
 import { InlineField } from "@/components/rpg/InlineField";
+import { MasterUnlockModal } from "@/components/rpg/MasterUnlockModal";
 import { Stepper } from "@/components/rpg/Stepper";
 import { Button } from "@/components/ui/button";
+import { useMasterAuth } from "@/context/MasterAuthContext";
 import { useMonsters } from "@/hooks/use-monsters";
 import { ATTRIBUTE_THEME } from "@/lib/attribute-theme";
 import { MONSTER_LIMITS } from "@/lib/combat";
@@ -56,34 +58,59 @@ function MonsterPage() {
   const { id } = Route.useParams();
   const { data: monsters } = useSuspenseQuery(monstersQuery);
   const { update, remove } = useMonsters();
+  const { isMaster } = useMasterAuth();
   const navigate = useNavigate();
   const m = monsters.find((x) => x.id === id);
   if (!m) return null;
 
-  const save = (patch: Parameters<typeof update.mutate>[0]["patch"]) => update.mutate({ id, patch });
+  const save = (patch: Parameters<typeof update.mutate>[0]["patch"]) => {
+    if (!isMaster) return;
+    update.mutate({ id, patch });
+  };
   const roll = (label: string, mod: number) =>
     void logRolls([{ characterId: null, characterName: m.name, label, result: roll2d6(mod, null) }]);
 
   return (
     <main className="mx-auto max-w-5xl space-y-6 px-4 py-6 md:px-6 md:py-8">
+      {!isMaster ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/80 bg-card/60 p-3 text-xs text-muted-foreground">
+          <span className="flex items-center gap-1.5">
+            <Lock className="size-3.5 text-primary" /> Visualização de monstro (Edição e exclusão restritas ao mestre)
+          </span>
+          <MasterUnlockModal
+            trigger={
+              <Button size="sm" variant="outline" className="h-7 text-xs">
+                Desbloquear Mestre
+              </Button>
+            }
+          />
+        </div>
+      ) : (
+        <div className="flex items-center gap-1.5 text-xs font-semibold text-primary">
+          <Crown className="size-3.5" /> Modo Mestre: Edição e controle liberados
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <Button asChild variant="ghost" size="sm">
           <Link to="/bestiario">
             <ArrowLeft /> Bestiário
           </Link>
         </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-muted-foreground hover:text-destructive"
-          onClick={() => {
-            if (!confirm(`Apagar ${m.name}? Ele sai também do combate.`)) return;
-            remove.mutate(id);
-            navigate({ to: "/bestiario" });
-          }}
-        >
-          <Trash2 /> Apagar
-        </Button>
+        {isMaster && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-muted-foreground hover:text-destructive"
+            onClick={() => {
+              if (!confirm(`Apagar ${m.name}? Ele sai também do combate.`)) return;
+              remove.mutate(id);
+              navigate({ to: "/bestiario" });
+            }}
+          >
+            <Trash2 /> Apagar monstro
+          </Button>
+        )}
       </div>
 
       <header className="flex items-center gap-4 border-b border-border pb-6 md:gap-6">
