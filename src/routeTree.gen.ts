@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as CelularRouteImport } from './routes/celular'
 import { Route as CombateRouteImport } from './routes/combate'
 import { Route as MestreRouteImport } from './routes/mestre'
 import { Route as BestiarioIndexRouteImport } from './routes/bestiario.index'
@@ -19,6 +20,11 @@ import { Route as PersonagemIdRouteImport } from './routes/personagem.$id'
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CelularRoute = CelularRouteImport.update({
+  id: '/celular',
+  path: '/celular',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CombateRoute = CombateRouteImport.update({
@@ -49,6 +55,7 @@ const PersonagemIdRoute = PersonagemIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/celular': typeof CelularRoute
   '/combate': typeof CombateRoute
   '/mestre': typeof MestreRoute
   '/bestiario/$id': typeof BestiarioIdRoute
@@ -57,6 +64,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/celular': typeof CelularRoute
   '/combate': typeof CombateRoute
   '/mestre': typeof MestreRoute
   '/bestiario/$id': typeof BestiarioIdRoute
@@ -66,6 +74,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/celular': typeof CelularRoute
   '/combate': typeof CombateRoute
   '/mestre': typeof MestreRoute
   '/bestiario/$id': typeof BestiarioIdRoute
@@ -76,6 +85,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/celular'
     | '/combate'
     | '/mestre'
     | '/bestiario/$id'
@@ -84,6 +94,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/celular'
     | '/combate'
     | '/mestre'
     | '/bestiario/$id'
@@ -92,6 +103,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/celular'
     | '/combate'
     | '/mestre'
     | '/bestiario/$id'
@@ -101,6 +113,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  CelularRoute: typeof CelularRoute
   CombateRoute: typeof CombateRoute
   MestreRoute: typeof MestreRoute
   BestiarioIdRoute: typeof BestiarioIdRoute
@@ -115,6 +128,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/celular': {
+      id: '/celular'
+      path: '/celular'
+      fullPath: '/celular'
+      preLoaderRoute: typeof CelularRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/combate': {
@@ -157,6 +177,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  CelularRoute: CelularRoute,
   CombateRoute: CombateRoute,
   MestreRoute: MestreRoute,
   BestiarioIdRoute: BestiarioIdRoute,

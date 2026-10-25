@@ -1,4 +1,4 @@
-import { Brush, Eraser, ImagePlus, Lock, LogOut, Paintbrush, X } from "lucide-react";
+import { Brush, CloudFog, Eraser, Eye, Image as ImageIcon, ImagePlus, Lock, LogOut, Paintbrush, X } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -8,7 +8,19 @@ import { Stepper } from "@/components/rpg/Stepper";
 import { Button } from "@/components/ui/button";
 import { useMasterAuth } from "@/context/MasterAuthContext";
 import { useBattleMap } from "@/hooks/use-battle-map";
-import { canMoveTo, cellKey, MAP_LIMITS, TERRAINS, type Terrain, type TerrainKey } from "@/lib/combat";
+import {
+  canMoveTo,
+  cellKey,
+  conditionEmoji,
+  fillFog,
+  MAP_LIMITS,
+  TERRAINS,
+  tokenVisible,
+  type Fog,
+  type Terrain,
+  type TerrainKey,
+  type TileImages,
+} from "@/lib/combat";
 import { fileToSmallImage } from "@/lib/image";
 import { getPlayerCharacterId } from "@/lib/player-character";
 import type { BattleMap as MapRow } from "@/lib/rpg-queries";
@@ -26,7 +38,11 @@ export type MapToken = {
   hpPct: number | null;
   out: boolean;
   current: boolean;
+  conditions?: string[];
 };
+
+type BrushKey = TerrainKey | "erase" | "image" | "fog" | "reveal";
+type Draft = { terrain: Terrain; tile_images: TileImages; fog: Fog };
 
 const CELL = 44;
 
@@ -56,16 +72,25 @@ export function BattleMap({
   const myCharacterId = getPlayerCharacterId();
   const [selected, setSelected] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
-  const [brush, setBrush] = useState<TerrainKey | "erase">("wall");
-  const [draft, setDraft] = useState<Terrain | null>(null);
+  const [brush, setBrush] = useState<BrushKey>("wall");
+  const [stamp, setStamp] = useState<string>("");
+  const [draft, setDraft] = useState<Draft | null>(null);
+  const stampFile = useRef<HTMLInputElement>(null);
   const painting = useRef(false);
   const grid = useRef<HTMLDivElement>(null);
   const file = useRef<HTMLInputElement>(null);
 
-  const terrain = draft ?? ((map.terrain ?? {}) as Terrain);
-  const placed = tokens.filter((t) => t.x !== null && t.y !== null && t.x < map.cols && t.y! < map.rows);
-  const tray = tokens.filter((t) => !placed.includes(t));
-  const occupied = useMemo(() => new Set(placed.map((t) => cellKey(t.x!, t.y!))), [placed]);
+  const saved: Draft = {
+    terrain: (map.terrain ?? {}) as Terrain,
+    tile_images: (map.tile_images ?? {}) as TileImages,
+    fog: (map.fog ?? {}) as Fog,
+  };
+  const cur = draft ?? saved;
+  const { terrain, tile_images: images, fog } = cur;
+  const inside = tokens.filter((t) => t.x !== null && t.y !== null && t.x < map.cols && t.y! < map.rows);
+  const placed = inside.filter((t) => tokenVisible(fog, t.x!, t.y!, isMaster, t.characterId === myCharacterId && !!myCharacterId));
+  const tray = tokens.filter((t) => !inside.includes(t));
+  const occupied = useMemo(() => new Set(inside.map((t) => cellKey(t.x!, t.y!))), [inside]);
   const sel = tokens.find((t) => t.id === selected) ?? null;
 
   const cellAt = (e: React.PointerEvent) => {
@@ -76,10 +101,18 @@ export function BattleMap({
   const paint = (e: React.PointerEvent) => {
     const { x, y } = cellAt(e);
     if (x < 0 || y < 0 || x >= map.cols || y >= map.rows) return;
+    const k = cellKey(x, y);
     setDraft((d) => {
-      const next = { ...(d ?? terrain) };
-      if (brush === "erase") delete next[cellKey(x, y)];
-      else next[cellKey(x, y)] = brush;
+      const base = d ?? saved;
+      const next: Draft = { terrain: { ...base.terrain }, tile_images: { ...base.tile_images }, fog: { ...base.fog } };
+      if (brush === "erase") {
+        delete next.terrain[k];
+        delete next.tile_images[k];
+      } else if (brush === "image") {
+        if (stamp) next.tile_images[k] = stamp;
+      } else if (brush === "fog") next.fog[k] = true;
+      else if (brush === "reveal") delete next.fog[k];
+      else next.terrain[k] = brush;
       return next;
     });
   };
@@ -87,7 +120,7 @@ export function BattleMap({
   const commit = () => {
     if (!painting.current) return;
     painting.current = false;
-    if (draft) saveMap.mutate({ terrain: draft }, { onSettled: () => setDraft(null) });
+    if (draft) saveMap.mutate(draft, { onSettled: () => setDraft(null) });
   };
 
   /**
@@ -107,6 +140,10 @@ export function BattleMap({
 
   const onGridDown = (e: React.PointerEvent) => {
     if (editing) {
+      if (brush === "image" && !stamp) {
+        toast("Escolha uma imagem primeiro.");
+        return;
+      }
       painting.current = true;
       (e.target as Element).setPointerCapture?.(e.pointerId);
       paint(e);
@@ -131,7 +168,13 @@ export function BattleMap({
           <p className="label-caps text-primary">Mapa de batalha</p>
           <p className="text-sm text-muted-foreground">
             {editing
-              ? "Escolha um pincel e pinte as casas."
+              ? brush === "fog"
+                ? "Pinte as casas que os jogadores não podem ver."
+                : brush === "reveal"
+                  ? "Pinte para revelar as casas escondidas."
+                  : brush === "image"
+                    ? "Toque nas casas para colocar a imagem."
+                    : "Escolha um pincel e pinte as casas."
               : sel
                 ? `Toque numa casa para mover ${sel.name}.`
                 : combatActive && !isMaster && currentCombatantId
@@ -183,6 +226,62 @@ export function BattleMap({
               <Eraser /> Borracha
             </Button>
           </div>
+          <div className="flex flex-wrap items-center gap-1.5 border-t border-border pt-3">
+            <Button
+              size="sm"
+              variant={brush === "image" ? "secondary" : "ghost"}
+              onClick={() => (stamp ? setBrush("image") : stampFile.current?.click())}
+              className={cn(brush === "image" && "ring-2 ring-primary")}
+            >
+              {stamp ? <img src={stamp} alt="" className="size-5 rounded-sm object-cover" /> : <ImageIcon />}
+              Imagem na casa
+            </Button>
+            {stamp && (
+              <Button size="sm" variant="ghost" onClick={() => stampFile.current?.click()}>
+                Trocar imagem
+              </Button>
+            )}
+            <input
+              ref={stampFile}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={async (e) => {
+                const f = e.target.files?.[0];
+                e.target.value = "";
+                if (!f) return;
+                try {
+                  setStamp(await fileToSmallImage(f, 128, 0.7));
+                  setBrush("image");
+                } catch {
+                  toast.error("Não consegui abrir essa imagem.");
+                }
+              }}
+            />
+            <span className="mx-1 h-5 w-px bg-border" />
+            <Button
+              size="sm"
+              variant={brush === "fog" ? "secondary" : "ghost"}
+              onClick={() => setBrush("fog")}
+              className={cn(brush === "fog" && "ring-2 ring-primary")}
+            >
+              <CloudFog /> Névoa
+            </Button>
+            <Button
+              size="sm"
+              variant={brush === "reveal" ? "secondary" : "ghost"}
+              onClick={() => setBrush("reveal")}
+              className={cn(brush === "reveal" && "ring-2 ring-primary")}
+            >
+              <Eye /> Revelar
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => saveMap.mutate({ fog: fillFog(map.cols, map.rows) })}>
+              Cobrir tudo
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => saveMap.mutate({ fog: {} })}>
+              Revelar tudo
+            </Button>
+          </div>
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
             <label className="flex items-center gap-2">
               <span className="label-caps text-muted-foreground">Largura</span>
@@ -215,7 +314,7 @@ export function BattleMap({
             <Button
               size="sm"
               variant="ghost"
-              onClick={() => confirm("Limpar todo o terreno?") && saveMap.mutate({ terrain: {} })}
+              onClick={() => confirm("Limpar todo o terreno e as imagens das casas?") && saveMap.mutate({ terrain: {}, tile_images: {} })}
             >
               <Brush /> Limpar terreno
             </Button>
@@ -263,7 +362,17 @@ export function BattleMap({
             {Array.from({ length: map.cols * map.rows }).map((_, i) => {
               const k = cellKey(i % map.cols, Math.floor(i / map.cols));
               const t = terrain[k];
-              return <div key={k} className={cn("border border-border/40", t && TERRAIN_CLASS[t])} />;
+              const img = images[k];
+              const fogged = Boolean(fog[k]);
+              if (fogged && !isMaster) {
+                return <div key={k} className="fog-cell border border-background" aria-label="Casa escondida" />;
+              }
+              return (
+                <div key={k} className={cn("relative border border-border/40", t && TERRAIN_CLASS[t])}>
+                  {img && <img src={img} alt="" draggable={false} className="absolute inset-0 size-full object-cover" />}
+                  {fogged && <div className="fog-cell absolute inset-0 opacity-60" title="Escondida dos jogadores" />}
+                </div>
+              );
             })}
           </div>
 
@@ -303,6 +412,15 @@ export function BattleMap({
                     selected === t.id && "ring-4 ring-foreground",
                   )}
                 />
+                {t.conditions && t.conditions.length > 0 && (
+                  <span className="absolute -right-2 -top-2 flex max-w-14 flex-wrap justify-end gap-px text-[11px] leading-none drop-shadow">
+                    {t.conditions.slice(0, 3).map((c) => (
+                      <span key={c} title={c} className="rounded-full bg-background/90 p-px">
+                        {conditionEmoji(c)}
+                      </span>
+                    ))}
+                  </span>
+                )}
                 {t.hpPct !== null && (
                   <span className="absolute -bottom-1 left-0 h-1 w-full overflow-hidden rounded-full bg-background">
                     <span

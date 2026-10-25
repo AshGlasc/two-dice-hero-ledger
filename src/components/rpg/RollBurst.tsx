@@ -50,6 +50,11 @@ export function RollBurst() {
       <div className={cn("pointer-events-none absolute inset-0 animate-flash", FLASH[outcome] ?? "")} />
       {single ? (
         <div className={cn("relative w-full max-w-md animate-burst-in text-center", crit && "animate-shake")}>
+          {single.hidden && (
+            <p className="mx-auto mb-2 w-fit rounded-full border border-primary/50 px-3 py-0.5 text-xs font-bold uppercase tracking-wider text-primary">
+              🤫 Rolagem silenciosa
+            </p>
+          )}
           <p className="label-caps text-primary">{single.label}</p>
           <p className="mt-1 truncate font-display text-4xl font-bold uppercase leading-none md:text-5xl">
             {single.name || "Alguém"}
@@ -86,7 +91,9 @@ export function RollBurst() {
       ) : (
         <div className="relative w-full max-w-md animate-burst-in rounded-lg border border-border bg-card p-5 shadow-paint">
           <p className="label-caps text-primary">{rolls[0]?.label}</p>
-          <p className="font-display text-3xl font-bold uppercase">A mesa rolou!</p>
+          <p className="font-display text-3xl font-bold uppercase">
+            {rolls.every((r) => r.hidden) ? "🤫 Rolagem silenciosa" : "A mesa rolou!"}
+          </p>
           <ol className="mt-3 divide-y divide-border">
             {[...rolls]
               .sort((a, b) => b.total - a.total)

@@ -12,6 +12,7 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { MasterAuthProvider } from "@/context/MasterAuthContext";
+import { SilentRollToggle } from "@/components/rpg/SilentRollToggle";
 import { RollBurst } from "@/components/rpg/RollBurst";
 import { TopNav } from "@/components/rpg/TopNav";
 import { Toaster } from "@/components/ui/sonner";
@@ -142,6 +143,7 @@ function RootComponent() {
           <Outlet />
         </div>
         <RollBurst />
+        <SilentRollToggle />
         <Toaster position="top-center" theme="dark" />
       </MasterAuthProvider>
     </QueryClientProvider>

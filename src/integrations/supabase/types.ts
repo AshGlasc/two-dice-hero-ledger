@@ -53,25 +53,31 @@ export type Database = {
         Row: {
           background_url: string
           cols: number
+          fog: Json
           id: number
           rows: number
           terrain: Json
+          tile_images: Json
           updated_at: string
         }
         Insert: {
           background_url?: string
           cols?: number
+          fog?: Json
           id?: number
           rows?: number
           terrain?: Json
+          tile_images?: Json
           updated_at?: string
         }
         Update: {
           background_url?: string
           cols?: number
+          fog?: Json
           id?: number
           rows?: number
           terrain?: Json
+          tile_images?: Json
           updated_at?: string
         }
         Relationships: []
@@ -148,6 +154,7 @@ export type Database = {
           fisico: number
           id: string
           intelecto: number
+          money: number
           motor: number
           name: string
           notes: string
@@ -162,6 +169,7 @@ export type Database = {
           fisico?: number
           id?: string
           intelecto?: number
+          money?: number
           motor?: number
           name: string
           notes?: string
@@ -176,6 +184,7 @@ export type Database = {
           fisico?: number
           id?: string
           intelecto?: number
+          money?: number
           motor?: number
           name?: string
           notes?: string
@@ -304,6 +313,54 @@ export type Database = {
         }
         Relationships: []
       }
+      messages: {
+        Row: {
+          amount: number | null
+          body: string
+          created_at: string
+          from_character_id: string | null
+          from_name: string
+          id: string
+          kind: string
+          to_character_id: string | null
+        }
+        Insert: {
+          amount?: number | null
+          body?: string
+          created_at?: string
+          from_character_id?: string | null
+          from_name?: string
+          id?: string
+          kind?: string
+          to_character_id?: string | null
+        }
+        Update: {
+          amount?: number | null
+          body?: string
+          created_at?: string
+          from_character_id?: string | null
+          from_name?: string
+          id?: string
+          kind?: string
+          to_character_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_from_character_id_fkey"
+            columns: ["from_character_id"]
+            isOneToOne: false
+            referencedRelation: "characters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_to_character_id_fkey"
+            columns: ["to_character_id"]
+            isOneToOne: false
+            referencedRelation: "characters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       monsters: {
         Row: {
           abilities: string
@@ -319,6 +376,7 @@ export type Database = {
           id: string
           initiative_bonus: number
           intelecto: number
+          money: number
           motor: number
           name: string
           psique: number
@@ -337,6 +395,7 @@ export type Database = {
           id?: string
           initiative_bonus?: number
           intelecto?: number
+          money?: number
           motor?: number
           name: string
           psique?: number
@@ -355,6 +414,7 @@ export type Database = {
           id?: string
           initiative_bonus?: number
           intelecto?: number
+          money?: number
           motor?: number
           name?: string
           psique?: number
@@ -460,7 +520,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      transfer_money: {
+        Args: { _amount: number; _from: string; _note?: string; _to: string }
+        Returns: number
+      }
     }
     Enums: {
       [_ in never]: never

@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { emitRoll } from "@/lib/roll-burst";
+import { isSilentRoll } from "@/lib/silent-roll";
 import type { RollResult } from "@/lib/skills";
 
 // Rolagens feitas nesta aba: não mostramos aviso de novo para quem acabou de rolar.
@@ -24,11 +25,12 @@ export function isLocalRoll(r: {
   return true;
 }
 
-/** Salva a rolagem para aparecer ao vivo para todos na mesa. */
+/** Salva a rolagem para aparecer ao vivo para todos na mesa (ou só para o mestre, se silenciosa). */
 export async function logRolls(
   entries: { characterId: string | null; characterName: string; label: string; result: RollResult }[],
 ) {
   if (entries.length === 0) return;
+  const hidden = isSilentRoll();
   for (const e of entries) {
     localRolls.set(
       signature(e.characterName, e.label, e.result.dice[0], e.result.dice[1], e.result.total),
@@ -43,6 +45,7 @@ export async function logRolls(
       total: e.result.total,
       difficulty: e.result.difficulty,
       outcome: e.result.outcome,
+      hidden,
     });
   }
   const { error } = await supabase.from("rolls").insert(
@@ -56,6 +59,7 @@ export async function logRolls(
       total: e.result.total,
       difficulty: e.result.difficulty,
       outcome: e.result.outcome,
+      hidden,
     })),
   );
   if (error) console.error(error);

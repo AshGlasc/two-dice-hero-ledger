@@ -141,7 +141,7 @@ export function parseMonsterAttacks(monsterId: string, raw: string | null | unde
     .map((item, i) => {
       // tenta extrair dados da string
       const matchDice = item.match(/(\d+)d6/i);
-      const dice = matchDice ? parseInt(matchDice[1], 10) : 2;
+      const dice = matchDice ? parseInt(matchDice[1] ?? "2", 10) : 2;
       return {
         id: `legacy-${monsterId}-${i}`,
         ownerId: monsterId,
@@ -184,11 +184,11 @@ export function rollCustomAttack(
 
   let outcome: RollOutcome;
   if (isCritSuccess) {
-    outcome = "critical_success";
+    outcome = "critical-success";
   } else if (isCritFailure) {
-    outcome = "critical_failure";
+    outcome = "critical-failure";
   } else if (targetDefense === null) {
-    outcome = "normal";
+    outcome = "none";
   } else if (total >= targetDefense) {
     outcome = "success";
   } else {
@@ -196,7 +196,7 @@ export function rollCustomAttack(
   }
 
   return {
-    dice: [dice[0], dice[1] ?? 0],
+    dice: [dice[0] ?? 0, dice[1] ?? 0],
     modifier: skillBonus,
     total,
     difficulty: targetDefense,

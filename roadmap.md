@@ -11,3 +11,11 @@
 - [x] Bestiário: criar/editar perfis de monstros (PV, defesa, ataque, iniciativa, ataques, habilidades)
 - [x] Combate: montar encontro (jogadores + monstros), iniciativa, turnos/rodadas, ataques, dano, condições — ao vivo para todos
 - [x] Rolagens visíveis para todos: aviso na tela de todo mundo + gaveta de rolagens em qualquer página
+- [x] Acesso do mestre com senha (feito pelo usuário)
+- [ ] Corrigir erros que impedem o app de abrir
+- [ ] Emoji para cada efeito em jogadores e monstros (lista e mapa)
+- [ ] Rolagem silenciosa no cantinho: só quem rolou (e o mestre) vê
+- [ ] Mapa: imagem em ladrilhos específicos
+- [ ] Mapa: névoa (ocultar ladrilhos para os jogadores)
+- [ ] Dinheiro para jogadores e monstros/NPCs
+- [ ] Aba Celular: saldo, Pix entre jogadores, mensagens, apps futuros

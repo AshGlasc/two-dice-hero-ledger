@@ -12,6 +12,7 @@ import { useCombat } from "@/hooks/use-combat";
 import {
   ATTACK_SKILLS,
   CONDITIONS,
+  conditionEmoji,
   INITIATIVE_SKILL,
   changeHp,
   findFreeCell,
@@ -24,6 +25,7 @@ import {
   cellKey,
   type Terrain,
 } from "@/lib/combat";
+import { getPlayerCharacterId } from "@/lib/player-character";
 import { logRolls } from "@/lib/roll-log";
 import { battleMapQuery, combatQuery, groupQuery, monstersQuery, type Combatant } from "@/lib/rpg-queries";
 import { roll2d6 } from "@/lib/skills";
@@ -157,7 +159,12 @@ function CombatPage() {
     hpPct: x.hp_max ? x.hp_current / x.hp_max : null,
     out: x.hp_current <= 0,
     current: x.id === state.current_combatant_id,
+    conditions: x.conditions,
   }));
+
+  const myId = getPlayerCharacterId();
+  /** Mestre controla todos; jogador só o próprio personagem. */
+  const mine = (x: Combatant) => isMaster || (!!myId && x.character_id === myId);
 
   const inCombat = new Set(combat.combatants.map((x) => x.character_id));
 
@@ -264,18 +271,38 @@ function CombatPage() {
               <div className="flex items-center gap-2">
                 <Avatar src={avatarOf(x)} name={x.name} tone={x.kind === "monster" ? "monster" : "player"} className="size-10" />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate font-bold">{x.name}</p>
+                  <p className="truncate font-bold">
+                    {x.name}{" "}
+                    {x.conditions.map((cd) => (
+                      <span key={cd} title={cd}>
+                        {conditionEmoji(cd)}
+                      </span>
+                    ))}
+                  </p>
                   <p className="text-xs text-muted-foreground">
                     Inic. {x.initiative ?? "—"} · Def {x.defense} · Atq +{x.attack_bonus}
                   </p>
                 </div>
-                <Button size="icon" variant="ghost" className="size-8" onClick={() => attack(x)} aria-label="Atacar">
-                  <Swords />
-                </Button>
-                <Button size="icon" variant="ghost" className="size-8" onClick={() => c.remove.mutate(x.id)} aria-label="Remover">
-                  <Trash2 />
-                </Button>
+                {mine(x) && (
+                  <Button size="icon" variant="ghost" className="size-8" onClick={() => attack(x)} aria-label="Atacar">
+                    <Swords />
+                  </Button>
+                )}
+                {isMaster && (
+                  <Button size="icon" variant="ghost" className="size-8" onClick={() => c.remove.mutate(x.id)} aria-label="Remover">
+                    <Trash2 />
+                  </Button>
+                )}
               </div>
+              {!mine(x) ? (
+                <div className="mt-2 flex items-center gap-2">
+                  <div className="h-2 flex-1 overflow-hidden rounded bg-muted">
+                    <div className="h-full bg-destructive" style={{ width: `${(x.hp_current / Math.max(1, x.hp_max)) * 100}%` }} />
+                  </div>
+                  {x.kind === "character" && <span className="w-14 text-right text-sm font-bold">{x.hp_current}/{x.hp_max}</span>}
+                </div>
+              ) : (
+              <>
               <div className="mt-2 flex items-center gap-2">
                 <Button size="sm" variant="outline" className="h-7" onClick={() => c.update.mutate([{ id: x.id, patch: { hp_current: changeHp(x.hp_current, -hpDelta, x.hp_max) } }])}>
                   −{hpDelta}
@@ -303,11 +330,13 @@ function CombatPage() {
                         on ? "border-destructive bg-destructive/20 text-destructive" : "border-border text-muted-foreground",
                       )}
                     >
-                      {cond}
+                      {conditionEmoji(cond)} {cond}
                     </button>
                   );
                 })}
               </div>
+              </>
+              )}
             </div>
           ))}
         </aside>

@@ -8,6 +8,8 @@ export type BurstRoll = {
   total: number;
   difficulty: number | null;
   outcome: string;
+  /** Rolagem silenciosa: só quem rolou e o mestre veem. */
+  hidden?: boolean;
 };
 
 type Listener = (rolls: BurstRoll[]) => void;

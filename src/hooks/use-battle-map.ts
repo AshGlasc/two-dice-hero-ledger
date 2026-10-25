@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import type { BattleMap } from "@/lib/rpg-queries";
 
-type MapPatch = Partial<Pick<BattleMap, "cols" | "rows" | "background_url" | "terrain">>;
+type MapPatch = Partial<Pick<BattleMap, "cols" | "rows" | "background_url" | "terrain" | "tile_images" | "fog">>;
 const KEY = ["battle_map"];
 
 export function useBattleMap() {

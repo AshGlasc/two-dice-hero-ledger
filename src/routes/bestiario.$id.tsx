@@ -5,6 +5,7 @@ import { ArrowLeft, Crown, Dices, Lock, Swords, Trash2 } from "lucide-react";
 import { AvatarUpload } from "@/components/rpg/AvatarUpload";
 import { InlineField } from "@/components/rpg/InlineField";
 import { MasterUnlockModal } from "@/components/rpg/MasterUnlockModal";
+import { MoneyField } from "@/components/rpg/MoneyField";
 import { MonsterAttacksSection } from "@/components/rpg/MonsterAttacksSection";
 import { Stepper } from "@/components/rpg/Stepper";
 import { Button } from "@/components/ui/button";
@@ -133,6 +134,7 @@ function MonsterPage() {
             onSave={(v) => save({ former_life: v })}
             className="px-1 italic"
           />
+          <MoneyField value={m.money} canEdit={isMaster} onSave={(v) => save({ money: v })} className="mt-1" />
         </div>
       </header>
 

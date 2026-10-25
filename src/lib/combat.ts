@@ -11,7 +11,25 @@ export const CONDITIONS = [
   "Caído",
   "Cego",
   "Agarrado",
+  "Infectado",
+  "Invisível",
 ] as const;
+
+/** Emoji que aparece no rosto do jogador/monstro para cada efeito. */
+export const CONDITION_EMOJI: Record<string, string> = {
+  Atordoado: "💫",
+  Sangrando: "🩸",
+  "Em chamas": "🔥",
+  Amedrontado: "😱",
+  Envenenado: "🤢",
+  Caído: "🛌",
+  Cego: "🙈",
+  Agarrado: "🪢",
+  Infectado: "🍄",
+  Invisível: "👻",
+};
+
+export const conditionEmoji = (c: string) => CONDITION_EMOJI[c] ?? "❔";
 
 /** Skill usada para rolar iniciativa dos jogadores. */
 export const INITIATIVE_SKILL = "velocidade_reacao";
@@ -161,4 +179,22 @@ export function findFreeCell(
     for (let y = 0; y < rows; y++) if (canMoveTo(x, y, cols, rows, terrain, occupied)) return { x, y };
   }
   return null;
+}
+
+/** Casas cobertas pela névoa (só o mestre enxerga o que tem embaixo). */
+export type Fog = Record<string, boolean>;
+export type TileImages = Record<string, string>;
+
+export const isFogged = (fog: Fog, x: number, y: number) => Boolean(fog[cellKey(x, y)]);
+
+/** Jogador vê um rosto no mapa? O mestre vê tudo; o jogador sempre vê o próprio. */
+export function tokenVisible(fog: Fog, x: number, y: number, viewerIsMaster: boolean, isMine: boolean) {
+  return viewerIsMaster || isMine || !isFogged(fog, x, y);
+}
+
+/** Cobre (ou revela) o mapa inteiro de névoa. */
+export function fillFog(cols: number, rows: number): Fog {
+  const out: Fog = {};
+  for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) out[cellKey(x, y)] = true;
+  return out;
 }
