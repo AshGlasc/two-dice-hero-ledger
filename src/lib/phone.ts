@@ -7,13 +7,16 @@ export type PhoneMessage = {
 
 /** Conversa "grupo" = mensagens sem destinatário. */
 export const GROUP = "grupo";
+/** Conversa com os NPCs do mestre. */
+export const NPC = "npc";
 
 /** A mensagem pertence à conversa entre `me` e `other` (ou ao grupo)? */
 export function inConversation(m: PhoneMessage, me: string | null, other: string) {
   if (other === GROUP) return m.to_character_id === null;
   if (m.to_character_id === null) return false;
-  // Mensagem do mestre/NPC (sem remetente) para mim aparece na conversa "mestre".
-  if (other === "npc") return m.from_character_id === null && m.to_character_id === me;
+  // Conversa com o mestre/NPCs: o NPC manda sem remetente; o jogador responde "para si mesmo".
+  if (other === NPC) return m.to_character_id === me && (m.from_character_id === null || m.from_character_id === me);
+  if (m.from_character_id === m.to_character_id) return false;
   return (
     (m.from_character_id === me && m.to_character_id === other) ||
     (m.from_character_id === other && m.to_character_id === me)

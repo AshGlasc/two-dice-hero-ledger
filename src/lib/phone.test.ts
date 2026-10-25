@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { fillFog, tokenVisible } from "@/lib/combat";
-import { GROUP, inConversation, transferError } from "@/lib/phone";
+import { GROUP, inConversation, NPC, transferError } from "@/lib/phone";
 import { shouldAnnounce } from "@/lib/silent-roll";
 
 describe("Pix", () => {
@@ -20,6 +20,12 @@ describe("Mensagens", () => {
     expect(inConversation({ from_character_id: "a", to_character_id: "b" }, "b", "a")).toBe(true);
     expect(inConversation({ from_character_id: "a", to_character_id: "c" }, "b", "a")).toBe(false);
     expect(inConversation({ from_character_id: "a", to_character_id: null }, "b", GROUP)).toBe(true);
+  });
+  it("conversa com NPC: mensagem do mestre e resposta do jogador ficam juntas, e só dele", () => {
+    expect(inConversation({ from_character_id: null, to_character_id: "b" }, "b", NPC)).toBe(true);
+    expect(inConversation({ from_character_id: "b", to_character_id: "b" }, "b", NPC)).toBe(true);
+    expect(inConversation({ from_character_id: null, to_character_id: "c" }, "b", NPC)).toBe(false);
+    expect(inConversation({ from_character_id: "b", to_character_id: "b" }, "a", "b")).toBe(false);
   });
 });
 
