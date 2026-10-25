@@ -153,6 +153,8 @@ export const EMPTY_MAP: BattleMap = {
   rows: 12,
   background_url: "",
   terrain: {},
+  tile_images: {},
+  fog: {},
   updated_at: "",
 };
 
@@ -162,5 +164,20 @@ export const battleMapQuery = queryOptions({
     const { data, error } = await supabase.from("battle_map").select("*").eq("id", 1).maybeSingle();
     if (error) throw error;
     return data ?? EMPTY_MAP;
+  },
+});
+
+export type Message = Tables["messages"]["Row"];
+
+export const messagesQuery = queryOptions({
+  queryKey: ["messages"],
+  queryFn: async () => {
+    const { data, error } = await supabase
+      .from("messages")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(300);
+    if (error) throw error;
+    return data.reverse();
   },
 });
