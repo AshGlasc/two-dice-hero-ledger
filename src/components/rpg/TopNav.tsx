@@ -19,7 +19,7 @@ export function TopNav() {
       <header className="sticky top-0 z-40 border-b border-border bg-background/85 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-4 px-4 md:px-6">
           <Link to="/" className="font-display text-2xl font-bold uppercase tracking-wide">
-            Fungo <span className="text-primary">Disco</span>
+            Eco dos <span className="text-primary">Caídos</span>
           </Link>
           <nav className="hidden items-center gap-5 md:flex">
             {LINKS.map((l) => (

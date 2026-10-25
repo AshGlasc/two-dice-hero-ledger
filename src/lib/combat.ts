@@ -1,4 +1,4 @@
-// Regras de combate do Fungo Disco (funções puras, testadas em combat.test.ts).
+// Regras de combate do Eco dos Caídos (funções puras, testadas em combat.test.ts).
 import type { GroupData } from "@/lib/rpg-queries";
 import { ALL_SKILLS, skillTotal } from "@/lib/skills";
 

@@ -36,13 +36,13 @@ import { cn } from "@/lib/utils";
 export const Route = createFileRoute("/mestre")({
   head: () => ({
     meta: [
-      { title: "Painel do mestre — Fungo Disco" },
+      { title: "Painel do mestre — Eco dos Caídos" },
       {
         name: "description",
         content:
-          "Painel do mestre do Fungo Disco: visão do grupo, testes em grupo, iniciativa, rolagens ao vivo e notas da sessão.",
+          "Painel do mestre do Eco dos Caídos: visão do grupo, testes em grupo, iniciativa, rolagens ao vivo e notas da sessão.",
       },
-      { property: "og:title", content: "Painel do mestre — Fungo Disco" },
+      { property: "og:title", content: "Painel do mestre — Eco dos Caídos" },
       {
         property: "og:description",
         content: "Testes em grupo, iniciativa, rolagens ao vivo e notas para mestrar a sessão.",

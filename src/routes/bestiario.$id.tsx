@@ -28,7 +28,7 @@ export const Route = createFileRoute("/bestiario/$id")({
         { title },
         { name: "description", content: "Perfil do monstro: quem era antes, atributos, PV, defesa, ataques e habilidades." },
         { property: "og:title", content: title },
-        { property: "og:description", content: "Perfil de monstro do bestiário do Fungo Disco." },
+        { property: "og:description", content: "Perfil de monstro do bestiário do Eco dos Caídos." },
         { property: "og:type", content: "profile" },
         { name: "twitter:card", content: "summary" },
       ],

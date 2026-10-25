@@ -13,13 +13,13 @@ import { cn } from "@/lib/utils";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Fungo Disco — Fichas de RPG" },
+      { title: "Eco dos Caídos — Fichas de RPG" },
       {
         name: "description",
         content:
-          "Fungo Disco: fichas de RPG no estilo Disco Elysium com skills, rolagem 2d6, corpo, armas e mochila, tudo ao vivo para a mesa.",
+          "Eco dos Caídos: fichas de RPG no estilo Disco Elysium com skills, rolagem 2d6, corpo, armas e mochila, tudo ao vivo para a mesa.",
       },
-      { property: "og:title", content: "Fungo Disco — Fichas de RPG" },
+      { property: "og:title", content: "Eco dos Caídos — Fichas de RPG" },
       {
         property: "og:description",
         content: "Personagens, skills, armas e mochila de cada jogador, sincronizados ao vivo.",
@@ -49,7 +49,7 @@ function Index() {
         <div className="mx-auto flex min-h-[440px] max-w-6xl flex-col justify-end px-6 pb-12 pt-20">
           <p className="label-caps text-primary">Arquivo de personagens</p>
           <h1 className="mt-2 max-w-3xl text-6xl font-bold uppercase leading-[0.85] md:text-9xl">
-            Fungo Disco
+            Eco dos Caídos
           </h1>
           <p className="mt-4 max-w-xl text-lg text-foreground/85">
             Cada ficha guarda atributos, skills, corpo, armas e a mochila do jogador — ao vivo

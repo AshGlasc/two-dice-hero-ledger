@@ -20,12 +20,12 @@ import { monstersQuery } from "@/lib/rpg-queries";
 export const Route = createFileRoute("/bestiario/")({
   head: () => ({
     meta: [
-      { title: "Bestiário — Fungo Disco" },
+      { title: "Bestiário — Eco dos Caídos" },
       {
         name: "description",
-        content: "Bestiário do Fungo Disco: perfis dos monstros, quem eles eram antes, PV, defesa, ataques e habilidades.",
+        content: "Bestiário do Eco dos Caídos: perfis dos monstros, quem eles eram antes, PV, defesa, ataques e habilidades.",
       },
-      { property: "og:title", content: "Bestiário — Fungo Disco" },
+      { property: "og:title", content: "Bestiário — Eco dos Caídos" },
       { property: "og:description", content: "Os monstros da mesa — e quem eles eram antes da transformação." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },

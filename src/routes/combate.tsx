@@ -30,9 +30,9 @@ import { cn } from "@/lib/utils";
 export const Route = createFileRoute("/combate")({
   head: () => ({
     meta: [
-      { title: "Combate — Fungo Disco" },
+      { title: "Combate — Eco dos Caídos" },
       { name: "description", content: "Mapa de batalha, iniciativa e turnos ao vivo para a mesa." },
-      { property: "og:title", content: "Combate — Fungo Disco" },
+      { property: "og:title", content: "Combate — Eco dos Caídos" },
       { property: "og:description", content: "Mapa de batalha, iniciativa e turnos ao vivo para a mesa." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
