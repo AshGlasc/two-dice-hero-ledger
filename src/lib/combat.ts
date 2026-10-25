@@ -180,3 +180,21 @@ export function findFreeCell(
   }
   return null;
 }
+
+/** Casas cobertas pela névoa (só o mestre enxerga o que tem embaixo). */
+export type Fog = Record<string, boolean>;
+export type TileImages = Record<string, string>;
+
+export const isFogged = (fog: Fog, x: number, y: number) => Boolean(fog[cellKey(x, y)]);
+
+/** Jogador vê um rosto no mapa? O mestre vê tudo; o jogador sempre vê o próprio. */
+export function tokenVisible(fog: Fog, x: number, y: number, viewerIsMaster: boolean, isMine: boolean) {
+  return viewerIsMaster || isMine || !isFogged(fog, x, y);
+}
+
+/** Cobre (ou revela) o mapa inteiro de névoa. */
+export function fillFog(cols: number, rows: number): Fog {
+  const out: Fog = {};
+  for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) out[cellKey(x, y)] = true;
+  return out;
+}
