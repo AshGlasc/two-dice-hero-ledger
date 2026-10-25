@@ -1,16 +1,19 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+
+import { useMasterAuth } from "@/context/MasterAuthContext";
 
 import { supabase } from "@/integrations/supabase/client";
 import { isLocalRoll } from "@/lib/roll-log";
 import type { Roll } from "@/lib/rpg-queries";
 import { emitRoll } from "@/lib/roll-burst";
+import { shouldAnnounce } from "@/lib/silent-roll";
 
 type Row = { id?: string | number; character_id?: string | null } | null;
 
 /** Aviso grande na tela de todo mundo quando alguém da mesa rola os dados. */
-function announceRoll(r: Roll) {
-  if (r.hidden || isLocalRoll(r)) return;
+function announceRoll(r: Roll, viewerIsMaster: boolean) {
+  if (!shouldAnnounce(r, viewerIsMaster) || isLocalRoll(r)) return;
   emitRoll({
     name: r.character_name,
     label: r.label,
@@ -20,6 +23,7 @@ function announceRoll(r: Roll) {
     total: r.total,
     difficulty: r.difficulty,
     outcome: r.outcome,
+    hidden: r.hidden,
   });
 }
 
@@ -29,6 +33,9 @@ function announceRoll(r: Roll) {
  */
 export function useRealtimeSync() {
   const qc = useQueryClient();
+  const { isMaster } = useMasterAuth();
+  const masterRef = useRef(isMaster);
+  masterRef.current = isMaster;
 
   useEffect(() => {
     const pending = new Set<string>();
@@ -77,7 +84,7 @@ export function useRealtimeSync() {
         queue(sheetKey(row));
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "rolls" }, (p) => {
-        if (p.eventType === "INSERT") announceRoll(p.new as Roll);
+        if (p.eventType === "INSERT") announceRoll(p.new as Roll, masterRef.current);
         queue(["rolls"]);
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "gm_notes" }, () =>
@@ -94,6 +101,9 @@ export function useRealtimeSync() {
       )
       .on("postgres_changes", { event: "*", schema: "public", table: "battle_map" }, () =>
         queue(["battle_map"]),
+      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, () =>
+        queue(["messages"]),
       )
       .subscribe();
 

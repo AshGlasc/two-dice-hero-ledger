@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Crown, Lock, LogOut, Map as MapIcon, Radio, Skull, Theater, Users } from "lucide-react";
+import { Crown, Lock, LogOut, Map as MapIcon, Radio, Skull, Smartphone, Theater, Users } from "lucide-react";
 
 import { RollDrawer } from "@/components/rpg/RollDrawer";
 import { MasterUnlockModal } from "@/components/rpg/MasterUnlockModal";
@@ -19,6 +19,7 @@ const LINKS = [
   { to: "/", label: "Personagens", short: "Fichas", icon: Users, exact: true, restricted: false },
   { to: "/bestiario", label: "Bestiário", short: "Monstros", icon: Skull, exact: false, restricted: false },
   { to: "/combate", label: "Combate", short: "Combate", icon: MapIcon, exact: false, restricted: false },
+  { to: "/celular", label: "Celular", short: "Celular", icon: Smartphone, exact: false, restricted: false },
   { to: "/mestre", label: "Mestre", short: "Mestre", icon: Theater, exact: false, restricted: true },
 ] as const;
 
@@ -42,9 +43,9 @@ export function TopNav() {
                 <span>{l.label}</span>
                 {l.restricted && (
                   isMaster ? (
-                    <Crown className="size-3 text-primary animate-pulse" title="Mestre autenticado" />
+                    <span title="Mestre autenticado"><Crown className="size-3 text-primary animate-pulse" /></span>
                   ) : (
-                    <Lock className="size-3 text-muted-foreground/70" title="Acesso restrito ao mestre" />
+                    <span title="Acesso restrito ao mestre"><Lock className="size-3 text-muted-foreground/70" /></span>
                   )
                 )}
               </Link>
@@ -125,14 +126,14 @@ export function TopNav() {
       {/* Barra de baixo no celular */}
       <nav
         aria-label="Navegação"
-        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-border bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-border bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
       >
         {LINKS.map((l) => (
           <Link
             key={l.to}
             to={l.to}
             activeOptions={{ exact: l.exact }}
-            className="relative flex flex-col items-center gap-0.5 py-2 font-display text-[11px] font-semibold uppercase tracking-wider text-muted-foreground data-[status=active]:text-primary"
+            className="relative flex flex-col items-center gap-0.5 py-2 font-display text-[10px] font-semibold uppercase tracking-wider text-muted-foreground data-[status=active]:text-primary"
           >
             <div className="relative">
               <l.icon className="size-5" />
