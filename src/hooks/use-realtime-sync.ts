@@ -70,7 +70,7 @@ export function useRealtimeSync() {
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "weapons" }, (p) => {
         const row = (p.new && "character_id" in p.new ? p.new : p.old) as Row;
-        queue(sheetKey(row));
+        queue(sheetKey(row), ["all_weapons"]);
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "backpack_items" }, (p) => {
         const row = (p.new && "character_id" in p.new ? p.new : p.old) as Row;

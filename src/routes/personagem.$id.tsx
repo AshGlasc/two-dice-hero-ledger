@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSheetMutations } from "@/hooks/use-sheet-mutations";
 import { supabase } from "@/integrations/supabase/client";
+import { clearPlayerCharacterId, getPlayerCharacterId } from "@/lib/player-character";
 import { sheetQuery } from "@/lib/rpg-queries";
 
 export const Route = createFileRoute("/personagem/$id")({
@@ -75,6 +76,9 @@ function CharacterPage() {
       if (error) throw error;
     },
     onSuccess: async () => {
+      if (getPlayerCharacterId() === id) {
+        clearPlayerCharacterId();
+      }
       await qc.invalidateQueries({ queryKey: ["characters"] });
       toast.success("Personagem apagado.");
       navigate({ to: "/" });

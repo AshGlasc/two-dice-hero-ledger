@@ -148,6 +148,7 @@ function CombatPage() {
 
   const tokens: MapToken[] = order.map((x) => ({
     id: x.id,
+    characterId: x.kind === "character" ? x.character_id : null,
     name: x.name,
     avatar: avatarOf(x),
     tone: x.kind === "monster" ? "monster" : "player",
@@ -235,6 +236,8 @@ function CombatPage() {
           <BattleMap
             map={map}
             tokens={tokens}
+            combatActive={state.active}
+            currentCombatantId={state.current_combatant_id}
             onMove={(id, x, y) => c.update.mutate([{ id, patch: { pos_x: x, pos_y: y } }])}
           />
         </div>

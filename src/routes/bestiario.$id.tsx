@@ -5,12 +5,14 @@ import { ArrowLeft, Crown, Dices, Lock, Swords, Trash2 } from "lucide-react";
 import { AvatarUpload } from "@/components/rpg/AvatarUpload";
 import { InlineField } from "@/components/rpg/InlineField";
 import { MasterUnlockModal } from "@/components/rpg/MasterUnlockModal";
+import { MonsterAttacksSection } from "@/components/rpg/MonsterAttacksSection";
 import { Stepper } from "@/components/rpg/Stepper";
 import { Button } from "@/components/ui/button";
 import { useMasterAuth } from "@/context/MasterAuthContext";
 import { useMonsters } from "@/hooks/use-monsters";
 import { ATTRIBUTE_THEME } from "@/lib/attribute-theme";
 import { MONSTER_LIMITS } from "@/lib/combat";
+import { parseMonsterAttacks, getSkillLabel } from "@/lib/custom-attacks";
 import { logRolls } from "@/lib/roll-log";
 import { monstersQuery } from "@/lib/rpg-queries";
 import { ATTRIBUTES, ATTRIBUTE_MAX, ATTRIBUTE_MIN, roll2d6 } from "@/lib/skills";
@@ -183,11 +185,10 @@ function MonsterPage() {
         </div>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-3">
+      <section className="grid gap-4 md:grid-cols-2">
         {(
           [
             ["description", "Descrição", "Aparência, cheiro, como se move…"],
-            ["attacks", "Ataques", "Ex.: Mordida (2d6+3), Garras (1d6)"],
             ["abilities", "Habilidades", "Ex.: Regenera 2 PV por rodada"],
           ] as const
         ).map(([key, label, ph]) => (
@@ -204,6 +205,41 @@ function MonsterPage() {
           </div>
         ))}
       </section>
+
+      {/* Ataques: mestre configura com UI estruturada; jogadores vêem resumo */}
+      {isMaster ? (
+        <MonsterAttacksSection
+          monster={m}
+          onSave={(serialized) => save({ attacks: serialized })}
+        />
+      ) : (
+        <section className="rounded-lg border border-border bg-card p-5">
+          <p className="label-caps mb-1 text-destructive">Ataques do Monstro</p>
+          <h2 className="mb-3 text-2xl font-bold uppercase">Ações de Combate</h2>
+          {(() => {
+            const atks = parseMonsterAttacks(m.id, m.attacks);
+            if (atks.length === 0) {
+              return <p className="text-sm italic text-muted-foreground">Nenhum ataque configurado pelo mestre.</p>;
+            }
+            return (
+              <ul className="space-y-2">
+                {atks.map((atk) => (
+                  <li key={atk.id} className="flex items-start gap-3 rounded-lg border border-border bg-background/50 p-3">
+                    <Swords className="mt-0.5 size-4 shrink-0 text-destructive" />
+                    <div>
+                      <p className="font-display font-bold uppercase">{atk.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {getSkillLabel(atk.skillKey)} · {atk.diceCount}d6 · {atk.turnsCost} {atk.turnsCost === 1 ? "turno" : "turnos"}
+                      </p>
+                      {atk.description && <p className="mt-0.5 text-xs italic text-foreground/70">{atk.description}</p>}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            );
+          })()}
+        </section>
+      )}
     </main>
   );
 }

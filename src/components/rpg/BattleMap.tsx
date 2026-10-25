@@ -10,11 +10,14 @@ import { useMasterAuth } from "@/context/MasterAuthContext";
 import { useBattleMap } from "@/hooks/use-battle-map";
 import { canMoveTo, cellKey, MAP_LIMITS, TERRAINS, type Terrain, type TerrainKey } from "@/lib/combat";
 import { fileToSmallImage } from "@/lib/image";
+import { getPlayerCharacterId } from "@/lib/player-character";
 import type { BattleMap as MapRow } from "@/lib/rpg-queries";
 import { cn } from "@/lib/utils";
 
 export type MapToken = {
   id: string;
+  /** ID do combatant (para restrição de turno) */
+  characterId?: string | null;
   name: string;
   avatar: string;
   tone: "player" | "monster";
@@ -39,13 +42,18 @@ export function BattleMap({
   map,
   tokens,
   onMove,
+  currentCombatantId,
+  combatActive,
 }: {
   map: MapRow;
   tokens: MapToken[];
   onMove: (id: string, x: number | null, y: number | null) => void;
+  currentCombatantId?: string | null;
+  combatActive?: boolean;
 }) {
   const saveMap = useBattleMap();
   const { isMaster } = useMasterAuth();
+  const myCharacterId = getPlayerCharacterId();
   const [selected, setSelected] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [brush, setBrush] = useState<TerrainKey | "erase">("wall");
@@ -82,6 +90,21 @@ export function BattleMap({
     if (draft) saveMap.mutate({ terrain: draft }, { onSettled: () => setDraft(null) });
   };
 
+  /**
+   * Verifica se o jogador (ou mestre) pode mover o token `t`.
+   * Regras:
+   *  – Mestre: pode mover qualquer um.
+   *  – Jogador: só pode mover SEU token de personagem.
+   *  – Em combate ativo: só pode mover quando for o turno do SEU combatant.
+   */
+  const canSelectToken = (t: MapToken) => {
+    if (isMaster) return true;
+    if (t.tone === "monster") return false;
+    if (!myCharacterId || t.characterId !== myCharacterId) return false;
+    if (combatActive && currentCombatantId !== t.id) return false;
+    return true;
+  };
+
   const onGridDown = (e: React.PointerEvent) => {
     if (editing) {
       painting.current = true;
@@ -111,7 +134,14 @@ export function BattleMap({
               ? "Escolha um pincel e pinte as casas."
               : sel
                 ? `Toque numa casa para mover ${sel.name}.`
-                : "Toque num rosto e depois numa casa para andar."}
+                : combatActive && !isMaster && currentCombatantId
+                  ? (() => {
+                      const myToken = tokens.find((t) => t.characterId === myCharacterId);
+                      if (myToken && myToken.id === currentCombatantId) return "É sua vez! Toque no seu token e depois numa casa.";
+                      const currentToken = tokens.find((t) => t.id === currentCombatantId);
+                      return `Vez de ${currentToken?.name ?? "outro combatente"}. Aguarde seu turno.`;
+                    })()
+                  : "Toque num rosto e depois numa casa para andar."}
           </p>
         </div>
         {isMaster ? (
@@ -244,6 +274,12 @@ export function BattleMap({
               onPointerDown={(e) => {
                 if (editing) return;
                 e.stopPropagation();
+                if (!canSelectToken(t)) {
+                  if (combatActive && currentCombatantId && currentCombatantId !== t.id && t.characterId === myCharacterId) {
+                    toast("Aguarde sua vez para mover.");
+                  }
+                  return;
+                }
                 setSelected((s) => (s === t.id ? null : t.id));
               }}
               aria-label={`${t.name}${t.current ? " (vez dele)" : ""}`}
@@ -288,7 +324,15 @@ export function BattleMap({
             <button
               key={t.id}
               type="button"
-              onClick={() => setSelected((s) => (s === t.id ? null : t.id))}
+              onClick={() => {
+                if (!canSelectToken(t)) {
+                  if (combatActive && currentCombatantId && currentCombatantId !== t.id && t.characterId === myCharacterId) {
+                    toast("Aguarde sua vez para mover.");
+                  }
+                  return;
+                }
+                setSelected((s) => (s === t.id ? null : t.id));
+              }}
               className={cn("flex items-center gap-1.5 rounded-full border border-border py-0.5 pl-0.5 pr-3 text-sm", selected === t.id && "ring-2 ring-foreground")}
             >
               <Avatar src={t.avatar} name={t.name} tone={t.tone} className="size-7 text-[10px]" />

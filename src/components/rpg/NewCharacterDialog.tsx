@@ -1,6 +1,6 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
-import { UserPlus } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { Crown, Lock, User, UserPlus } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
 
@@ -16,8 +16,11 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { useMasterAuth } from "@/context/MasterAuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { ATTRIBUTE_THEME } from "@/lib/attribute-theme";
+import { checkCanCreateCharacter, setPlayerCharacterId } from "@/lib/player-character";
+import { charactersQuery } from "@/lib/rpg-queries";
 import { ATTRIBUTES, ATTRIBUTE_MAX, ATTRIBUTE_MIN, type AttributeKey } from "@/lib/skills";
 import { cn } from "@/lib/utils";
 
@@ -31,6 +34,10 @@ export function NewCharacterDialog() {
   const [attrs, setAttrs] = useState(START);
   const qc = useQueryClient();
   const navigate = useNavigate();
+
+  const { isMaster } = useMasterAuth();
+  const { data: characters = [] } = useQuery(charactersQuery);
+  const check = checkCanCreateCharacter(characters, isMaster);
 
   const create = useMutation({
     mutationFn: async () => {
@@ -48,6 +55,9 @@ export function NewCharacterDialog() {
       return data.id;
     },
     onSuccess: async (id) => {
+      if (!isMaster) {
+        setPlayerCharacterId(id);
+      }
       await qc.invalidateQueries({ queryKey: ["characters"] });
       qc.invalidateQueries({ queryKey: ["group"] });
       setOpen(false);
@@ -68,19 +78,70 @@ export function NewCharacterDialog() {
     if (name.trim()) create.mutate();
   };
 
+  // Se o jogador comum já possui um personagem ativo
+  if (!check.allowed && check.existingCharacter) {
+    const existing = check.existingCharacter;
+    return (
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogTrigger asChild>
+          <Button variant="paint" size="lg" className="gap-2">
+            <User className="size-5" /> Meu Personagem: {existing.name}
+          </Button>
+        </DialogTrigger>
+        <DialogContent>
+          <DialogHeader>
+            <div className="flex items-center gap-2 text-warning">
+              <Lock className="size-5" />
+              <DialogTitle className="font-display text-2xl uppercase">Limite de Personagem</DialogTitle>
+            </div>
+            <DialogDescription className="space-y-2 pt-2 text-sm text-foreground/90">
+              <p>
+                Jogadores podem criar apenas <strong>1 personagem por vez</strong> nesta mesa. O mestre da mesa não possui essa restrição.
+              </p>
+              <div className="rounded-lg border border-border bg-card p-3">
+                <span className="text-xs uppercase text-muted-foreground">Seu personagem ativo:</span>
+                <p className="font-display text-xl font-bold uppercase text-primary">{existing.name}</p>
+                {existing.concept && <p className="text-xs italic text-muted-foreground">{existing.concept}</p>}
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setOpen(false)}>
+              Fechar
+            </Button>
+            <Button asChild variant="paint" onClick={() => setOpen(false)}>
+              <Link to="/personagem/$id" params={{ id: existing.id }}>
+                Abrir Minha Ficha
+              </Link>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="paint" size="lg">
-          <UserPlus /> Novo personagem
+        <Button variant="paint" size="lg" className="gap-2">
+          {isMaster ? <Crown className="size-5 text-warning" /> : <UserPlus className="size-5" />}
+          Novo personagem {isMaster && "(Mestre)"}
         </Button>
       </DialogTrigger>
       <DialogContent className="max-h-[90vh] overflow-y-auto">
         <form onSubmit={submit} className="space-y-5">
           <DialogHeader>
-            <DialogTitle className="font-display text-3xl uppercase">Novo personagem</DialogTitle>
+            <div className="flex items-center justify-between">
+              <DialogTitle className="font-display text-3xl uppercase">Novo personagem</DialogTitle>
+              {isMaster && (
+                <span className="flex items-center gap-1 rounded bg-primary/10 px-2 py-0.5 text-xs font-bold uppercase text-primary">
+                  <Crown className="size-3" /> Mestre (Sem limites)
+                </span>
+              )}
+            </div>
             <DialogDescription>
               As subskills começam com os mesmos pontos do atributo. Você adiciona extras depois.
+              {!isMaster && " (Jogadores possuem 1 personagem por vez)."}
             </DialogDescription>
           </DialogHeader>
           <label className="block space-y-1.5">

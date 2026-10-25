@@ -1,9 +1,10 @@
-import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Crown, Dices, Eraser, KeyRound, Lock, LogOut, Swords, Users } from "lucide-react";
+import { Check, Clock, Crown, Dices, Eraser, LogOut, ShieldAlert, Swords, Users, X } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { Badge } from "@/components/ui/badge";
 import { BodyMap } from "@/components/rpg/BodyMap";
 import { ChangePinDialog } from "@/components/rpg/ChangePinDialog";
 import { InlineField } from "@/components/rpg/InlineField";
@@ -21,6 +22,12 @@ import {
 import { useMasterAuth } from "@/context/MasterAuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { ATTRIBUTE_THEME } from "@/lib/attribute-theme";
+import {
+  attackToWeaponPayload,
+  getSkillLabel,
+  isCustomAttack,
+  parseWeaponToAttack,
+} from "@/lib/custom-attacks";
 import { logRolls } from "@/lib/roll-log";
 import { gmNotesQuery, groupQuery, rollsQuery, type GroupData } from "@/lib/rpg-queries";
 import {
@@ -126,6 +133,9 @@ function GmPageContent({ onLock }: { onLock: () => void }) {
         </div>
       </header>
 
+      {/* Ataques pendentes — seção de aprovação */}
+      <PendingAttacks group={group} />
+
       <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
         <div className="space-y-6">
           <GroupTest group={group} />
@@ -137,6 +147,130 @@ function GmPageContent({ onLock }: { onLock: () => void }) {
         </div>
       </div>
     </main>
+  );
+}
+
+/** Busca todas as armas do grupo para encontrar ataques pendentes. */
+const allWeaponsQueryKey = ["all_weapons"] as const;
+const allWeaponsQuery = {
+  queryKey: allWeaponsQueryKey,
+  queryFn: async () => {
+    const { data, error } = await supabase
+      .from("weapons")
+      .select("*")
+      .order("created_at", { ascending: true });
+    if (error) throw error;
+    return data ?? [];
+  },
+};
+
+function PendingAttacks({ group }: { group: GroupData }) {
+  const qc = useQueryClient();
+  const { data: allWeapons = [] } = useQuery(allWeaponsQuery);
+
+  const pending = allWeapons
+    .filter(isCustomAttack)
+    .map(parseWeaponToAttack)
+    .filter((a) => a.status === "pending");
+
+  const updateStatus = useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: "approved" | "rejected" }) => {
+      // Lê o weapon atual para montar o payload correto
+      const atk = allWeapons.find((w) => w.id === id);
+      if (!atk) throw new Error("Arma não encontrada");
+      const parsed = parseWeaponToAttack(atk);
+      const payload = attackToWeaponPayload({
+        name: parsed.name,
+        skillKey: parsed.skillKey,
+        turnsCost: parsed.turnsCost,
+        diceCount: parsed.diceCount,
+        description: parsed.description,
+        status,
+      });
+      const { error } = await supabase.from("weapons").update(payload).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: (_, { status }) => {
+      toast.success(status === "approved" ? "Ataque aprovado!" : "Ataque recusado.");
+      void qc.invalidateQueries({ queryKey: allWeaponsQueryKey });
+    },
+    onError: () => toast.error("Erro ao atualizar ataque."),
+  });
+
+  if (pending.length === 0) return null;
+
+  return (
+    <section className="rounded-lg border border-warning/50 bg-warning/5 p-5 shadow-paint animate-in fade-in">
+      <div className="mb-4 flex items-center gap-2">
+        <ShieldAlert className="size-5 text-warning" />
+        <div>
+          <p className="label-caps text-warning">Revisão necessária</p>
+          <h2 className="text-2xl font-bold uppercase">
+            Ataques Pendentes{" "}
+            <span className="ml-1 rounded-full bg-warning/20 px-2 py-0.5 font-display text-lg text-warning">
+              {pending.length}
+            </span>
+          </h2>
+        </div>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {pending.map((atk) => {
+          const owner = group.characters.find((c) => c.id === atk.ownerId);
+          return (
+            <div
+              key={atk.id}
+              className="flex flex-col justify-between rounded-lg border border-warning/30 bg-card p-4"
+            >
+              <div>
+                <div className="mb-1 flex items-center gap-2">
+                  <Badge variant="outline" className="border-warning/60 bg-warning/10 text-[11px] text-warning gap-1">
+                    <Clock className="size-3 animate-pulse" /> Pendente
+                  </Badge>
+                  {owner && (
+                    <span className="truncate text-xs text-muted-foreground">{owner.name}</span>
+                  )}
+                </div>
+                <h3 className="font-display text-xl font-bold uppercase leading-tight">{atk.name}</h3>
+                <p className="text-xs text-primary">{getSkillLabel(atk.skillKey)}</p>
+                {atk.description && (
+                  <p className="mt-1 text-xs italic text-foreground/70">{atk.description}</p>
+                )}
+                <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    <Clock className="size-3" />
+                    {atk.turnsCost} {atk.turnsCost === 1 ? "turno" : "turnos"}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Dices className="size-3" />
+                    {atk.diceCount}d6
+                  </span>
+                </div>
+              </div>
+              <div className="mt-4 flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="flex-1 h-8 border-success/50 text-success hover:bg-success/10 text-xs"
+                  disabled={updateStatus.isPending}
+                  onClick={() => updateStatus.mutate({ id: atk.id, status: "approved" })}
+                >
+                  <Check className="mr-1 size-3" /> Aprovar
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="flex-1 h-8 border-destructive/50 text-destructive hover:bg-destructive/10 text-xs"
+                  disabled={updateStatus.isPending}
+                  onClick={() => updateStatus.mutate({ id: atk.id, status: "rejected" })}
+                >
+                  <X className="mr-1 size-3" /> Recusar
+                </Button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
