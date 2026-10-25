@@ -12,6 +12,7 @@ import { useCombat } from "@/hooks/use-combat";
 import {
   ATTACK_SKILLS,
   CONDITIONS,
+  conditionEmoji,
   INITIATIVE_SKILL,
   changeHp,
   findFreeCell,
@@ -157,6 +158,7 @@ function CombatPage() {
     hpPct: x.hp_max ? x.hp_current / x.hp_max : null,
     out: x.hp_current <= 0,
     current: x.id === state.current_combatant_id,
+    conditions: x.conditions,
   }));
 
   const inCombat = new Set(combat.combatants.map((x) => x.character_id));
@@ -264,7 +266,14 @@ function CombatPage() {
               <div className="flex items-center gap-2">
                 <Avatar src={avatarOf(x)} name={x.name} tone={x.kind === "monster" ? "monster" : "player"} className="size-10" />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate font-bold">{x.name}</p>
+                  <p className="truncate font-bold">
+                    {x.name}{" "}
+                    {x.conditions.map((cd) => (
+                      <span key={cd} title={cd}>
+                        {conditionEmoji(cd)}
+                      </span>
+                    ))}
+                  </p>
                   <p className="text-xs text-muted-foreground">
                     Inic. {x.initiative ?? "—"} · Def {x.defense} · Atq +{x.attack_bonus}
                   </p>
@@ -303,7 +312,7 @@ function CombatPage() {
                         on ? "border-destructive bg-destructive/20 text-destructive" : "border-border text-muted-foreground",
                       )}
                     >
-                      {cond}
+                      {conditionEmoji(cond)} {cond}
                     </button>
                   );
                 })}
