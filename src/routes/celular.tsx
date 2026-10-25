@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft, Camera, Newspaper, Send, Trash2, UserPlus } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -45,8 +45,6 @@ export const Route = createFileRoute("/celular")({
       context.queryClient.ensureQueryData(charactersQuery),
       context.queryClient.ensureQueryData(messagesQuery),
       context.queryClient.ensureQueryData(phoneContactsQuery),
-      context.queryClient.ensureQueryData(phoneCluesQuery),
-      context.queryClient.ensureQueryData(phoneGalleryQuery),
     ]),
   component: PhonePage,
 });
@@ -67,11 +65,20 @@ const FUTURE_APPS = [
 ];
 
 function PhonePage() {
+  const [screen, setScreen] = useState<Screen>({ app: "home" });
   const { data: characters } = useSuspenseQuery(charactersQuery);
   const { data: messages } = useSuspenseQuery(messagesQuery);
   const { data: contacts } = useSuspenseQuery(phoneContactsQuery);
-  const { data: clues } = useSuspenseQuery(phoneCluesQuery);
-  const { data: photos } = useSuspenseQuery(phoneGalleryQuery);
+  const {
+    data: clues = [],
+    isPending: cluesPending,
+    error: cluesError,
+  } = useQuery({ ...phoneCluesQuery, enabled: screen.app === "news" });
+  const {
+    data: photos = [],
+    isPending: photosPending,
+    error: photosError,
+  } = useQuery({ ...phoneGalleryQuery, enabled: screen.app === "gallery" });
   const { isMaster } = useMasterAuth();
   const [myId, setMyId] = useState<string | null>(null);
   const [asNpc, setAsNpc] = useState(false);
@@ -79,7 +86,6 @@ function PhonePage() {
   const [contactName, setContactName] = useState("");
   const [contactTarget, setContactTarget] = useState("");
   const [npcContactId, setNpcContactId] = useState("");
-  const [screen, setScreen] = useState<Screen>({ app: "home" });
   const qc = useQueryClient();
 
   useEffect(() => setMyId(getPlayerCharacterId()), []);
@@ -261,9 +267,21 @@ function PhonePage() {
               back={() => setScreen({ app: "chats" })}
             />
           ) : screen.app === "news" ? (
-            <News clues={clues} isMaster={isMaster} back={() => setScreen({ app: "home" })} />
+            <News
+              clues={clues}
+              isMaster={isMaster}
+              isLoading={cluesPending}
+              error={cluesError?.message}
+              back={() => setScreen({ app: "home" })}
+            />
           ) : screen.app === "gallery" ? (
-            <Gallery photos={photos} character={me} back={() => setScreen({ app: "home" })} />
+            <Gallery
+              photos={photos}
+              character={me}
+              isLoading={photosPending}
+              error={photosError?.message}
+              back={() => setScreen({ app: "home" })}
+            />
           ) : null}
         </div>
       </div>
@@ -315,7 +333,7 @@ function Home({
       </p>
       {me && !npcMode && (
         <div className="rounded-2xl border border-warning/40 bg-warning/10 p-4 text-center">
-          <p className="label-caps text-warning">Saldo</p>
+          <p className="label-caps text-warning">Rupias</p>
           <p className="tabular font-display text-5xl font-bold">{formatMoney(me.money)}</p>
         </div>
       )}
@@ -429,7 +447,7 @@ function Bank({
       <AppHeader title="Banco rupia" back={back} />
       <div className="space-y-4 p-4">
         <div className="rounded-2xl border border-warning/40 bg-warning/10 p-4 text-center">
-          <p className="label-caps text-warning">Saldo de {me.name}</p>
+          <p className="label-caps text-warning">Rupias de {me.name}</p>
           <p className="tabular font-display text-5xl font-bold">{formatMoney(me.money)}</p>
         </div>
         <form
@@ -517,10 +535,14 @@ function Bank({
 function News({
   clues,
   isMaster,
+  isLoading,
+  error,
   back,
 }: {
   clues: PhoneClue[];
   isMaster: boolean;
+  isLoading: boolean;
+  error: string | undefined;
   back: () => void;
 }) {
   const qc = useQueryClient();
@@ -616,7 +638,13 @@ function News({
             </Button>
           </form>
         )}
-        {clues.length === 0 ? (
+        {error ? (
+          <p role="alert" className="py-8 text-center text-sm text-destructive">
+            Não foi possível carregar as notícias: {error}
+          </p>
+        ) : isLoading ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">Carregando notícias…</p>
+        ) : clues.length === 0 ? (
           <p className="py-8 text-center text-sm italic text-muted-foreground">
             Nenhuma notícia ou pista publicada.
           </p>
@@ -627,7 +655,13 @@ function News({
               className="overflow-hidden rounded-xl border border-border bg-background"
             >
               {clue.image_url && (
-                <img src={clue.image_url} alt="" className="max-h-56 w-full object-cover" />
+                <img
+                  src={clue.image_url}
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
+                  className="max-h-56 w-full object-cover"
+                />
               )}
               <div className="p-3">
                 <div className="flex items-start justify-between gap-2">
@@ -663,6 +697,8 @@ function News({
 function Gallery({
   photos,
   character,
+  isLoading,
+  error,
   back,
 }: {
   photos: {
@@ -673,6 +709,8 @@ function Gallery({
     created_at: string;
   }[];
   character: Character | null;
+  isLoading: boolean;
+  error: string | undefined;
   back: () => void;
 }) {
   const qc = useQueryClient();
@@ -742,7 +780,13 @@ function Gallery({
             <Camera /> Guardar no arquivo
           </Button>
         </form>
-        {photos.length === 0 ? (
+        {error ? (
+          <p role="alert" className="py-8 text-center text-sm text-destructive">
+            Não foi possível carregar a galeria: {error}
+          </p>
+        ) : isLoading ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">Carregando galeria…</p>
+        ) : photos.length === 0 ? (
           <p className="py-8 text-center text-sm italic text-muted-foreground">
             A galeria compartilhada ainda está vazia.
           </p>
@@ -756,6 +800,8 @@ function Gallery({
                 <img
                   src={photo.image_url}
                   alt={photo.caption || "Foto de pista"}
+                  loading="lazy"
+                  decoding="async"
                   className="aspect-square w-full object-cover"
                 />
                 <figcaption className="p-2 text-xs">

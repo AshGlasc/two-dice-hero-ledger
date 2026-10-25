@@ -12,8 +12,8 @@ import {
 import { shouldAnnounce } from "@/lib/silent-roll";
 
 describe("Transferências em rupias", () => {
-  it("formata o saldo em rupias indonésias", () => {
-    expect(formatMoney(1000)).toContain("Rp");
+  it("formata o saldo em rupias sem repetir o símbolo da moeda", () => {
+    expect(formatMoney(1000)).toBe("1.000");
   });
 
   it("não deixa enviar mais do que o saldo", () => {

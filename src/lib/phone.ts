@@ -41,11 +41,7 @@ export function transferError(
 }
 
 export const formatMoney = (v: number) =>
-  new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    maximumFractionDigits: 0,
-  }).format(v);
+  new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 }).format(v);
 
 export function unreadPhoneMessages(
   messages: {
