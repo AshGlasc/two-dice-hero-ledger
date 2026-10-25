@@ -246,3 +246,13 @@
 @utility tabular {
   font-variant-numeric: tabular-nums;
 }
+
+/* Névoa do mapa: casa escondida dos jogadores. */
+@utility fog-cell {
+  background-color: var(--background);
+  background-image: repeating-linear-gradient(
+    45deg,
+    color-mix(in oklab, var(--muted-foreground) 14%, transparent) 0 2px,
+    transparent 2px 9px
+  );
+}
