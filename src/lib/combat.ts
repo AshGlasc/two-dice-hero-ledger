@@ -11,7 +11,25 @@ export const CONDITIONS = [
   "Caído",
   "Cego",
   "Agarrado",
+  "Infectado",
+  "Invisível",
 ] as const;
+
+/** Emoji que aparece no rosto do jogador/monstro para cada efeito. */
+export const CONDITION_EMOJI: Record<string, string> = {
+  Atordoado: "💫",
+  Sangrando: "🩸",
+  "Em chamas": "🔥",
+  Amedrontado: "😱",
+  Envenenado: "🤢",
+  Caído: "🛌",
+  Cego: "🙈",
+  Agarrado: "🪢",
+  Infectado: "🍄",
+  Invisível: "👻",
+};
+
+export const conditionEmoji = (c: string) => CONDITION_EMOJI[c] ?? "❔";
 
 /** Skill usada para rolar iniciativa dos jogadores. */
 export const INITIATIVE_SKILL = "velocidade_reacao";
