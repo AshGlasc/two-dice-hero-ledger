@@ -43,6 +43,13 @@
       "when": 1792897011081,
       "tag": "0005_fog_tiles_money_phone",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792938000000,
+      "tag": "0006_phone_apps_contacts",
+      "breakpoints": true
     }
   ]
 }

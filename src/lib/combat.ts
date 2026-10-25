@@ -31,6 +31,20 @@ export const CONDITION_EMOJI: Record<string, string> = {
 
 export const conditionEmoji = (c: string) => CONDITION_EMOJI[c] ?? "❔";
 
+export const MOVEMENT_RANGE = 6;
+
+/** Distância em quadrados, contando diagonais como um quadrado. */
+export function gridDistance(fromX: number, fromY: number, toX: number, toY: number) {
+  return Math.max(Math.abs(toX - fromX), Math.abs(toY - fromY));
+}
+
+/** Atordoado e Caído dificultam ataques; a penalidade também reduz a defesa. */
+export function conditionPenalty(conditions: string[]) {
+  return (
+    conditions.filter((condition) => condition === "Atordoado" || condition === "Caído").length * 2
+  );
+}
+
 /** Skill usada para rolar iniciativa dos jogadores. */
 export const INITIATIVE_SKILL = "velocidade_reacao";
 
@@ -46,7 +60,8 @@ type Orderable = { id: string; initiative: number | null; created_at: string };
 /** Maior iniciativa primeiro; sem iniciativa vai para o fim; empate = quem entrou antes. */
 export function sortByInitiative<T extends Orderable>(list: T[]): T[] {
   return [...list].sort((a, b) => {
-    if (a.initiative === null && b.initiative === null) return a.created_at.localeCompare(b.created_at);
+    if (a.initiative === null && b.initiative === null)
+      return a.created_at.localeCompare(b.created_at);
     if (a.initiative === null) return 1;
     if (b.initiative === null) return -1;
     if (b.initiative !== a.initiative) return b.initiative - a.initiative;
@@ -120,7 +135,8 @@ export function skillValueFor(group: GroupData, characterId: string, skillKey: s
   const character = group.characters.find((c) => c.id === characterId);
   if (!skill || !character) return 0;
   const bonus =
-    group.skills.find((s) => s.character_id === characterId && s.skill_key === skillKey)?.bonus ?? 0;
+    group.skills.find((s) => s.character_id === characterId && s.skill_key === skillKey)?.bonus ??
+    0;
   return skillTotal(character[skill.attribute], bonus);
 }
 
@@ -176,7 +192,8 @@ export function findFreeCell(
 ) {
   for (let i = 0; i < cols; i++) {
     const x = side === "left" ? i : cols - 1 - i;
-    for (let y = 0; y < rows; y++) if (canMoveTo(x, y, cols, rows, terrain, occupied)) return { x, y };
+    for (let y = 0; y < rows; y++)
+      if (canMoveTo(x, y, cols, rows, terrain, occupied)) return { x, y };
   }
   return null;
 }
@@ -188,7 +205,13 @@ export type TileImages = Record<string, string>;
 export const isFogged = (fog: Fog, x: number, y: number) => Boolean(fog[cellKey(x, y)]);
 
 /** Jogador vê um rosto no mapa? O mestre vê tudo; o jogador sempre vê o próprio. */
-export function tokenVisible(fog: Fog, x: number, y: number, viewerIsMaster: boolean, isMine: boolean) {
+export function tokenVisible(
+  fog: Fog,
+  x: number,
+  y: number,
+  viewerIsMaster: boolean,
+  isMine: boolean,
+) {
   return viewerIsMaster || isMine || !isFogged(fog, x, y);
 }
 

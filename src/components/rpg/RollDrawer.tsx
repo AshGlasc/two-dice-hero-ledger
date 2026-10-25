@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useMasterAuth } from "@/context/MasterAuthContext";
 import { setSoundEnabled, soundEnabled } from "@/lib/roll-burst";
-import { rollsQuery } from "@/lib/rpg-queries";
+import { publicRollsQuery, rollsQuery } from "@/lib/rpg-queries";
 import { OUTCOME_CLASS, OUTCOME_TEXT, type RollOutcome } from "@/lib/skills";
 import { cn } from "@/lib/utils";
 
@@ -14,10 +14,14 @@ import { cn } from "@/lib/utils";
 export function RollDrawer({ trigger }: { trigger?: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const [sound, setSound] = useState(true);
+  const [showHidden, setShowHidden] = useState(false);
   const { isMaster } = useMasterAuth();
   useEffect(() => setSound(soundEnabled()), []);
-  const { data: rolls = [] } = useQuery({ ...rollsQuery, enabled: open });
-  const visibleRolls = rolls.filter((r) => !r.hidden || isMaster);
+  const { data: rolls = [] } = useQuery({
+    ...(isMaster ? rollsQuery : publicRollsQuery),
+    enabled: open,
+  });
+  const visibleRolls = rolls.filter((r) => (showHidden ? r.hidden && isMaster : !r.hidden));
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -31,7 +35,9 @@ export function RollDrawer({ trigger }: { trigger?: React.ReactNode }) {
       <SheetContent side="right" className="flex w-full flex-col sm:max-w-sm">
         <SheetHeader>
           <p className="label-caps text-success">Ao vivo</p>
-          <SheetTitle className="font-display text-3xl font-bold uppercase">Rolagens da mesa</SheetTitle>
+          <SheetTitle className="font-display text-3xl font-bold uppercase">
+            Rolagens da mesa
+          </SheetTitle>
         </SheetHeader>
         <Button
           variant="ghost"
@@ -44,12 +50,35 @@ export function RollDrawer({ trigger }: { trigger?: React.ReactNode }) {
         >
           {sound ? <Volume2 /> : <VolumeX />} Som dos dados: {sound ? "ligado" : "desligado"}
         </Button>
+        {isMaster && (
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant={!showHidden ? "secondary" : "outline"}
+              onClick={() => setShowHidden(false)}
+            >
+              Rolagens da mesa
+            </Button>
+            <Button
+              size="sm"
+              variant={showHidden ? "secondary" : "outline"}
+              onClick={() => setShowHidden(true)}
+            >
+              <Lock /> 🤫 Rolagens Ocultas ({rolls.filter((r) => r.hidden).length})
+            </Button>
+          </div>
+        )}
         {visibleRolls.length === 0 ? (
-          <p className="py-10 text-center text-sm italic text-muted-foreground">Ninguém rolou ainda.</p>
+          <p className="py-10 text-center text-sm italic text-muted-foreground">
+            {showHidden ? "Nenhuma rolagem oculta." : "Ninguém rolou ainda."}
+          </p>
         ) : (
           <ul className="-mr-2 flex-1 space-y-1 overflow-y-auto pr-2 text-sm">
             {visibleRolls.map((r) => (
-              <li key={r.id} className="flex items-center justify-between gap-2 border-b border-border/60 py-2">
+              <li
+                key={r.id}
+                className="flex items-center justify-between gap-2 border-b border-border/60 py-2"
+              >
                 <span className="min-w-0">
                   <span className="flex items-center gap-1.5 font-display text-base font-semibold uppercase">
                     <span className="truncate">{r.character_name || "—"}</span>
@@ -61,7 +90,10 @@ export function RollDrawer({ trigger }: { trigger?: React.ReactNode }) {
                   </span>
                   <span className="block truncate text-xs text-muted-foreground">
                     {r.label} ·{" "}
-                    {new Date(r.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                    {new Date(r.created_at).toLocaleTimeString("pt-BR", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
                   </span>
                 </span>
                 <span className="flex shrink-0 items-baseline gap-2">
@@ -69,7 +101,10 @@ export function RollDrawer({ trigger }: { trigger?: React.ReactNode }) {
                     {r.die1}+{r.die2}+{r.modifier}
                   </span>
                   <span
-                    className={cn("tabular font-display text-2xl font-bold", OUTCOME_CLASS[r.outcome as RollOutcome])}
+                    className={cn(
+                      "tabular font-display text-2xl font-bold",
+                      OUTCOME_CLASS[r.outcome as RollOutcome],
+                    )}
                     title={OUTCOME_TEXT[r.outcome as RollOutcome]}
                   >
                     {r.total}

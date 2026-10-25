@@ -1,4 +1,16 @@
-import { Brush, CloudFog, Eraser, Eye, Image as ImageIcon, ImagePlus, Lock, LogOut, Paintbrush, X } from "lucide-react";
+import {
+  Brush,
+  CloudFog,
+  Eraser,
+  Eye,
+  Image as ImageIcon,
+  ImagePlus,
+  Lock,
+  LogOut,
+  Paintbrush,
+  Ruler,
+  X,
+} from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -13,7 +25,9 @@ import {
   cellKey,
   conditionEmoji,
   fillFog,
+  gridDistance,
   MAP_LIMITS,
+  MOVEMENT_RANGE,
   TERRAINS,
   tokenVisible,
   type Fog,
@@ -72,6 +86,10 @@ export function BattleMap({
   const myCharacterId = getPlayerCharacterId();
   const [selected, setSelected] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
+  const [viewAsPlayers, setViewAsPlayers] = useState(false);
+  const [previewCharacterId, setPreviewCharacterId] = useState("");
+  const [measuring, setMeasuring] = useState(false);
+  const [hoverCell, setHoverCell] = useState<{ x: number; y: number } | null>(null);
   const [brush, setBrush] = useState<BrushKey>("wall");
   const [stamp, setStamp] = useState<string>("");
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -87,15 +105,30 @@ export function BattleMap({
   };
   const cur = draft ?? saved;
   const { terrain, tile_images: images, fog } = cur;
-  const inside = tokens.filter((t) => t.x !== null && t.y !== null && t.x < map.cols && t.y! < map.rows);
-  const placed = inside.filter((t) => tokenVisible(fog, t.x!, t.y!, isMaster, t.characterId === myCharacterId && !!myCharacterId));
+  const viewerIsMaster = isMaster && !viewAsPlayers;
+  const viewerCharacterId = viewAsPlayers ? previewCharacterId : myCharacterId;
+  const inside = tokens.filter(
+    (t) => t.x !== null && t.y !== null && t.x < map.cols && t.y! < map.rows,
+  );
+  const placed = inside.filter((t) =>
+    tokenVisible(
+      fog,
+      t.x!,
+      t.y!,
+      viewerIsMaster,
+      t.characterId === viewerCharacterId && !!viewerCharacterId,
+    ),
+  );
   const tray = tokens.filter((t) => !inside.includes(t));
   const occupied = useMemo(() => new Set(inside.map((t) => cellKey(t.x!, t.y!))), [inside]);
   const sel = tokens.find((t) => t.id === selected) ?? null;
 
   const cellAt = (e: React.PointerEvent) => {
     const r = grid.current!.getBoundingClientRect();
-    return { x: Math.floor((e.clientX - r.left) / CELL), y: Math.floor((e.clientY - r.top) / CELL) };
+    return {
+      x: Math.floor((e.clientX - r.left) / CELL),
+      y: Math.floor((e.clientY - r.top) / CELL),
+    };
   };
 
   const paint = (e: React.PointerEvent) => {
@@ -104,7 +137,11 @@ export function BattleMap({
     const k = cellKey(x, y);
     setDraft((d) => {
       const base = d ?? saved;
-      const next: Draft = { terrain: { ...base.terrain }, tile_images: { ...base.tile_images }, fog: { ...base.fog } };
+      const next: Draft = {
+        terrain: { ...base.terrain },
+        tile_images: { ...base.tile_images },
+        fog: { ...base.fog },
+      };
       if (brush === "erase") {
         delete next.terrain[k];
         delete next.tile_images[k];
@@ -131,6 +168,7 @@ export function BattleMap({
    *  – Em combate ativo: só pode mover quando for o turno do SEU combatant.
    */
   const canSelectToken = (t: MapToken) => {
+    if (viewAsPlayers) return false;
     if (isMaster) return true;
     if (t.tone === "monster") return false;
     if (!myCharacterId || t.characterId !== myCharacterId) return false;
@@ -152,6 +190,10 @@ export function BattleMap({
     if (!sel) return;
     const { x, y } = cellAt(e);
     if (sel.x === x && sel.y === y) return;
+    if (sel.x !== null && sel.y !== null && gridDistance(sel.x, sel.y, x, y) > MOVEMENT_RANGE) {
+      toast.error(`Movimento limitado a ${MOVEMENT_RANGE} quadrados por turno.`);
+      return;
+    }
     const others = new Set(occupied);
     if (sel.x !== null && sel.y !== null) others.delete(cellKey(sel.x, sel.y));
     if (!canMoveTo(x, y, map.cols, map.rows, terrain, others)) {
@@ -175,31 +217,87 @@ export function BattleMap({
                   : brush === "image"
                     ? "Toque nas casas para colocar a imagem."
                     : "Escolha um pincel e pinte as casas."
-              : sel
-                ? `Toque numa casa para mover ${sel.name}.`
-                : combatActive && !isMaster && currentCombatantId
-                  ? (() => {
-                      const myToken = tokens.find((t) => t.characterId === myCharacterId);
-                      if (myToken && myToken.id === currentCombatantId) return "É sua vez! Toque no seu token e depois numa casa.";
-                      const currentToken = tokens.find((t) => t.id === currentCombatantId);
-                      return `Vez de ${currentToken?.name ?? "outro combatente"}. Aguarde seu turno.`;
-                    })()
-                  : "Toque num rosto e depois numa casa para andar."}
+              : measuring && sel
+                ? `Medição: ${hoverCell ? gridDistance(sel.x ?? 0, sel.y ?? 0, hoverCell.x, hoverCell.y) : "—"} quadrados (alcance ${MOVEMENT_RANGE}).`
+                : sel
+                  ? `Toque numa casa para mover ${sel.name}.`
+                  : combatActive && !isMaster && currentCombatantId
+                    ? (() => {
+                        const myToken = tokens.find((t) => t.characterId === myCharacterId);
+                        if (myToken && myToken.id === currentCombatantId)
+                          return "É sua vez! Toque no seu token e depois numa casa.";
+                        const currentToken = tokens.find((t) => t.id === currentCombatantId);
+                        return `Vez de ${currentToken?.name ?? "outro combatente"}. Aguarde seu turno.`;
+                      })()
+                    : "Toque num rosto e depois numa casa para andar."}
           </p>
         </div>
-        {isMaster ? (
-          <Button variant={editing ? "paint" : "outline"} size="sm" onClick={() => setEditing((v) => !v)}>
-            <Paintbrush /> {editing ? "Pronto" : "Editar mapa"}
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant={measuring ? "secondary" : "outline"}
+            size="sm"
+            disabled={editing}
+            onClick={() => {
+              setMeasuring((value) => !value);
+              setHoverCell(null);
+            }}
+          >
+            <Ruler /> {measuring ? "Fechar régua" : "Medir movimento"}
           </Button>
-        ) : (
-          <MasterUnlockModal
-            trigger={
-              <Button variant="outline" size="sm" className="gap-1.5 opacity-80" title="Apenas o mestre pode alterar o terreno">
-                <Lock className="size-3.5 text-muted-foreground" /> Editar mapa (Mestre)
-              </Button>
-            }
-          />
-        )}
+          {isMaster && (
+            <Button
+              variant={viewAsPlayers ? "secondary" : "outline"}
+              size="sm"
+              onClick={() => {
+                setViewAsPlayers((value) => !value);
+                setEditing(false);
+                setSelected(null);
+              }}
+            >
+              <Eye /> {viewAsPlayers ? "Voltar à visão do Mestre" : "Visão dos jogadores"}
+            </Button>
+          )}
+          {viewAsPlayers && (
+            <select
+              className="h-9 rounded-md border border-border bg-card px-2 text-sm"
+              value={previewCharacterId}
+              onChange={(event) => setPreviewCharacterId(event.target.value)}
+              aria-label="Personagem da prévia"
+            >
+              <option value="">Sem personagem selecionado</option>
+              {tokens
+                .filter((token) => token.characterId)
+                .map((token) => (
+                  <option key={token.characterId} value={token.characterId!}>
+                    {token.name}
+                  </option>
+                ))}
+            </select>
+          )}
+          {isMaster ? (
+            <Button
+              variant={editing ? "paint" : "outline"}
+              size="sm"
+              disabled={viewAsPlayers}
+              onClick={() => setEditing((v) => !v)}
+            >
+              <Paintbrush /> {editing ? "Pronto" : "Editar mapa"}
+            </Button>
+          ) : (
+            <MasterUnlockModal
+              trigger={
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 opacity-80"
+                  title="Apenas o mestre pode alterar o terreno"
+                >
+                  <Lock className="size-3.5 text-muted-foreground" /> Editar mapa (Mestre)
+                </Button>
+              }
+            />
+          )}
+        </div>
       </div>
 
       {editing && (
@@ -213,7 +311,9 @@ export function BattleMap({
                 onClick={() => setBrush(t.key)}
                 className={cn(brush === t.key && "ring-2 ring-primary")}
               >
-                <span className={cn("size-4 rounded-sm border border-border", TERRAIN_CLASS[t.key])} />
+                <span
+                  className={cn("size-4 rounded-sm border border-border", TERRAIN_CLASS[t.key])}
+                />
                 {t.name}
               </Button>
             ))}
@@ -233,7 +333,11 @@ export function BattleMap({
               onClick={() => (stamp ? setBrush("image") : stampFile.current?.click())}
               className={cn(brush === "image" && "ring-2 ring-primary")}
             >
-              {stamp ? <img src={stamp} alt="" className="size-5 rounded-sm object-cover" /> : <ImageIcon />}
+              {stamp ? (
+                <img src={stamp} alt="" className="size-5 rounded-sm object-cover" />
+              ) : (
+                <ImageIcon />
+              )}
               Imagem na casa
             </Button>
             {stamp && (
@@ -275,7 +379,11 @@ export function BattleMap({
             >
               <Eye /> Revelar
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => saveMap.mutate({ fog: fillFog(map.cols, map.rows) })}>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => saveMap.mutate({ fog: fillFog(map.cols, map.rows) })}
+            >
               Cobrir tudo
             </Button>
             <Button size="sm" variant="ghost" onClick={() => saveMap.mutate({ fog: {} })}>
@@ -307,14 +415,21 @@ export function BattleMap({
               <ImagePlus /> Imagem de fundo
             </Button>
             {map.background_url && (
-              <Button size="sm" variant="ghost" onClick={() => saveMap.mutate({ background_url: "" })}>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => saveMap.mutate({ background_url: "" })}
+              >
                 <X /> Tirar fundo
               </Button>
             )}
             <Button
               size="sm"
               variant="ghost"
-              onClick={() => confirm("Limpar todo o terreno e as imagens das casas?") && saveMap.mutate({ terrain: {}, tile_images: {} })}
+              onClick={() =>
+                confirm("Limpar todo o terreno e as imagens das casas?") &&
+                saveMap.mutate({ terrain: {}, tile_images: {} })
+              }
             >
               <Brush /> Limpar terreno
             </Button>
@@ -344,10 +459,17 @@ export function BattleMap({
           role="grid"
           aria-label="Mapa de batalha"
           onPointerDown={onGridDown}
-          onPointerMove={(e) => editing && painting.current && paint(e)}
+          onPointerMove={(e) => {
+            if (editing && painting.current) paint(e);
+            else if (!editing && measuring) setHoverCell(cellAt(e));
+          }}
+          onPointerLeave={() => setHoverCell(null)}
           onPointerUp={commit}
           onPointerCancel={commit}
-          className={cn("relative select-none", editing ? "cursor-crosshair touch-none" : sel && "cursor-pointer")}
+          className={cn(
+            "relative select-none",
+            editing ? "cursor-crosshair touch-none" : sel && "cursor-pointer",
+          )}
           style={{
             width: map.cols * CELL,
             height: map.rows * CELL,
@@ -357,20 +479,44 @@ export function BattleMap({
         >
           <div
             className="absolute inset-0 grid"
-            style={{ gridTemplateColumns: `repeat(${map.cols}, ${CELL}px)`, gridTemplateRows: `repeat(${map.rows}, ${CELL}px)` }}
+            style={{
+              gridTemplateColumns: `repeat(${map.cols}, ${CELL}px)`,
+              gridTemplateRows: `repeat(${map.rows}, ${CELL}px)`,
+            }}
           >
             {Array.from({ length: map.cols * map.rows }).map((_, i) => {
               const k = cellKey(i % map.cols, Math.floor(i / map.cols));
               const t = terrain[k];
               const img = images[k];
               const fogged = Boolean(fog[k]);
-              if (fogged && !isMaster) {
-                return <div key={k} className="fog-cell border border-background" aria-label="Casa escondida" />;
+              if (fogged && !viewerIsMaster) {
+                return (
+                  <div
+                    key={k}
+                    className="fog-cell border border-background"
+                    aria-label="Casa escondida"
+                  />
+                );
               }
               return (
-                <div key={k} className={cn("relative border border-border/40", t && TERRAIN_CLASS[t])}>
-                  {img && <img src={img} alt="" draggable={false} className="absolute inset-0 size-full object-cover" />}
-                  {fogged && <div className="fog-cell absolute inset-0 opacity-60" title="Escondida dos jogadores" />}
+                <div
+                  key={k}
+                  className={cn("relative border border-border/40", t && TERRAIN_CLASS[t])}
+                >
+                  {img && (
+                    <img
+                      src={img}
+                      alt=""
+                      draggable={false}
+                      className="absolute inset-0 size-full object-cover"
+                    />
+                  )}
+                  {fogged && (
+                    <div
+                      className="fog-cell absolute inset-0 opacity-60"
+                      title="Escondida dos jogadores"
+                    />
+                  )}
                 </div>
               );
             })}
@@ -384,7 +530,12 @@ export function BattleMap({
                 if (editing) return;
                 e.stopPropagation();
                 if (!canSelectToken(t)) {
-                  if (combatActive && currentCombatantId && currentCombatantId !== t.id && t.characterId === myCharacterId) {
+                  if (
+                    combatActive &&
+                    currentCombatantId &&
+                    currentCombatantId !== t.id &&
+                    t.characterId === myCharacterId
+                  ) {
                     toast("Aguarde sua vez para mover.");
                   }
                   return;
@@ -397,10 +548,16 @@ export function BattleMap({
                 "absolute left-0 top-0 grid place-items-center transition-transform duration-300 ease-out",
                 editing && "pointer-events-none",
               )}
-              style={{ width: CELL, height: CELL, transform: `translate(${t.x! * CELL}px, ${t.y! * CELL}px)` }}
+              style={{
+                width: CELL,
+                height: CELL,
+                transform: `translate(${t.x! * CELL}px, ${t.y! * CELL}px)`,
+              }}
             >
               <span className="relative">
-                {t.current && <span className="absolute -inset-1.5 animate-ping rounded-full bg-primary/50" />}
+                {t.current && (
+                  <span className="absolute -inset-1.5 animate-ping rounded-full bg-primary/50" />
+                )}
                 <Avatar
                   src={t.avatar}
                   name={t.name}
@@ -424,7 +581,14 @@ export function BattleMap({
                 {t.hpPct !== null && (
                   <span className="absolute -bottom-1 left-0 h-1 w-full overflow-hidden rounded-full bg-background">
                     <span
-                      className={cn("block h-full", t.hpPct > 0.5 ? "bg-success" : t.hpPct > 0.25 ? "bg-warning" : "bg-destructive")}
+                      className={cn(
+                        "block h-full",
+                        t.hpPct > 0.5
+                          ? "bg-success"
+                          : t.hpPct > 0.25
+                            ? "bg-warning"
+                            : "bg-destructive",
+                      )}
                       style={{ width: `${Math.max(0, t.hpPct) * 100}%` }}
                     />
                   </span>
@@ -432,33 +596,72 @@ export function BattleMap({
               </span>
             </button>
           ))}
+          {measuring && sel && hoverCell && sel.x !== null && sel.y !== null && (
+            <svg
+              className="pointer-events-none absolute inset-0"
+              width={map.cols * CELL}
+              height={map.rows * CELL}
+            >
+              <line
+                x1={(sel.x + 0.5) * CELL}
+                y1={(sel.y + 0.5) * CELL}
+                x2={(hoverCell.x + 0.5) * CELL}
+                y2={(hoverCell.y + 0.5) * CELL}
+                stroke={
+                  gridDistance(sel.x, sel.y, hoverCell.x, hoverCell.y) > MOVEMENT_RANGE
+                    ? "#ef4444"
+                    : "#facc15"
+                }
+                strokeWidth="3"
+                strokeDasharray="6 4"
+              />
+            </svg>
+          )}
         </div>
       </div>
 
       {(tray.length > 0 || sel) && !editing && (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-dashed border-border p-2">
-          {tray.length > 0 && <span className="label-caps px-1 text-muted-foreground">Fora do mapa:</span>}
+          {tray.length > 0 && (
+            <span className="label-caps px-1 text-muted-foreground">Fora do mapa:</span>
+          )}
           {tray.map((t) => (
             <button
               key={t.id}
               type="button"
               onClick={() => {
                 if (!canSelectToken(t)) {
-                  if (combatActive && currentCombatantId && currentCombatantId !== t.id && t.characterId === myCharacterId) {
+                  if (
+                    combatActive &&
+                    currentCombatantId &&
+                    currentCombatantId !== t.id &&
+                    t.characterId === myCharacterId
+                  ) {
                     toast("Aguarde sua vez para mover.");
                   }
                   return;
                 }
                 setSelected((s) => (s === t.id ? null : t.id));
               }}
-              className={cn("flex items-center gap-1.5 rounded-full border border-border py-0.5 pl-0.5 pr-3 text-sm", selected === t.id && "ring-2 ring-foreground")}
+              className={cn(
+                "flex items-center gap-1.5 rounded-full border border-border py-0.5 pl-0.5 pr-3 text-sm",
+                selected === t.id && "ring-2 ring-foreground",
+              )}
             >
               <Avatar src={t.avatar} name={t.name} tone={t.tone} className="size-7 text-[10px]" />
               {t.name}
             </button>
           ))}
           {sel && sel.x !== null && (
-            <Button size="sm" variant="ghost" className="ml-auto" onClick={() => { onMove(sel.id, null, null); setSelected(null); }}>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="ml-auto"
+              onClick={() => {
+                onMove(sel.id, null, null);
+                setSelected(null);
+              }}
+            >
               <LogOut /> Tirar {sel.name} do mapa
             </Button>
           )}

@@ -20,15 +20,20 @@ export function MoneyField({
   useEffect(() => setDraft(String(value)), [value]);
 
   return (
-    <div className={cn("inline-flex items-center gap-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-1.5", className)}>
+    <div
+      className={cn(
+        "inline-flex items-center gap-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-1.5",
+        className,
+      )}
+    >
       <span aria-hidden>💰</span>
-      <span className="label-caps text-warning">Dinheiro</span>
+      <span className="label-caps text-warning">Rupias</span>
       {canEdit ? (
         <Input
           type="number"
           inputMode="numeric"
           min={0}
-          aria-label="Dinheiro"
+          aria-label="Saldo em rupias"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onBlur={() => {

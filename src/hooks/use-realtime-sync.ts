@@ -10,12 +10,14 @@ import type { Message, Roll } from "@/lib/rpg-queries";
 import { toast } from "sonner";
 import { emitRoll } from "@/lib/roll-burst";
 import { shouldAnnounce } from "@/lib/silent-roll";
+import { formatMoney } from "@/lib/phone";
+import { postRollToDiscord } from "@/lib/discord-webhook";
 
 type Row = { id?: string | number; character_id?: string | null } | null;
 
 /** Aviso grande na tela de todo mundo quando alguém da mesa rola os dados. */
-function announceRoll(r: Roll, viewerIsMaster: boolean) {
-  if (!shouldAnnounce(r, viewerIsMaster) || isLocalRoll(r)) return;
+function announceRoll(r: Roll, viewerIsMaster: boolean, local: boolean) {
+  if (!shouldAnnounce(r, viewerIsMaster) || local) return;
   emitRoll({
     name: r.character_name,
     label: r.label,
@@ -29,12 +31,12 @@ function announceRoll(r: Roll, viewerIsMaster: boolean) {
   });
 }
 
-/** Aviso no topo quando chega mensagem ou Pix para o personagem deste aparelho. */
+/** Aviso no topo quando chega mensagem ou transferência para o personagem deste aparelho. */
 function notifyMessage(m: Message) {
   const me = getPlayerCharacterId();
   if (!me || m.from_character_id === me) return;
   if (m.kind === "pix" && m.to_character_id === me) {
-    toast.success(`💸 ${m.from_name} te enviou $${m.amount ?? 0}`);
+    toast.success(`💴 ${m.from_name} te enviou ${formatMoney(m.amount ?? 0)}`);
   } else if (m.to_character_id === me || m.to_character_id === null) {
     toast(`📱 ${m.from_name || "Desconhecido"}: ${m.body.slice(0, 80)}`);
   }
@@ -97,8 +99,18 @@ export function useRealtimeSync() {
         queue(sheetKey(row));
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "rolls" }, (p) => {
-        if (p.eventType === "INSERT") announceRoll(p.new as Roll, masterRef.current);
-        queue(["rolls"]);
+        if (p.eventType === "INSERT") {
+          const roll = p.new as Roll;
+          const local = isLocalRoll(roll);
+          announceRoll(roll, masterRef.current, local);
+          if (masterRef.current && !local && !roll.hidden) {
+            void postRollToDiscord(roll).catch((error: unknown) => {
+              console.error("Não foi possível publicar a rolagem no Discord.", error);
+              toast.error("Não foi possível enviar a rolagem ao Discord.");
+            });
+          }
+        }
+        queue(["rolls"], ["public_rolls"]);
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "gm_notes" }, () =>
         queue(["gm_notes"]),
@@ -119,6 +131,15 @@ export function useRealtimeSync() {
         if (p.eventType === "INSERT") notifyMessage(p.new as Message);
         queue(["messages"], ["characters"], ["group"]);
       })
+      .on("postgres_changes", { event: "*", schema: "public", table: "phone_contacts" }, () =>
+        queue(["phone_contacts"]),
+      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "phone_clues" }, () =>
+        queue(["phone_clues"]),
+      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "phone_gallery" }, () =>
+        queue(["phone_gallery"]),
+      )
       .subscribe();
 
     return () => {

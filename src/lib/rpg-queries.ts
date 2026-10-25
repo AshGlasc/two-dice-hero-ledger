@@ -97,6 +97,20 @@ export const rollsQuery = queryOptions({
   },
 });
 
+export const publicRollsQuery = queryOptions({
+  queryKey: ["public_rolls"],
+  queryFn: async () => {
+    const { data, error } = await supabase
+      .from("rolls")
+      .select("*")
+      .eq("hidden", false)
+      .order("created_at", { ascending: false })
+      .limit(40);
+    if (error) throw error;
+    return data;
+  },
+});
+
 export const gmNotesQuery = queryOptions({
   queryKey: ["gm_notes"],
   queryFn: async () => {
@@ -168,6 +182,9 @@ export const battleMapQuery = queryOptions({
 });
 
 export type Message = Tables["messages"]["Row"];
+export type PhoneContact = Tables["phone_contacts"]["Row"];
+export type PhoneClue = Tables["phone_clues"]["Row"];
+export type PhonePhoto = Tables["phone_gallery"]["Row"];
 
 export const messagesQuery = queryOptions({
   queryKey: ["messages"],
@@ -179,5 +196,41 @@ export const messagesQuery = queryOptions({
       .limit(300);
     if (error) throw error;
     return data.reverse();
+  },
+});
+
+export const phoneContactsQuery = queryOptions({
+  queryKey: ["phone_contacts"],
+  queryFn: async () => {
+    const { data, error } = await supabase
+      .from("phone_contacts")
+      .select("*")
+      .order("created_at", { ascending: true });
+    if (error) throw error;
+    return data;
+  },
+});
+
+export const phoneCluesQuery = queryOptions({
+  queryKey: ["phone_clues"],
+  queryFn: async () => {
+    const { data, error } = await supabase
+      .from("phone_clues")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    return data;
+  },
+});
+
+export const phoneGalleryQuery = queryOptions({
+  queryKey: ["phone_gallery"],
+  queryFn: async () => {
+    const { data, error } = await supabase
+      .from("phone_gallery")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    return data;
   },
 });

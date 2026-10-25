@@ -3,6 +3,7 @@
 export type PhoneMessage = {
   from_character_id: string | null;
   to_character_id: string | null;
+  contact_id?: string | null;
 };
 
 /** Conversa "grupo" = mensagens sem destinatário. */
@@ -15,7 +16,8 @@ export function inConversation(m: PhoneMessage, me: string | null, other: string
   if (other === GROUP) return m.to_character_id === null;
   if (m.to_character_id === null) return false;
   // Conversa com o mestre/NPCs: o NPC manda sem remetente; o jogador responde "para si mesmo".
-  if (other === NPC) return m.to_character_id === me && (m.from_character_id === null || m.from_character_id === me);
+  if (other === NPC)
+    return m.to_character_id === me && (m.from_character_id === null || m.from_character_id === me);
   if (m.from_character_id === m.to_character_id) return false;
   return (
     (m.from_character_id === me && m.to_character_id === other) ||
@@ -23,14 +25,44 @@ export function inConversation(m: PhoneMessage, me: string | null, other: string
   );
 }
 
-/** Erro de um Pix antes de mandar para o servidor (o servidor confere de novo). */
-export function transferError(balance: number, amount: number, from: string | null, to: string | null) {
+/** Erro de uma transferência em rupias antes de mandar para o servidor. */
+export function transferError(
+  balance: number,
+  amount: number,
+  from: string | null,
+  to: string | null,
+) {
   if (!from) return "Escolha seu personagem primeiro.";
   if (!to) return "Escolha para quem enviar.";
   if (from === to) return "Não dá para enviar para si mesmo.";
   if (!Number.isInteger(amount) || amount <= 0) return "Digite um valor maior que zero.";
-  if (amount > balance) return "Saldo insuficiente.";
+  if (amount > balance) return "Saldo insuficiente em rupias.";
   return null;
 }
 
-export const formatMoney = (v: number) => `$${v.toLocaleString("pt-BR")}`;
+export const formatMoney = (v: number) =>
+  new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    maximumFractionDigits: 0,
+  }).format(v);
+
+export function unreadPhoneMessages(
+  messages: {
+    from_character_id: string | null;
+    to_character_id: string | null;
+    created_at: string;
+  }[],
+  characterId: string | null,
+  lastReadAt: string | null,
+) {
+  if (!characterId || !lastReadAt) return 0;
+  const readAt = Date.parse(lastReadAt);
+  if (!Number.isFinite(readAt)) return 0;
+  return messages.filter(
+    (message) =>
+      message.from_character_id !== characterId &&
+      (message.to_character_id === characterId || message.to_character_id === null) &&
+      Date.parse(message.created_at) > readAt,
+  ).length;
+}

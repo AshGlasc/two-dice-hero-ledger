@@ -1,5 +1,17 @@
-import { Link } from "@tanstack/react-router";
-import { Crown, Lock, LogOut, Map as MapIcon, Radio, Skull, Smartphone, Theater, Users } from "lucide-react";
+import { Link, useLocation } from "@tanstack/react-router";
+import {
+  Crown,
+  Lock,
+  LogOut,
+  Map as MapIcon,
+  Radio,
+  Skull,
+  Smartphone,
+  Theater,
+  Users,
+} from "lucide-react";
+import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 import { RollDrawer } from "@/components/rpg/RollDrawer";
 import { MasterUnlockModal } from "@/components/rpg/MasterUnlockModal";
@@ -14,13 +26,44 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
+import { messagesQuery } from "@/lib/rpg-queries";
+import { getPlayerCharacterId } from "@/lib/player-character";
+import { unreadPhoneMessages } from "@/lib/phone";
 
 const LINKS = [
   { to: "/", label: "Personagens", short: "Fichas", icon: Users, exact: true, restricted: false },
-  { to: "/bestiario", label: "Bestiário", short: "Monstros", icon: Skull, exact: false, restricted: false },
-  { to: "/combate", label: "Combate", short: "Combate", icon: MapIcon, exact: false, restricted: false },
-  { to: "/celular", label: "Celular", short: "Celular", icon: Smartphone, exact: false, restricted: false },
-  { to: "/mestre", label: "Mestre", short: "Mestre", icon: Theater, exact: false, restricted: true },
+  {
+    to: "/bestiario",
+    label: "Bestiário",
+    short: "Monstros",
+    icon: Skull,
+    exact: false,
+    restricted: false,
+  },
+  {
+    to: "/combate",
+    label: "Combate",
+    short: "Combate",
+    icon: MapIcon,
+    exact: false,
+    restricted: false,
+  },
+  {
+    to: "/celular",
+    label: "Celular",
+    short: "Celular",
+    icon: Smartphone,
+    exact: false,
+    restricted: false,
+  },
+  {
+    to: "/mestre",
+    label: "Mestre",
+    short: "Mestre",
+    icon: Theater,
+    exact: false,
+    restricted: true,
+  },
 ] as const;
 
 const linkClass =
@@ -28,6 +71,39 @@ const linkClass =
 
 export function TopNav() {
   const { isMaster, lock } = useMasterAuth();
+  const location = useLocation();
+  const { data: messages } = useQuery(messagesQuery);
+  const [characterId, setCharacterId] = useState<string | null>(null);
+  const [lastReadAt, setLastReadAt] = useState<string | null>(null);
+
+  useEffect(() => {
+    const id = getPlayerCharacterId();
+    setCharacterId(id);
+    setLastReadAt(id ? localStorage.getItem(`eco_caidos_phone_read_${id}`) : null);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!characterId || !messages) return;
+    const key = `eco_caidos_phone_read_${characterId}`;
+    if (!localStorage.getItem(key)) {
+      const latest = messages.reduce(
+        (time, message) => Math.max(time, Date.parse(message.created_at) || 0),
+        0,
+      );
+      const initialReadAt = new Date(Math.max(Date.now(), latest)).toISOString();
+      localStorage.setItem(key, initialReadAt);
+      setLastReadAt(initialReadAt);
+    }
+  }, [characterId, messages]);
+
+  useEffect(() => {
+    if (location.pathname !== "/celular" || !characterId) return;
+    const readAt = new Date().toISOString();
+    localStorage.setItem(`eco_caidos_phone_read_${characterId}`, readAt);
+    setLastReadAt(readAt);
+  }, [characterId, location.pathname]);
+
+  const unreadCount = unreadPhoneMessages(messages ?? [], characterId, lastReadAt);
 
   return (
     <>
@@ -41,13 +117,21 @@ export function TopNav() {
             {LINKS.map((l) => (
               <Link key={l.to} to={l.to} className={linkClass} activeOptions={{ exact: l.exact }}>
                 <span>{l.label}</span>
-                {l.restricted && (
-                  isMaster ? (
-                    <span title="Mestre autenticado"><Crown className="size-3 text-primary animate-pulse" /></span>
-                  ) : (
-                    <span title="Acesso restrito ao mestre"><Lock className="size-3 text-muted-foreground/70" /></span>
-                  )
+                {l.to === "/celular" && unreadCount > 0 && (
+                  <span className="rounded-full bg-destructive px-1.5 text-[10px] leading-4 text-destructive-foreground">
+                    {unreadCount}
+                  </span>
                 )}
+                {l.restricted &&
+                  (isMaster ? (
+                    <span title="Mestre autenticado">
+                      <Crown className="size-3 text-primary animate-pulse" />
+                    </span>
+                  ) : (
+                    <span title="Acesso restrito ao mestre">
+                      <Lock className="size-3 text-muted-foreground/70" />
+                    </span>
+                  ))}
               </Link>
             ))}
           </nav>
@@ -137,6 +221,11 @@ export function TopNav() {
           >
             <div className="relative">
               <l.icon className="size-5" />
+              {l.to === "/celular" && unreadCount > 0 && (
+                <span className="absolute -right-2 -top-2 grid min-w-4 place-items-center rounded-full bg-destructive px-1 text-[9px] leading-4 text-destructive-foreground">
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </span>
+              )}
               {l.restricted && (
                 <span className="absolute -right-1.5 -top-1">
                   {isMaster ? (

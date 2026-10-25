@@ -25,6 +25,18 @@ import { ATTRIBUTES, ATTRIBUTE_MAX, ATTRIBUTE_MIN, type AttributeKey } from "@/l
 import { cn } from "@/lib/utils";
 
 const START: Record<AttributeKey, number> = { intelecto: 2, psique: 2, fisico: 2, motor: 2 };
+const INDONESIAN_NAME_SUGGESTIONS = [
+  "Siti Aminah",
+  "Budi Santoso",
+  "Dewi Lestari",
+  "Agus Pratama",
+  "Made Suryani",
+  "Wayan Putra",
+  "Ratna Wibowo",
+  "Slamet Riyadi",
+  "Nyoman Kartika",
+  "Rudi Hartono",
+];
 
 export function NewCharacterDialog() {
   const [open, setOpen] = useState(false);
@@ -92,16 +104,25 @@ export function NewCharacterDialog() {
           <DialogHeader>
             <div className="flex items-center gap-2 text-warning">
               <Lock className="size-5" />
-              <DialogTitle className="font-display text-2xl uppercase">Limite de Personagem</DialogTitle>
+              <DialogTitle className="font-display text-2xl uppercase">
+                Limite de Personagem
+              </DialogTitle>
             </div>
             <DialogDescription className="space-y-2 pt-2 text-sm text-foreground/90">
               <p>
-                Jogadores podem criar apenas <strong>1 personagem por vez</strong> nesta mesa. O mestre da mesa não possui essa restrição.
+                Jogadores podem criar apenas <strong>1 personagem por vez</strong> nesta mesa. O
+                mestre da mesa não possui essa restrição.
               </p>
               <div className="rounded-lg border border-border bg-card p-3">
-                <span className="text-xs uppercase text-muted-foreground">Seu personagem ativo:</span>
-                <p className="font-display text-xl font-bold uppercase text-primary">{existing.name}</p>
-                {existing.concept && <p className="text-xs italic text-muted-foreground">{existing.concept}</p>}
+                <span className="text-xs uppercase text-muted-foreground">
+                  Seu personagem ativo:
+                </span>
+                <p className="font-display text-xl font-bold uppercase text-primary">
+                  {existing.name}
+                </p>
+                {existing.concept && (
+                  <p className="text-xs italic text-muted-foreground">{existing.concept}</p>
+                )}
               </div>
             </DialogDescription>
           </DialogHeader>
@@ -145,8 +166,27 @@ export function NewCharacterDialog() {
             </DialogDescription>
           </DialogHeader>
           <label className="block space-y-1.5">
-            <span className="label-caps text-muted-foreground">Nome do personagem</span>
-            <Input value={name} onChange={(e) => setName(e.target.value)} required autoFocus />
+            <span className="label-caps text-muted-foreground">Nome do personagem · Indonésia</span>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Ex.: Siti Aminah, Budi Santoso, Made Suryani"
+              required
+              autoFocus
+            />
+            <button
+              type="button"
+              className="text-xs text-primary underline-offset-2 hover:underline"
+              onClick={() =>
+                setName(
+                  INDONESIAN_NAME_SUGGESTIONS[
+                    Math.floor(Math.random() * INDONESIAN_NAME_SUGGESTIONS.length)
+                  ]!,
+                )
+              }
+            >
+              Sugerir nome local
+            </button>
           </label>
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block space-y-1.5">
@@ -156,7 +196,7 @@ export function NewCharacterDialog() {
             <label className="block space-y-1.5">
               <span className="label-caps text-muted-foreground">Conceito</span>
               <Input
-                placeholder="Ex.: Detetive amnésico"
+                placeholder="Ex.: investigador de Djakarta, ex-estudante de Yogyakarta"
                 value={concept}
                 onChange={(e) => setConcept(e.target.value)}
               />
@@ -168,7 +208,11 @@ export function NewCharacterDialog() {
               return (
                 <div
                   key={a.key}
-                  className={cn("flex items-center justify-between rounded-md border px-4 py-2", theme.border, theme.soft)}
+                  className={cn(
+                    "flex items-center justify-between rounded-md border px-4 py-2",
+                    theme.border,
+                    theme.soft,
+                  )}
                 >
                   <span className={cn("font-display text-xl font-bold uppercase", theme.text)}>
                     {a.name}

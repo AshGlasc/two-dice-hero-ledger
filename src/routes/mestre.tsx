@@ -1,7 +1,18 @@
 import { useMutation, useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Check, Clock, Crown, Dices, Eraser, LogOut, ShieldAlert, Swords, Users, X } from "lucide-react";
-import { useState } from "react";
+import {
+  Check,
+  Clock,
+  Crown,
+  Dices,
+  Eraser,
+  LogOut,
+  ShieldAlert,
+  Swords,
+  Users,
+  X,
+} from "lucide-react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +21,7 @@ import { ChangePinDialog } from "@/components/rpg/ChangePinDialog";
 import { InlineField } from "@/components/rpg/InlineField";
 import { MasterLockScreen } from "@/components/rpg/MasterLockScreen";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -30,6 +42,7 @@ import {
 } from "@/lib/custom-attacks";
 import { logRolls } from "@/lib/roll-log";
 import { gmNotesQuery, groupQuery, rollsQuery, type GroupData } from "@/lib/rpg-queries";
+import { getDiscordWebhookUrl, saveDiscordWebhookUrl } from "@/lib/discord-webhook";
 import {
   ALL_SKILLS,
   ATTRIBUTES,
@@ -64,7 +77,6 @@ export const Route = createFileRoute("/mestre")({
   loader: async ({ context }) => {
     await Promise.all([
       context.queryClient.ensureQueryData(groupQuery),
-      context.queryClient.ensureQueryData(rollsQuery),
       context.queryClient.ensureQueryData(gmNotesQuery),
     ]);
   },
@@ -78,7 +90,8 @@ function skillValueFor(group: GroupData, characterId: string, skillKey: string) 
   const character = group.characters.find((c) => c.id === characterId);
   if (!skill || !character) return 0;
   const bonus =
-    group.skills.find((s) => s.character_id === characterId && s.skill_key === skillKey)?.bonus ?? 0;
+    group.skills.find((s) => s.character_id === characterId && s.skill_key === skillKey)?.bonus ??
+    0;
   return skillTotal(character[skill.attribute], bonus);
 }
 
@@ -115,7 +128,9 @@ function GmPageContent({ onLock }: { onLock: () => void }) {
               <Crown className="size-3" /> Mestre Ativo
             </span>
           </div>
-          <h1 className="mt-1 text-5xl font-bold uppercase leading-none md:text-6xl">Painel do mestre</h1>
+          <h1 className="mt-1 text-5xl font-bold uppercase leading-none md:text-6xl">
+            Painel do mestre
+          </h1>
           <p className="mt-2 text-muted-foreground">
             Tudo aqui atualiza ao vivo quando qualquer jogador muda a ficha ou rola os dados.
           </p>
@@ -133,6 +148,8 @@ function GmPageContent({ onLock }: { onLock: () => void }) {
         </div>
       </header>
 
+      <DiscordWebhookSettings />
+
       {/* Ataques pendentes — seção de aprovação */}
       <PendingAttacks group={group} />
 
@@ -147,6 +164,53 @@ function GmPageContent({ onLock }: { onLock: () => void }) {
         </div>
       </div>
     </main>
+  );
+}
+
+function DiscordWebhookSettings() {
+  const [url, setUrl] = useState("");
+  useEffect(() => setUrl(getDiscordWebhookUrl()), []);
+
+  return (
+    <section className="space-y-3 rounded-lg border border-border bg-card p-5">
+      <div>
+        <p className="label-caps text-primary">Integração opcional</p>
+        <h2 className="font-display text-xl font-bold uppercase">Webhook do Discord</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Envia rolagens públicas e início de combate. Rolagens ocultas nunca são enviadas. O
+          endereço fica salvo somente neste navegador.
+        </p>
+      </div>
+      <form
+        className="flex flex-col gap-2 sm:flex-row"
+        onSubmit={(event) => {
+          event.preventDefault();
+          const error = saveDiscordWebhookUrl(url);
+          if (error) {
+            toast.error(error);
+            return;
+          }
+          toast.success(
+            url.trim() ? "Webhook do Discord salvo neste navegador." : "Webhook removido.",
+          );
+        }}
+      >
+        <Input
+          type="url"
+          value={url}
+          onChange={(event) => setUrl(event.target.value)}
+          placeholder="https://discord.com/api/webhooks/..."
+          aria-label="URL do webhook do Discord"
+        />
+        <Button type="submit" variant="outline">
+          Salvar webhook
+        </Button>
+      </form>
+      <p className="text-xs text-warning">
+        Trate a URL como senha. Configure-a apenas em um dispositivo confiável; ela não é enviada
+        nem armazenada no Supabase.
+      </p>
+    </section>
   );
 }
 
@@ -223,14 +287,19 @@ function PendingAttacks({ group }: { group: GroupData }) {
             >
               <div>
                 <div className="mb-1 flex items-center gap-2">
-                  <Badge variant="outline" className="border-warning/60 bg-warning/10 text-[11px] text-warning gap-1">
+                  <Badge
+                    variant="outline"
+                    className="border-warning/60 bg-warning/10 text-[11px] text-warning gap-1"
+                  >
                     <Clock className="size-3 animate-pulse" /> Pendente
                   </Badge>
                   {owner && (
                     <span className="truncate text-xs text-muted-foreground">{owner.name}</span>
                   )}
                 </div>
-                <h3 className="font-display text-xl font-bold uppercase leading-tight">{atk.name}</h3>
+                <h3 className="font-display text-xl font-bold uppercase leading-tight">
+                  {atk.name}
+                </h3>
                 <p className="text-xs text-primary">{getSkillLabel(atk.skillKey)}</p>
                 {atk.description && (
                   <p className="mt-1 text-xs italic text-foreground/70">{atk.description}</p>
@@ -382,7 +451,9 @@ function GroupTest({ group }: { group: GroupData }) {
                     {r.result.dice[0]}+{r.result.dice[1]}+{r.result.modifier}
                   </span>
                   <span className="tabular font-display text-2xl font-bold">{r.result.total}</span>
-                  <span className={cn("label-caps w-24 text-right", OUTCOME_CLASS[r.result.outcome])}>
+                  <span
+                    className={cn("label-caps w-24 text-right", OUTCOME_CLASS[r.result.outcome])}
+                  >
                     {OUTCOME_TEXT[r.result.outcome]}
                   </span>
                 </span>
@@ -446,7 +517,7 @@ function PartyOverview({ group }: { group: GroupData }) {
 }
 
 function RollFeed() {
-  const { data: rolls } = useSuspenseQuery(rollsQuery);
+  const { data: rolls = [] } = useQuery(rollsQuery);
   const qc = useQueryClient();
   const clear = useMutation({
     mutationFn: async () => {
@@ -482,7 +553,10 @@ function RollFeed() {
       ) : (
         <ul className="max-h-[480px] space-y-1 overflow-y-auto pr-1 text-sm">
           {rolls.map((r) => (
-            <li key={r.id} className="flex items-center justify-between gap-2 border-b border-border/60 py-1.5">
+            <li
+              key={r.id}
+              className="flex items-center justify-between gap-2 border-b border-border/60 py-1.5"
+            >
               <span className="min-w-0">
                 <span className="block truncate font-display font-semibold uppercase">
                   {r.character_name || "—"}

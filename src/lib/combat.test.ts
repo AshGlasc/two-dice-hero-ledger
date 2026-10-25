@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   canMoveTo,
   changeHp,
+  conditionPenalty,
   findFreeCell,
+  gridDistance,
   nextTurn,
   playerCombatStats,
   previousTurn,
@@ -67,6 +69,19 @@ describe("pontos de vida", () => {
     expect(changeHp(5, -8, 20)).toBe(0);
     expect(changeHp(18, 5, 20)).toBe(20);
     expect(changeHp(10, -3, 20)).toBe(7);
+  });
+
+  describe("condições e distância", () => {
+    it("acumula a penalidade de Atordoado e Caído", () => {
+      expect(conditionPenalty(["Atordoado"])).toBe(2);
+      expect(conditionPenalty(["Atordoado", "Caído"])).toBe(4);
+      expect(conditionPenalty(["Sangrando"])).toBe(0);
+    });
+
+    it("mede quadrados contando a diagonal como um quadrado", () => {
+      expect(gridDistance(1, 2, 5, 4)).toBe(4);
+      expect(gridDistance(2, 2, 4, 4)).toBe(2);
+    });
   });
 });
 
