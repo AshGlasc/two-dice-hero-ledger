@@ -13,7 +13,7 @@ import {
 type CharacterPatch = Partial<
   Pick<
     Character,
-    "name" | "player_name" | "concept" | "notes" | "intelecto" | "psique" | "fisico" | "motor" | "avatar_url"
+    "name" | "player_name" | "concept" | "notes" | "intelecto" | "psique" | "fisico" | "motor" | "avatar_url" | "money"
   >
 >;
 type WeaponInput = Pick<Weapon, "name" | "weapon_type" | "damage" | "ammo" | "notes">;
