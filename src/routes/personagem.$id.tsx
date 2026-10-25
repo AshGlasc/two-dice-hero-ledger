@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { AvatarUpload } from "@/components/rpg/AvatarUpload";
 import { BackpackSection } from "@/components/rpg/BackpackSection";
 import { InlineField } from "@/components/rpg/InlineField";
+import { MoneyField } from "@/components/rpg/MoneyField";
 import { SkillsSection } from "@/components/rpg/SkillsSection";
 import { WeaponsSection } from "@/components/rpg/WeaponsSection";
 import {
@@ -21,6 +22,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useMasterAuth } from "@/context/MasterAuthContext";
 import { useSheetMutations } from "@/hooks/use-sheet-mutations";
 import { supabase } from "@/integrations/supabase/client";
 import { clearPlayerCharacterId, getPlayerCharacterId } from "@/lib/player-character";
@@ -69,6 +71,7 @@ function CharacterPage() {
   const mutations = useSheetMutations(id);
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const { isMaster } = useMasterAuth();
 
   const remove = useMutation({
     mutationFn: async () => {
@@ -140,6 +143,16 @@ function CharacterPage() {
               className="h-auto px-1 font-display text-4xl font-bold uppercase leading-none md:text-7xl"
             />
           </div>
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <MoneyField
+            value={character.money}
+            canEdit={isMaster}
+            onSave={(v) => mutations.updateCharacter.mutate({ money: v })}
+          />
+          <Button asChild variant="outline" size="sm">
+            <Link to="/celular">📱 Abrir celular</Link>
+          </Button>
         </div>
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
           <label className="block">
