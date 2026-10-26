@@ -14,6 +14,24 @@ export type Database = {
   }
   public: {
     Tables: {
+      app_settings: {
+        Row: {
+          discord_webhook: string
+          id: number
+          updated_at: string
+        }
+        Insert: {
+          discord_webhook?: string
+          id?: number
+          updated_at?: string
+        }
+        Update: {
+          discord_webhook?: string
+          id?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       backpack_items: {
         Row: {
           character_id: string
@@ -371,91 +389,6 @@ export type Database = {
           },
         ]
       }
-      phone_contacts: {
-        Row: {
-          created_at: string
-          id: string
-          name: string
-          target_character_id: string | null
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          name: string
-          target_character_id?: string | null
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          name?: string
-          target_character_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "phone_contacts_target_character_id_fkey"
-            columns: ["target_character_id"]
-            isOneToOne: false
-            referencedRelation: "characters"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      phone_clues: {
-        Row: {
-          body: string
-          created_at: string
-          headline: string
-          id: string
-          image_url: string
-        }
-        Insert: {
-          body?: string
-          created_at?: string
-          headline: string
-          id?: string
-          image_url?: string
-        }
-        Update: {
-          body?: string
-          created_at?: string
-          headline?: string
-          id?: string
-          image_url?: string
-        }
-        Relationships: []
-      }
-      phone_gallery: {
-        Row: {
-          caption: string
-          character_id: string | null
-          created_at: string
-          id: string
-          image_url: string
-        }
-        Insert: {
-          caption?: string
-          character_id?: string | null
-          created_at?: string
-          id?: string
-          image_url: string
-        }
-        Update: {
-          caption?: string
-          character_id?: string | null
-          created_at?: string
-          id?: string
-          image_url?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "phone_gallery_character_id_fkey"
-            columns: ["character_id"]
-            isOneToOne: false
-            referencedRelation: "characters"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       monsters: {
         Row: {
           abilities: string
@@ -515,6 +448,91 @@ export type Database = {
           psique?: number
         }
         Relationships: []
+      }
+      phone_clues: {
+        Row: {
+          body: string
+          created_at: string
+          headline: string
+          id: string
+          image_url: string
+        }
+        Insert: {
+          body?: string
+          created_at?: string
+          headline: string
+          id?: string
+          image_url?: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          headline?: string
+          id?: string
+          image_url?: string
+        }
+        Relationships: []
+      }
+      phone_contacts: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          target_character_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          target_character_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          target_character_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "phone_contacts_target_character_id_fkey"
+            columns: ["target_character_id"]
+            isOneToOne: false
+            referencedRelation: "characters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      phone_gallery: {
+        Row: {
+          caption: string
+          character_id: string | null
+          created_at: string
+          id: string
+          image_url: string
+        }
+        Insert: {
+          caption?: string
+          character_id?: string | null
+          created_at?: string
+          id?: string
+          image_url: string
+        }
+        Update: {
+          caption?: string
+          character_id?: string | null
+          created_at?: string
+          id?: string
+          image_url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "phone_gallery_character_id_fkey"
+            columns: ["character_id"]
+            isOneToOne: false
+            referencedRelation: "characters"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       rolls: {
         Row: {

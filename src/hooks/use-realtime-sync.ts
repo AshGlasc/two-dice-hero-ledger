@@ -12,7 +12,6 @@ import { toast } from "sonner";
 import { emitRoll } from "@/lib/roll-burst";
 import { shouldAnnounce } from "@/lib/silent-roll";
 import { formatMoney } from "@/lib/phone";
-import { postRollToDiscord } from "@/lib/discord-webhook";
 
 type Row = { id?: string | number; character_id?: string | null } | null;
 
@@ -96,7 +95,7 @@ export function useRealtimeSync() {
     const sheetKey = (row: Row) => (row?.character_id ? ["sheet", row.character_id] : ["sheet"]);
 
     const channel = supabase
-      .channel("fungo-disco-sync")
+      .channel(`mesa-sync-${Math.random().toString(36).slice(2)}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "characters" }, (p) => {
         const row = (p.new && "id" in p.new ? p.new : p.old) as Row;
         queue(["characters"], ["group"], row?.id ? ["sheet", row.id] : ["sheet"]);
@@ -122,12 +121,6 @@ export function useRealtimeSync() {
           const roll = p.new as Roll;
           const local = isLocalRoll(roll);
           announceRoll(roll, masterRef.current, local);
-          if (masterRef.current && !local && !roll.hidden) {
-            void postRollToDiscord(roll).catch((error: unknown) => {
-              console.error("Não foi possível publicar a rolagem no Discord.", error);
-              toast.error("Não foi possível enviar a rolagem ao Discord.");
-            });
-          }
         }
         queue(["rolls"], ["public_rolls"]);
       })
