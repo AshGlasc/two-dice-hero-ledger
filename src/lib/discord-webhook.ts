@@ -63,7 +63,7 @@ export async function saveDiscordWebhookUrl(value: string): Promise<string | nul
 }
 
 async function postWebhook(embeds: object[], attachment?: { blob: Blob; name: string }) {
-  const url = getDiscordWebhookUrl();
+  const url = await loadDiscordWebhookUrl();
   if (!url || embeds.length === 0) return;
   let body: BodyInit;
   let request: RequestInit;
@@ -88,7 +88,7 @@ const normalize = (value: string) =>
     .toLowerCase();
 
 export async function postRollToDiscord(roll: Roll) {
-  if (roll.hidden || !getDiscordWebhookUrl()) return;
+  if (roll.hidden || !(await loadDiscordWebhookUrl())) return;
   const skill = ALL_SKILLS.find((item) => normalize(roll.label).includes(normalize(item.name)));
   let avatarUrl: string | undefined;
   if (roll.character_id) {
@@ -137,7 +137,7 @@ export async function postRollToDiscord(roll: Roll) {
 export async function postCombatStartToDiscord(
   combatants: { name: string; initiative: number | null }[],
 ) {
-  if (!getDiscordWebhookUrl()) return;
+  if (!(await loadDiscordWebhookUrl())) return;
   const initiativeImage = publicImageUrl(SKILL_ICONS["velocidade_reacao"]);
   await postWebhook([
     {
