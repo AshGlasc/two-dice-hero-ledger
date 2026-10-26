@@ -219,14 +219,27 @@ function CombatPage() {
       toast(`Penalidades aplicadas: ataque −${attackerPenalty}, defesa do alvo −${targetPenalty}.`);
     }
     const r = roll2d6(x.attack_bonus - attackerPenalty, defense);
+    const hit = r.outcome === "success" || r.outcome === "critical-success";
+    const damage = hit ? rollD6() + (r.outcome === "critical-success" ? 3 : 0) : 0;
     void logRolls([
       {
         characterId: x.character_id,
         characterName: x.name,
-        label: target ? `Ataque em ${target.name}` : "Ataque",
+        label: target
+          ? `Ataque em ${target.name}${hit ? ` — ${damage} de dano` : " — errou"}`
+          : "Ataque",
         result: r,
       },
     ]);
+    if (target && hit) {
+      c.update.mutate([
+        {
+          id: target.id,
+          patch: { hp_current: changeHp(target.hp_current, -damage, target.hp_max) },
+        },
+      ]);
+      toast.success(`${x.name} acertou ${target.name}: −${damage} de vida.`);
+    }
   };
 
   const tokens: MapToken[] = order.map((x) => ({
