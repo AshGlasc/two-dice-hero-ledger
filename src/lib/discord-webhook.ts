@@ -3,7 +3,9 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Roll } from "@/lib/rpg-queries";
 import { ALL_SKILLS } from "@/lib/skills";
 
-const STORAGE_KEY = "fungo_disco_discord_webhook";
+/** Webhook salvo no banco (vale para todos os aparelhos da mesa). */
+let cachedUrl = "";
+let loaded: Promise<string> | null = null;
 
 function publicImageUrl(value: string | undefined) {
   if (!value || value.startsWith("data:")) return undefined;
@@ -14,32 +16,49 @@ function publicImageUrl(value: string | undefined) {
   }
 }
 
-export function getDiscordWebhookUrl() {
-  if (typeof window === "undefined") return "";
-  return localStorage.getItem(STORAGE_KEY) ?? "";
+export function loadDiscordWebhookUrl(force = false) {
+  if (!loaded || force) {
+    loaded = (async () => {
+      const { data } = await supabase
+        .from("app_settings")
+        .select("discord_webhook")
+        .eq("id", 1)
+        .maybeSingle();
+      cachedUrl = data?.discord_webhook ?? "";
+      return cachedUrl;
+    })();
+  }
+  return loaded;
 }
 
-export function saveDiscordWebhookUrl(value: string) {
+export function getDiscordWebhookUrl() {
+  return cachedUrl;
+}
+
+export async function saveDiscordWebhookUrl(value: string): Promise<string | null> {
   const url = value.trim();
-  if (!url) {
-    localStorage.removeItem(STORAGE_KEY);
-    return null;
-  }
-  try {
-    const parsed = new URL(url);
-    if (
-      parsed.protocol !== "https:" ||
-      !["discord.com", "discordapp.com"].includes(parsed.hostname) ||
-      !parsed.pathname.startsWith("/api/webhooks/") ||
-      parsed.search ||
-      parsed.hash
-    ) {
+  if (url) {
+    try {
+      const parsed = new URL(url);
+      if (
+        parsed.protocol !== "https:" ||
+        !["discord.com", "discordapp.com", "ptb.discord.com", "canary.discord.com"].includes(
+          parsed.hostname,
+        ) ||
+        !parsed.pathname.startsWith("/api/webhooks/")
+      ) {
+        return "Informe uma URL HTTPS válida de webhook do Discord.";
+      }
+    } catch {
       return "Informe uma URL HTTPS válida de webhook do Discord.";
     }
-  } catch {
-    return "Informe uma URL HTTPS válida de webhook do Discord.";
   }
-  localStorage.setItem(STORAGE_KEY, url);
+  const { error } = await supabase
+    .from("app_settings")
+    .upsert({ id: 1, discord_webhook: url, updated_at: new Date().toISOString() });
+  if (error) return "Não foi possível salvar o webhook.";
+  cachedUrl = url;
+  loaded = Promise.resolve(url);
   return null;
 }
 
