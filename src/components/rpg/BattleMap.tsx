@@ -98,11 +98,14 @@ export function BattleMap({
   const grid = useRef<HTMLDivElement>(null);
   const file = useRef<HTMLInputElement>(null);
 
-  const saved: Draft = {
-    terrain: (map.terrain ?? {}) as Terrain,
-    tile_images: (map.tile_images ?? {}) as TileImages,
-    fog: (map.fog ?? {}) as Fog,
-  };
+  const saved: Draft = useMemo(
+    () => ({
+      terrain: (map.terrain ?? {}) as Terrain,
+      tile_images: (map.tile_images ?? {}) as TileImages,
+      fog: (map.fog ?? {}) as Fog,
+    }),
+    [map.terrain, map.tile_images, map.fog],
+  );
   const cur = draft ?? saved;
   const { terrain, tile_images: images, fog } = cur;
   const viewerIsMaster = isMaster && !viewAsPlayers;
@@ -120,7 +123,7 @@ export function BattleMap({
     ),
   );
   const tray = tokens.filter((t) => !inside.includes(t));
-  const occupied = useMemo(() => new Set(inside.map((t) => cellKey(t.x!, t.y!))), [inside]);
+  const occupied = new Set(inside.map((t) => cellKey(t.x!, t.y!)));
   const sel = tokens.find((t) => t.id === selected) ?? null;
 
   const cellAt = (e: React.PointerEvent) => {
@@ -131,10 +134,13 @@ export function BattleMap({
     };
   };
 
+  const lastPainted = useRef<string | null>(null);
   const paint = (e: React.PointerEvent) => {
     const { x, y } = cellAt(e);
     if (x < 0 || y < 0 || x >= map.cols || y >= map.rows) return;
     const k = cellKey(x, y);
+    if (lastPainted.current === k) return;
+    lastPainted.current = k;
     setDraft((d) => {
       const base = d ?? saved;
       const next: Draft = {
@@ -157,6 +163,7 @@ export function BattleMap({
   const commit = () => {
     if (!painting.current) return;
     painting.current = false;
+    lastPainted.current = null;
     if (draft) saveMap.mutate(draft, { onSettled: () => setDraft(null) });
   };
 
@@ -201,7 +208,51 @@ export function BattleMap({
       return;
     }
     onMove(sel.id, x, y);
+    if (!measuring) setSelected(null);
   };
+
+  // Casas do mapa só re-renderizam quando terreno/névoa/imagens mudam (não a cada toque/hover).
+  const cells = useMemo(
+    () =>
+      Array.from({ length: map.cols * map.rows }).map((_, i) => {
+              const k = cellKey(i % map.cols, Math.floor(i / map.cols));
+              const t = terrain[k];
+              const img = images[k];
+              const fogged = Boolean(fog[k]);
+              if (fogged && !viewerIsMaster) {
+                return (
+                  <div
+                    key={k}
+                    className="fog-cell border border-background"
+                    aria-label="Casa escondida"
+                  />
+                );
+              }
+              return (
+                <div
+                  key={k}
+                  className={cn("relative border border-border/40", t && TERRAIN_CLASS[t])}
+                >
+                  {img && (
+                    <img
+                      src={img}
+                      alt=""
+                      draggable={false}
+                      className="absolute inset-0 size-full object-cover"
+                    />
+                  )}
+                  {fogged && (
+                    <div
+                      className="fog-cell absolute inset-0 opacity-60"
+                      title="Escondida dos jogadores"
+                    />
+                  )}
+                </div>
+              );
+            }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [map.cols, map.rows, terrain, images, fog, viewerIsMaster],
+  );
 
   return (
     <section className="space-y-3">
@@ -461,7 +512,10 @@ export function BattleMap({
           onPointerDown={onGridDown}
           onPointerMove={(e) => {
             if (editing && painting.current) paint(e);
-            else if (!editing && measuring) setHoverCell(cellAt(e));
+            else if (!editing && measuring) {
+              const c = cellAt(e);
+              setHoverCell((h) => (h && h.x === c.x && h.y === c.y ? h : c));
+            }
           }}
           onPointerLeave={() => setHoverCell(null)}
           onPointerUp={commit}
@@ -484,42 +538,7 @@ export function BattleMap({
               gridTemplateRows: `repeat(${map.rows}, ${CELL}px)`,
             }}
           >
-            {Array.from({ length: map.cols * map.rows }).map((_, i) => {
-              const k = cellKey(i % map.cols, Math.floor(i / map.cols));
-              const t = terrain[k];
-              const img = images[k];
-              const fogged = Boolean(fog[k]);
-              if (fogged && !viewerIsMaster) {
-                return (
-                  <div
-                    key={k}
-                    className="fog-cell border border-background"
-                    aria-label="Casa escondida"
-                  />
-                );
-              }
-              return (
-                <div
-                  key={k}
-                  className={cn("relative border border-border/40", t && TERRAIN_CLASS[t])}
-                >
-                  {img && (
-                    <img
-                      src={img}
-                      alt=""
-                      draggable={false}
-                      className="absolute inset-0 size-full object-cover"
-                    />
-                  )}
-                  {fogged && (
-                    <div
-                      className="fog-cell absolute inset-0 opacity-60"
-                      title="Escondida dos jogadores"
-                    />
-                  )}
-                </div>
-              );
-            })}
+            {cells}
           </div>
 
           {placed.map((t) => (

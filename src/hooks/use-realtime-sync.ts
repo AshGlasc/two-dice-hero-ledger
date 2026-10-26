@@ -74,11 +74,15 @@ export function useRealtimeSync() {
     const pending = new Set<string>();
     let timer: ReturnType<typeof setTimeout> | undefined;
 
+    let waits = 0;
     const flush = () => {
-      if (qc.isMutating() > 0) {
+      // Espera edições locais terminarem, mas nunca mais que ~2s (evita mapa "congelado").
+      if (qc.isMutating() > 0 && waits < 5) {
+        waits += 1;
         timer = setTimeout(flush, 400);
         return;
       }
+      waits = 0;
       timer = undefined;
       for (const k of pending) {
         const key = JSON.parse(k) as unknown[];
@@ -89,7 +93,7 @@ export function useRealtimeSync() {
 
     const queue = (...keys: unknown[][]) => {
       for (const k of keys) pending.add(JSON.stringify(k));
-      if (!timer) timer = setTimeout(flush, 250);
+      if (!timer) timer = setTimeout(flush, 120);
     };
 
     const sheetKey = (row: Row) => (row?.character_id ? ["sheet", row.character_id] : ["sheet"]);
@@ -146,7 +150,7 @@ export function useRealtimeSync() {
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, (p) => {
         if (p.eventType === "INSERT") notifyMessage(p.new as Message);
-        queue(["messages"], ["characters"], ["group"]);
+        queue(["messages"]);
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "phone_contacts" }, () =>
         queue(["phone_contacts"]),
@@ -159,15 +163,22 @@ export function useRealtimeSync() {
       )
       .subscribe((status, error) => {
         if (status === "SUBSCRIBED") {
-          queue(["battle_map"]);
+          // Conectou (ou reconectou depois do celular dormir): puxa tudo de novo.
+          void qc.invalidateQueries();
         } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-          console.error("A sincronização em tempo real do mapa falhou.", error);
-          toast.error("O mapa pode não estar sincronizando. Verifique sua conexão.");
+          console.error("A sincronização ao vivo falhou.", error);
         }
       });
 
+    // Celular voltou da tela bloqueada: atualiza na hora.
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void qc.invalidateQueries();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+
     return () => {
       if (timer) clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisible);
       supabase.removeChannel(channel);
     };
   }, [qc]);
