@@ -42,7 +42,7 @@ import {
 } from "@/lib/custom-attacks";
 import { logRolls } from "@/lib/roll-log";
 import { gmNotesQuery, groupQuery, rollsQuery, type GroupData } from "@/lib/rpg-queries";
-import { getDiscordWebhookUrl, saveDiscordWebhookUrl } from "@/lib/discord-webhook";
+import { loadDiscordWebhookUrl, saveDiscordWebhookUrl } from "@/lib/discord-webhook";
 import {
   ALL_SKILLS,
   ATTRIBUTES,
@@ -169,7 +169,9 @@ function GmPageContent({ onLock }: { onLock: () => void }) {
 
 function DiscordWebhookSettings() {
   const [url, setUrl] = useState("");
-  useEffect(() => setUrl(getDiscordWebhookUrl()), []);
+  useEffect(() => {
+    void loadDiscordWebhookUrl(true).then(setUrl);
+  }, []);
 
   return (
     <section className="space-y-3 rounded-lg border border-border bg-card p-5">
@@ -183,15 +185,15 @@ function DiscordWebhookSettings() {
       </div>
       <form
         className="flex flex-col gap-2 sm:flex-row"
-        onSubmit={(event) => {
+        onSubmit={async (event) => {
           event.preventDefault();
-          const error = saveDiscordWebhookUrl(url);
+          const error = await saveDiscordWebhookUrl(url);
           if (error) {
             toast.error(error);
             return;
           }
           toast.success(
-            url.trim() ? "Webhook do Discord salvo neste navegador." : "Webhook removido.",
+            url.trim() ? "Webhook salvo para toda a mesa." : "Webhook removido.",
           );
         }}
       >
@@ -207,8 +209,7 @@ function DiscordWebhookSettings() {
         </Button>
       </form>
       <p className="text-xs text-warning">
-        Trate a URL como senha. Configure-a apenas em um dispositivo confiável; ela não é enviada
-        nem armazenada no Supabase.
+        Trate a URL como senha. Ela vale para toda a mesa: qualquer rolagem pública vai para o canal.
       </p>
     </section>
   );
