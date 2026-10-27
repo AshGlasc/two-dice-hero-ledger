@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 
 import heroImage from "@/assets/hero-harbor.jpg";
 import { Avatar } from "@/components/rpg/AvatarUpload";
+import { PinLoginDialog } from "@/components/rpg/CharacterPinDialogs";
 import { NewCharacterDialog } from "@/components/rpg/NewCharacterDialog";
 import { useMasterAuth } from "@/context/MasterAuthContext";
 import { ATTRIBUTE_THEME } from "@/lib/attribute-theme";
@@ -68,8 +69,9 @@ function Index() {
             Cada ficha guarda atributos, skills, corpo, armas e a mochila do jogador — ao vivo
             para toda a mesa.
           </p>
-          <div className="mt-8">
+          <div className="mt-8 flex flex-wrap gap-2">
             <NewCharacterDialog />
+            {!isMaster && <PinLoginDialog characters={characters} />}
           </div>
         </div>
       </section>

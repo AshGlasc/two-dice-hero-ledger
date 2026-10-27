@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import { AvatarUpload } from "@/components/rpg/AvatarUpload";
 import { BackpackSection } from "@/components/rpg/BackpackSection";
+import { SetPinDialog } from "@/components/rpg/CharacterPinDialogs";
 import { InlineField } from "@/components/rpg/InlineField";
 import { MoneyField } from "@/components/rpg/MoneyField";
 import { SkillsSection } from "@/components/rpg/SkillsSection";
@@ -80,7 +81,7 @@ function CharacterPage() {
     const ownerId = getPlayerCharacterId();
     setPlayerCharacterId(ownerId);
     if (!masterAuthLoading && !isMaster && ownerId !== id) {
-      toast.error("Você só pode abrir a ficha do seu próprio personagem.");
+      toast.error("Essa ficha não é sua. Use \"Entrar com PIN\" na página inicial.");
       navigate({ to: "/" });
     }
   }, [id, isMaster, masterAuthLoading, navigate, playerCharacterId]);
@@ -166,6 +167,12 @@ function CharacterPage() {
           <Button asChild variant="outline" size="sm">
             <Link to="/celular">📱 Abrir celular</Link>
           </Button>
+          <SetPinDialog characterId={character.id} hasPin={!!character.pin_hash} />
+          {!character.pin_hash && (
+            <span className="text-xs text-muted-foreground">
+              Crie um PIN para abrir esta ficha em outro aparelho.
+            </span>
+          )}
         </div>
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
           <label className="block">
