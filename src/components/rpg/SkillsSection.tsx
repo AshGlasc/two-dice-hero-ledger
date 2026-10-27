@@ -30,6 +30,7 @@ import {
   skillTotal,
   type RollResult,
 } from "@/lib/skills";
+import { itemBonusFor } from "@/lib/combat";
 import { cn } from "@/lib/utils";
 
 type Mutations = ReturnType<typeof useSheetMutations>;
@@ -41,6 +42,7 @@ export function SkillsSection({ sheet, mutations }: { sheet: CharacterSheet; mut
   const { character, skills } = sheet;
 
   const bonusOf = (key: string) => skills.find((s) => s.skill_key === key)?.bonus ?? 0;
+  const itemsOf = (key: string) => itemBonusFor(sheet.backpack, character.id, key);
 
   const doRoll = (label: string, modifier: number) => {
     const dc = difficulty === "none" ? null : Number(difficulty);
@@ -127,7 +129,8 @@ export function SkillsSection({ sheet, mutations }: { sheet: CharacterSheet; mut
               <ul className="divide-y divide-border">
                 {attr.skills.map((skill) => {
                   const bonus = bonusOf(skill.key);
-                  const total = skillTotal(attrValue, bonus);
+                  const items = itemsOf(skill.key);
+                  const total = skillTotal(attrValue, bonus) + items;
                   return (
                     <li
                       key={skill.key}
@@ -148,6 +151,12 @@ export function SkillsSection({ sheet, mutations }: { sheet: CharacterSheet; mut
                           <p className={cn("tabular font-display text-lg font-semibold", theme.text)}>
                             {attrValue}
                           </p>
+                          {items !== 0 && (
+                            <p className="text-[10px] font-bold text-success" title="Bônus dos itens da mochila">
+                              {items > 0 ? "+" : ""}
+                              {items} itens
+                            </p>
+                          )}
                         </div>
                         <div className="text-center">
                           <p className="label-caps text-muted-foreground">Extra</p>

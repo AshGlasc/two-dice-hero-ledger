@@ -16,8 +16,10 @@ type CharacterPatch = Partial<
     "name" | "player_name" | "concept" | "notes" | "intelecto" | "psique" | "fisico" | "motor" | "avatar_url" | "money"
   >
 >;
-type WeaponInput = Pick<Weapon, "name" | "weapon_type" | "damage" | "ammo" | "notes">;
-type BackpackInput = Pick<BackpackItem, "name" | "quantity" | "notes">;
+type WeaponInput = Pick<Weapon, "name" | "weapon_type" | "damage" | "ammo" | "notes"> &
+  Partial<Pick<Weapon, "skill_key" | "range" | "uses_max" | "uses_current">>;
+type BackpackInput = Pick<BackpackItem, "name" | "quantity" | "notes"> &
+  Partial<Pick<BackpackItem, "skill_bonuses">>;
 
 function onSaveError(error: unknown) {
   console.error(error);

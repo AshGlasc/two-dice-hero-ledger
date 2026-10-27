@@ -36,7 +36,8 @@ import {
   type TileImages,
 } from "@/lib/combat";
 import { fileToSmallImage } from "@/lib/image";
-import { getPlayerCharacterId } from "@/lib/player-character";
+import { usePlayerCharacterId } from "@/lib/player-character";
+import { MapLayouts } from "@/components/rpg/MapLayouts";
 import type { BattleMap as MapRow } from "@/lib/rpg-queries";
 import { cn } from "@/lib/utils";
 
@@ -53,6 +54,10 @@ export type MapToken = {
   out: boolean;
   current: boolean;
   conditions?: string[];
+  /** Casas por turno (= Motor). */
+  moveRange?: number;
+  /** Já andou neste turno. */
+  moved?: boolean;
 };
 
 type BrushKey = TerrainKey | "erase" | "image" | "fog" | "reveal";
@@ -83,7 +88,7 @@ export function BattleMap({
 }) {
   const saveMap = useBattleMap();
   const { isMaster } = useMasterAuth();
-  const myCharacterId = getPlayerCharacterId();
+  const myCharacterId = usePlayerCharacterId();
   const [selected, setSelected] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [viewAsPlayers, setViewAsPlayers] = useState(false);
@@ -125,6 +130,7 @@ export function BattleMap({
   const tray = tokens.filter((t) => !inside.includes(t));
   const occupied = new Set(inside.map((t) => cellKey(t.x!, t.y!)));
   const sel = tokens.find((t) => t.id === selected) ?? null;
+  const selRange = sel?.moveRange ?? MOVEMENT_RANGE;
 
   const cellAt = (e: React.PointerEvent) => {
     const r = grid.current!.getBoundingClientRect();
@@ -197,8 +203,14 @@ export function BattleMap({
     if (!sel) return;
     const { x, y } = cellAt(e);
     if (sel.x === x && sel.y === y) return;
-    if (sel.x !== null && sel.y !== null && gridDistance(sel.x, sel.y, x, y) > MOVEMENT_RANGE) {
-      toast.error(`Movimento limitado a ${MOVEMENT_RANGE} quadrados por turno.`);
+    const limited = combatActive && !isMaster;
+    if (limited && sel.moved) {
+      toast.error("Você já andou neste turno.");
+      setSelected(null);
+      return;
+    }
+    if (limited && sel.x !== null && sel.y !== null && gridDistance(sel.x, sel.y, x, y) > selRange) {
+      toast.error(`Você anda até ${selRange} casas por turno (seu Motor).`);
       return;
     }
     const others = new Set(occupied);
@@ -269,9 +281,9 @@ export function BattleMap({
                     ? "Toque nas casas para colocar a imagem."
                     : "Escolha um pincel e pinte as casas."
               : measuring && sel
-                ? `Medição: ${hoverCell ? gridDistance(sel.x ?? 0, sel.y ?? 0, hoverCell.x, hoverCell.y) : "—"} quadrados (alcance ${MOVEMENT_RANGE}).`
+                ? `Medição: ${hoverCell ? gridDistance(sel.x ?? 0, sel.y ?? 0, hoverCell.x, hoverCell.y) : "—"} quadrados (alcance ${selRange}).`
                 : sel
-                  ? `Toque numa casa para mover ${sel.name}.`
+                  ? `Toque numa casa para mover ${sel.name} (até ${selRange} casas${combatActive ? ", 1 vez por turno" : ""}).`
                   : combatActive && !isMaster && currentCombatantId
                     ? (() => {
                         const myToken = tokens.find((t) => t.characterId === myCharacterId);
@@ -441,6 +453,7 @@ export function BattleMap({
               Revelar tudo
             </Button>
           </div>
+          <MapLayouts map={map} />
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
             <label className="flex items-center gap-2">
               <span className="label-caps text-muted-foreground">Largura</span>
@@ -627,7 +640,7 @@ export function BattleMap({
                 x2={(hoverCell.x + 0.5) * CELL}
                 y2={(hoverCell.y + 0.5) * CELL}
                 stroke={
-                  gridDistance(sel.x, sel.y, hoverCell.x, hoverCell.y) > MOVEMENT_RANGE
+                  gridDistance(sel.x, sel.y, hoverCell.x, hoverCell.y) > selRange
                     ? "#ef4444"
                     : "#facc15"
                 }

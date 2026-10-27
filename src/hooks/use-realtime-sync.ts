@@ -114,12 +114,15 @@ export function useRealtimeSync() {
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "weapons" }, (p) => {
         const row = (p.new && "character_id" in p.new ? p.new : p.old) as Row;
-        queue(sheetKey(row), ["all_weapons"]);
+        queue(sheetKey(row), ["all_weapons"], ["group"]);
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "backpack_items" }, (p) => {
         const row = (p.new && "character_id" in p.new ? p.new : p.old) as Row;
-        queue(sheetKey(row));
+        queue(sheetKey(row), ["group"]);
       })
+      .on("postgres_changes", { event: "*", schema: "public", table: "map_layouts" }, () =>
+        queue(["map_layouts"]),
+      )
       .on("postgres_changes", { event: "*", schema: "public", table: "rolls" }, (p) => {
         if (p.eventType === "INSERT") {
           const roll = p.new as Roll;

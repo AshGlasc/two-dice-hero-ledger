@@ -57,6 +57,13 @@
       "when": 1792974520209,
       "tag": "0007_app_settings_discord",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793063657130,
+      "tag": "0008_combat_rules_pins_layouts_items",
+      "breakpoints": true
     }
   ]
 }

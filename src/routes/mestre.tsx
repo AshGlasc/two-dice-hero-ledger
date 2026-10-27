@@ -40,6 +40,7 @@ import {
   isCustomAttack,
   parseWeaponToAttack,
 } from "@/lib/custom-attacks";
+import { skillValueFor } from "@/lib/combat";
 import { logRolls } from "@/lib/roll-log";
 import { gmNotesQuery, groupQuery, rollsQuery, type GroupData } from "@/lib/rpg-queries";
 import { loadDiscordWebhookUrl, saveDiscordWebhookUrl } from "@/lib/discord-webhook";
@@ -50,7 +51,6 @@ import {
   OUTCOME_CLASS,
   OUTCOME_TEXT,
   roll2d6,
-  skillTotal,
   type RollOutcome,
   type RollResult,
 } from "@/lib/skills";
@@ -84,16 +84,6 @@ export const Route = createFileRoute("/mestre")({
 });
 
 type GroupResult = { id: string; name: string; result: RollResult };
-
-function skillValueFor(group: GroupData, characterId: string, skillKey: string) {
-  const skill = ALL_SKILLS.find((s) => s.key === skillKey);
-  const character = group.characters.find((c) => c.id === characterId);
-  if (!skill || !character) return 0;
-  const bonus =
-    group.skills.find((s) => s.character_id === characterId && s.skill_key === skillKey)?.bonus ??
-    0;
-  return skillTotal(character[skill.attribute], bonus);
-}
 
 function GmPage() {
   const { isMaster, isLoading, lock } = useMasterAuth();
@@ -349,13 +339,15 @@ function GroupTest({ group }: { group: GroupData }) {
   const [difficulty, setDifficulty] = useState("10");
   const [title, setTitle] = useState("");
   const [results, setResults] = useState<GroupResult[]>([]);
+  const [excluded, setExcluded] = useState<string[]>([]);
+  const chosen = group.characters.filter((c) => !excluded.includes(c.id));
 
   const run = (key: string, dc: number | null, label: string) => {
-    if (group.characters.length === 0) {
-      toast("Crie personagens primeiro.");
+    if (chosen.length === 0) {
+      toast("Escolha quem vai rolar.");
       return;
     }
-    const rolled = group.characters
+    const rolled = chosen
       .map((c) => ({
         id: c.id,
         name: c.name,
@@ -381,6 +373,31 @@ function GroupTest({ group }: { group: GroupData }) {
       <div className="mb-4 flex items-center gap-2">
         <Users className="size-5 text-primary" />
         <h2 className="text-2xl font-bold uppercase">Teste em grupo</h2>
+      </div>
+      <div className="mb-4 flex flex-wrap items-center gap-1.5">
+        <span className="label-caps mr-1 text-muted-foreground">Quem rola</span>
+        {group.characters.map((c) => {
+          const on = !excluded.includes(c.id);
+          return (
+            <label
+              key={c.id}
+              className={cn(
+                "flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-sm",
+                on ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground",
+              )}
+            >
+              <input
+                type="checkbox"
+                className="accent-primary"
+                checked={on}
+                onChange={() =>
+                  setExcluded((x) => (on ? [...x, c.id] : x.filter((id) => id !== c.id)))
+                }
+              />
+              {c.name}
+            </label>
+          );
+        })}
       </div>
       <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
         <label className="space-y-1.5">
@@ -425,7 +442,7 @@ function GroupTest({ group }: { group: GroupData }) {
             run(skillKey, difficulty === "none" ? null : Number(difficulty), `Teste: ${skillName}`)
           }
         >
-          <Dices /> Rolar para todos
+          <Dices /> Rolar ({chosen.length})
         </Button>
       </div>
       <Button
