@@ -129,7 +129,23 @@ export function uniqueName(base: string, taken: string[]) {
   return `${base} ${n}`;
 }
 
-/** Total da skill de um personagem (atributo + pontos extras). */
+/** Soma dos bônus que os itens da mochila dão para uma skill. */
+export function itemBonusFor(
+  items: { character_id: string; skill_bonuses: unknown }[],
+  characterId: string,
+  skillKey: string,
+) {
+  let sum = 0;
+  for (const it of items) {
+    if (it.character_id !== characterId) continue;
+    const b = (it.skill_bonuses ?? {}) as Record<string, unknown>;
+    const v = Number(b[skillKey]);
+    if (Number.isFinite(v)) sum += v;
+  }
+  return sum;
+}
+
+/** Total da skill de um personagem (atributo + pontos extras + itens). */
 export function skillValueFor(group: GroupData, characterId: string, skillKey: string) {
   const skill = ALL_SKILLS.find((s) => s.key === skillKey);
   const character = group.characters.find((c) => c.id === characterId);
@@ -137,7 +153,97 @@ export function skillValueFor(group: GroupData, characterId: string, skillKey: s
   const bonus =
     group.skills.find((s) => s.character_id === characterId && s.skill_key === skillKey)?.bonus ??
     0;
-  return skillTotal(character[skill.attribute], bonus);
+  return (
+    skillTotal(character[skill.attribute], bonus) +
+    itemBonusFor(group.backpack ?? [], characterId, skillKey)
+  );
+}
+
+// ---------- Ataques, esquiva, armas e movimento ----------
+
+/** Casas que alguém anda por turno = nível de Motor (mínimo 1). */
+export const moveRangeFor = (motor: number | null | undefined) => Math.max(1, motor ?? 1);
+
+/** Em combate, cada um anda só uma vez por turno. */
+export function canMoveThisTurn(movedRound: number | null, round: number, combatActive: boolean) {
+  return !combatActive || movedRound !== round;
+}
+
+/** Defender dá +2 na defesa e na esquiva até o próximo turno. */
+export const DEFEND_BONUS = 2;
+
+/** Ataque não crítico que acertou: o alvo desvia se a esquiva for MAIOR que o ataque. */
+export const dodges = (attackTotal: number, dodgeTotal: number) => dodgeTotal > attackTotal;
+
+/** "1d6+2" -> 1 dado de 6 lados + 2. Texto inválido vira 1d6. */
+export function parseDamage(text: string | null | undefined) {
+  const m = (text ?? "").replace(/\s/g, "").match(/^(\d*)d(\d+)([+-]\d+)?$/i);
+  if (!m) {
+    const flat = Number(text);
+    if (text && Number.isFinite(flat) && flat > 0) return { count: 0, sides: 6, bonus: flat };
+    return { count: 1, sides: 6, bonus: 0 };
+  }
+  return {
+    count: m[1] ? Number(m[1]) : 1,
+    sides: Math.max(2, Number(m[2])),
+    bonus: m[3] ? Number(m[3]) : 0,
+  };
+}
+
+export function rollDamage(d: { count: number; sides: number; bonus: number }, rnd = Math.random) {
+  let total = d.bonus;
+  for (let i = 0; i < d.count; i++) total += Math.floor(rnd() * d.sides) + 1;
+  return Math.max(1, total);
+}
+
+/** Arma gasta 1 uso (munição ou durabilidade). usesMax 0 = sem limite. */
+export function consumeUse(usesCurrent: number, usesMax: number) {
+  if (usesMax <= 0) return { ok: true, next: usesCurrent };
+  if (usesCurrent <= 0) return { ok: false, next: 0 };
+  return { ok: true, next: usesCurrent - 1 };
+}
+
+export type AttackOption = {
+  id: string;
+  name: string;
+  kind: "basic" | "weapon" | "custom";
+  /** Bônus para acertar (skill + modificador). */
+  hitBonus: number;
+  /** Quantos d6 rola para acertar (2 = normal). */
+  hitDice: number;
+  range: number;
+  damage: { count: number; sides: number; bonus: number };
+  weaponId?: string;
+  usesCurrent?: number;
+  usesMax?: number;
+  note?: string;
+};
+
+/** Soco e Chute: todo jogador já começa com eles, baseados no Físico. */
+export function basicAttacks(fisico: number, socoSkill: number, chuteSkill: number): AttackOption[] {
+  const strength = Math.floor(fisico / 3);
+  return [
+    {
+      id: "soco",
+      name: "👊 Soco",
+      kind: "basic",
+      hitBonus: socoSkill,
+      hitDice: 2,
+      range: 1,
+      damage: { count: 1, sides: 6, bonus: strength },
+      note: "Ferramenta Física",
+    },
+    {
+      id: "chute",
+      name: "🦵 Chute",
+      kind: "basic",
+      hitBonus: chuteSkill - 1,
+      hitDice: 2,
+      range: 1,
+      damage: { count: 1, sides: 6, bonus: strength + 1 },
+      note: "Vigor −1, mais forte",
+    },
+  ];
 }
 
 /** PV e defesa iniciais de um jogador ao entrar no combate (editáveis depois). */

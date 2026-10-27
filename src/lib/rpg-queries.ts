@@ -68,19 +68,29 @@ export type GroupData = {
   characters: Character[];
   skills: CharacterSkill[];
   body: BodyPart[];
+  weapons: Weapon[];
+  backpack: BackpackItem[];
 };
 
 /** Todos os personagens com skills e corpo — para o painel do mestre. */
 export const groupQuery = queryOptions({
   queryKey: ["group"],
   queryFn: async (): Promise<GroupData> => {
-    const [characters, skills, body] = await Promise.all([
+    const [characters, skills, body, weapons, backpack] = await Promise.all([
       supabase.from("characters").select("*").order("created_at", { ascending: true }),
       supabase.from("character_skills").select("*"),
       supabase.from("body_parts").select("*"),
+      supabase.from("weapons").select("*").order("created_at", { ascending: true }),
+      supabase.from("backpack_items").select("*"),
     ]);
-    for (const r of [characters, skills, body]) if (r.error) throw r.error;
-    return { characters: characters.data ?? [], skills: skills.data ?? [], body: body.data ?? [] };
+    for (const r of [characters, skills, body, weapons, backpack]) if (r.error) throw r.error;
+    return {
+      characters: characters.data ?? [],
+      skills: skills.data ?? [],
+      body: body.data ?? [],
+      weapons: weapons.data ?? [],
+      backpack: backpack.data ?? [],
+    };
   },
 });
 
@@ -230,6 +240,20 @@ export const phoneGalleryQuery = queryOptions({
       .from("phone_gallery")
       .select("*")
       .order("created_at", { ascending: false });
+    if (error) throw error;
+    return data;
+  },
+});
+
+export type MapLayout = Tables["map_layouts"]["Row"];
+
+export const mapLayoutsQuery = queryOptions({
+  queryKey: ["map_layouts"],
+  queryFn: async () => {
+    const { data, error } = await supabase
+      .from("map_layouts")
+      .select("*")
+      .order("created_at", { ascending: true });
     if (error) throw error;
     return data;
   },
