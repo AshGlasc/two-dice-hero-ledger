@@ -5,7 +5,10 @@ import { InlineField } from "@/components/rpg/InlineField";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { useSheetMutations } from "@/hooks/use-sheet-mutations";
+import { Stepper } from "@/components/rpg/Stepper";
+import { isCustomAttack } from "@/lib/custom-attacks";
 import type { CharacterSheet, Weapon } from "@/lib/rpg-queries";
+import { ALL_SKILLS } from "@/lib/skills";
 
 type Mutations = ReturnType<typeof useSheetMutations>;
 
@@ -31,8 +34,13 @@ export function WeaponsSection({ sheet, mutations }: { sheet: CharacterSheet; mu
       damage: w.damage,
       ammo: w.ammo,
       notes: w.notes,
+      skill_key: w.skill_key,
+      range: w.range,
+      uses_max: w.uses_max,
+      uses_current: w.uses_current,
       ...patch,
     });
+  const weapons = sheet.weapons.filter((w) => !isCustomAttack(w));
 
   return (
     <div className="space-y-6">
@@ -78,11 +86,11 @@ export function WeaponsSection({ sheet, mutations }: { sheet: CharacterSheet; mu
         </Button>
       </form>
 
-      {sheet.weapons.length === 0 ? (
+      {weapons.length === 0 ? (
         <EmptyState icon={<Crosshair />} text="Nenhuma arma no arsenal ainda." />
       ) : (
         <ul className="grid gap-4 md:grid-cols-2">
-          {sheet.weapons.map((w) => (
+          {weapons.map((w) => (
             <li key={w.id} className="rounded-lg border border-border bg-card p-4 shadow-paint">
               <div className="flex items-start gap-2">
                 <InlineField
@@ -122,6 +130,80 @@ export function WeaponsSection({ sheet, mutations }: { sheet: CharacterSheet; mu
                     />
                   </div>
                 ))}
+              </div>
+              <div className="mt-3 grid gap-2 rounded-md border border-border/60 bg-muted/30 p-2 text-xs sm:grid-cols-2">
+                <label className="space-y-1 sm:col-span-2">
+                  <span className="label-caps text-muted-foreground">Skill para acertar</span>
+                  <select
+                    className="h-8 w-full rounded border border-border bg-card px-1 text-sm"
+                    value={w.skill_key}
+                    onChange={(e) => save(w, { skill_key: e.target.value })}
+                  >
+                    {ALL_SKILLS.map((s) => (
+                      <option key={s.key} value={s.key}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="space-y-1">
+                  <span className="label-caps text-muted-foreground">Alcance (casas)</span>
+                  <Stepper
+                    label="alcance"
+                    value={w.range}
+                    min={1}
+                    max={30}
+                    onChange={(v) => save(w, { range: v })}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <span className="label-caps text-muted-foreground">
+                    {w.range > 1 ? "Munição máx." : "Durabilidade máx."} (0 = infinita)
+                  </span>
+                  <Stepper
+                    label="usos máximos"
+                    value={w.uses_max}
+                    min={0}
+                    max={999}
+                    onChange={(v) =>
+                      save(w, { uses_max: v, uses_current: Math.min(w.uses_current || v, v) })
+                    }
+                  />
+                </div>
+                {w.uses_max > 0 && (
+                  <div className="space-y-1 sm:col-span-2">
+                    <span className="label-caps text-muted-foreground">
+                      {w.range > 1 ? "Munição restante" : "Durabilidade restante"}
+                      {w.uses_current <= 0 && (
+                        <span className="ml-1 text-destructive">
+                          {w.range > 1 ? "— sem munição" : "— quebrada"}
+                        </span>
+                      )}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <Stepper
+                        label="usos restantes"
+                        value={w.uses_current}
+                        min={0}
+                        max={w.uses_max}
+                        onChange={(v) => save(w, { uses_current: v })}
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-7"
+                        onClick={() => save(w, { uses_current: w.uses_max })}
+                      >
+                        {w.range > 1 ? "Recarregar" : "Consertar"}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                <p className="text-muted-foreground sm:col-span-2">
+                  No combate, esta arma aparece no menu de ataque (⚔️) e gasta 1{" "}
+                  {w.range > 1 ? "munição" : "de durabilidade"} por uso.
+                </p>
               </div>
               <div className="mt-2">
                 <span className="label-caps px-1 text-muted-foreground">Notas</span>
