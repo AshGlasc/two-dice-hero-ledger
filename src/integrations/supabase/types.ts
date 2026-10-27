@@ -40,6 +40,7 @@ export type Database = {
           name: string
           notes: string
           quantity: number
+          skill_bonuses: Json
         }
         Insert: {
           character_id: string
@@ -48,6 +49,7 @@ export type Database = {
           name: string
           notes?: string
           quantity?: number
+          skill_bonuses?: Json
         }
         Update: {
           character_id?: string
@@ -56,6 +58,7 @@ export type Database = {
           name?: string
           notes?: string
           quantity?: number
+          skill_bonuses?: Json
         }
         Relationships: [
           {
@@ -176,6 +179,8 @@ export type Database = {
           motor: number
           name: string
           notes: string
+          pin_hash: string
+          pin_salt: string
           player_name: string
           psique: number
           updated_at: string
@@ -191,6 +196,8 @@ export type Database = {
           motor?: number
           name: string
           notes?: string
+          pin_hash?: string
+          pin_salt?: string
           player_name?: string
           psique?: number
           updated_at?: string
@@ -206,6 +213,8 @@ export type Database = {
           motor?: number
           name?: string
           notes?: string
+          pin_hash?: string
+          pin_salt?: string
           player_name?: string
           psique?: number
           updated_at?: string
@@ -250,6 +259,7 @@ export type Database = {
           character_id: string | null
           conditions: string[]
           created_at: string
+          defending: boolean
           defense: number | null
           hp_current: number | null
           hp_max: number | null
@@ -258,6 +268,7 @@ export type Database = {
           initiative_bonus: number
           kind: string
           monster_id: string | null
+          moved_round: number | null
           name: string
           pos_x: number | null
           pos_y: number | null
@@ -267,6 +278,7 @@ export type Database = {
           character_id?: string | null
           conditions?: string[]
           created_at?: string
+          defending?: boolean
           defense?: number | null
           hp_current?: number | null
           hp_max?: number | null
@@ -275,6 +287,7 @@ export type Database = {
           initiative_bonus?: number
           kind: string
           monster_id?: string | null
+          moved_round?: number | null
           name: string
           pos_x?: number | null
           pos_y?: number | null
@@ -284,6 +297,7 @@ export type Database = {
           character_id?: string | null
           conditions?: string[]
           created_at?: string
+          defending?: boolean
           defense?: number | null
           hp_current?: number | null
           hp_max?: number | null
@@ -292,6 +306,7 @@ export type Database = {
           initiative_bonus?: number
           kind?: string
           monster_id?: string | null
+          moved_round?: number | null
           name?: string
           pos_x?: number | null
           pos_y?: number | null
@@ -328,6 +343,42 @@ export type Database = {
           content?: string
           id?: number
           updated_at?: string
+        }
+        Relationships: []
+      }
+      map_layouts: {
+        Row: {
+          background_url: string
+          cols: number
+          created_at: string
+          fog: Json
+          id: string
+          name: string
+          rows: number
+          terrain: Json
+          tile_images: Json
+        }
+        Insert: {
+          background_url?: string
+          cols?: number
+          created_at?: string
+          fog?: Json
+          id?: string
+          name: string
+          rows?: number
+          terrain?: Json
+          tile_images?: Json
+        }
+        Update: {
+          background_url?: string
+          cols?: number
+          created_at?: string
+          fog?: Json
+          id?: string
+          name?: string
+          rows?: number
+          terrain?: Json
+          tile_images?: Json
         }
         Relationships: []
       }
@@ -596,6 +647,10 @@ export type Database = {
           id: string
           name: string
           notes: string
+          range: number
+          skill_key: string
+          uses_current: number
+          uses_max: number
           weapon_type: string
         }
         Insert: {
@@ -606,6 +661,10 @@ export type Database = {
           id?: string
           name: string
           notes?: string
+          range?: number
+          skill_key?: string
+          uses_current?: number
+          uses_max?: number
           weapon_type?: string
         }
         Update: {
@@ -616,6 +675,10 @@ export type Database = {
           id?: string
           name?: string
           notes?: string
+          range?: number
+          skill_key?: string
+          uses_current?: number
+          uses_max?: number
           weapon_type?: string
         }
         Relationships: [
