@@ -51,7 +51,6 @@ import {
   OUTCOME_CLASS,
   OUTCOME_TEXT,
   roll2d6,
-  skillTotal,
   type RollOutcome,
   type RollResult,
 } from "@/lib/skills";
