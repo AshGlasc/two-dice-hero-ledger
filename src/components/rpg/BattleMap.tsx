@@ -56,7 +56,7 @@ export type MapToken = {
   conditions?: string[];
   /** Casas por turno (= Motor). */
   moveRange?: number;
-  /** Já andou neste turno. */
+  /** Já andou nesta rodada (`moved_round` = rodada atual). */
   moved?: boolean;
 };
 
@@ -203,15 +203,27 @@ export function BattleMap({
     if (!sel) return;
     const { x, y } = cellAt(e);
     if (sel.x === x && sel.y === y) return;
-    const limited = combatActive && !isMaster;
-    if (limited && sel.moved) {
-      toast.error("Você já andou neste turno.");
-      setSelected(null);
-      return;
+    // Em combate cada um anda 1 vez por rodada, até `moveRange` casas (Motor). Jogador não passa
+    // disso; o mestre pode abrir exceção (reposicionar, efeito de cena) depois de confirmar.
+    if (combatActive && sel.moved) {
+      if (!isMaster) {
+        toast.error("Você já andou nesta rodada. Espere a próxima.");
+        setSelected(null);
+        return;
+      }
+      if (!confirm(`${sel.name} já andou nesta rodada. Mover mesmo assim?`)) return;
     }
-    if (limited && sel.x !== null && sel.y !== null && gridDistance(sel.x, sel.y, x, y) > selRange) {
-      toast.error(`Você anda até ${selRange} casas por turno (seu Motor).`);
-      return;
+    if (combatActive && sel.x !== null && sel.y !== null) {
+      const steps = gridDistance(sel.x, sel.y, x, y);
+      if (steps > selRange) {
+        if (!isMaster) {
+          toast.error(`Você anda até ${selRange} casas por rodada (seu Motor).`);
+          return;
+        }
+        if (!confirm(`${sel.name} anda até ${selRange} casas. Mover ${steps} casas mesmo assim?`)) {
+          return;
+        }
+      }
     }
     const others = new Set(occupied);
     if (sel.x !== null && sel.y !== null) others.delete(cellKey(sel.x, sel.y));
@@ -283,7 +295,9 @@ export function BattleMap({
               : measuring && sel
                 ? `Medição: ${hoverCell ? gridDistance(sel.x ?? 0, sel.y ?? 0, hoverCell.x, hoverCell.y) : "—"} quadrados (alcance ${selRange}).`
                 : sel
-                  ? `Toque numa casa para mover ${sel.name} (até ${selRange} casas${combatActive ? ", 1 vez por turno" : ""}).`
+                  ? sel.moved && combatActive
+                    ? `${sel.name} já andou nesta rodada.`
+                    : `Toque numa casa para mover ${sel.name} (até ${selRange} casas${combatActive ? ", 1 vez por rodada" : ""}).`
                   : combatActive && !isMaster && currentCombatantId
                     ? (() => {
                         const myToken = tokens.find((t) => t.characterId === myCharacterId);

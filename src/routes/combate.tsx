@@ -1,6 +1,7 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import {
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Crown,
@@ -8,17 +9,19 @@ import {
   Lock,
   Minus,
   Plus,
-  Swords,
   Trash2,
   X,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { AttackDialog, type AttackTarget } from "@/components/rpg/AttackDialog";
 import { Avatar } from "@/components/rpg/AvatarUpload";
 import { BattleMap, type MapToken } from "@/components/rpg/BattleMap";
 import { MasterUnlockModal } from "@/components/rpg/MasterUnlockModal";
+import { QuickRollPanel } from "@/components/rpg/QuickRollPanel";
 import { Button } from "@/components/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useMasterAuth } from "@/context/MasterAuthContext";
 import { useCombat } from "@/hooks/use-combat";
 import {
@@ -27,15 +30,28 @@ import {
   conditionPenalty,
   conditionEmoji,
   INITIATIVE_SKILL,
+  attackOptionsForCharacter,
+  attackOptionsForMonster,
+  canMoveThisTurn,
   changeHp,
+  consumeUse,
+  DEFEND_BONUS,
+  DODGE_SKILL,
+  dodges,
   findFreeCell,
+  gridDistance,
+  moveRangeFor,
+  monsterMoveRange,
   nextTurn,
   playerCombatStats,
   previousTurn,
+  rollDamage,
+  rollHit,
   skillValueFor,
   sortByInitiative,
   uniqueName,
   cellKey,
+  type AttackOption,
   type Terrain,
 } from "@/lib/combat";
 import { getPlayerCharacterId } from "@/lib/player-character";
@@ -91,6 +107,7 @@ function CombatPage() {
   const { isMaster } = useMasterAuth();
   const c = useCombat();
   const [hpDelta, setHpDelta] = useState(1);
+  const [quickRollOpen, setQuickRollOpen] = useState(false);
   const [turnEffect, setTurnEffect] = useState<{
     combatantId: string;
     name: string;
@@ -207,39 +224,146 @@ function CombatPage() {
   const advanceTurn = () => {
     const next = nextTurn(slots, state.current_combatant_id, state.round);
     c.setState.mutate({ active: true, current_combatant_id: next.currentId, round: next.round });
-    if (next.currentId) prepareTurnEffect(next.currentId);
+    if (next.currentId) {
+      prepareTurnEffect(next.currentId);
+      // "Defender" dura até a vez de quem se defendeu chegar de novo.
+      const upNext = combat.combatants.find((item) => item.id === next.currentId);
+      if (upNext?.defending) c.update.mutate([{ id: upNext.id, patch: { defending: false } }]);
+    }
   };
 
-  const attack = (x: Combatant) => {
-    const target = order.find((t) => t.id !== x.id && t.kind !== x.kind && t.hp_current > 0);
-    const attackerPenalty = conditionPenalty(x.conditions);
-    const targetPenalty = target ? conditionPenalty(target.conditions) : 0;
-    const defense = target?.defense == null ? null : Math.max(2, target.defense - targetPenalty);
+  /** Casas entre dois combatentes no mapa (null se algum deles está fora do mapa). */
+  const distanceBetween = (a: Combatant, b: Combatant) =>
+    a.pos_x == null || a.pos_y == null || b.pos_x == null || b.pos_y == null
+      ? null
+      : gridDistance(a.pos_x, a.pos_y, b.pos_x, b.pos_y);
+
+  const attackOptionsOf = (x: Combatant): AttackOption[] =>
+    x.kind === "character" && x.character_id
+      ? attackOptionsForCharacter(group, x.character_id)
+      : attackOptionsForMonster(
+          x.monster_id,
+          monsters.find((m) => m.id === x.monster_id)?.attacks,
+          x.attack_bonus,
+        );
+
+  /** Alvos possíveis: quem está do outro lado e ainda de pé, com a distância no mapa. */
+  const attackTargetsOf = (x: Combatant): AttackTarget[] =>
+    order
+      .filter((t) => t.id !== x.id && t.kind !== x.kind && t.hp_current > 0)
+      .map((t) => ({
+        id: t.id,
+        name: t.name,
+        avatar: avatarOf(t),
+        tone: t.kind === "monster" ? "monster" : "player",
+        distance: distanceBetween(x, t),
+      }));
+
+  /** Por que o ⚔️ está bloqueado agora (null = liberado). O mestre age a qualquer hora. */
+  const attackBlockedReason = (x: Combatant) => {
+    if (x.kind === "monster" && (x.hp_current ?? 0) <= 0) return `${x.name} está fora de combate.`;
+    if (state.active && !isMaster && state.current_combatant_id !== x.id) {
+      return "Aguarde a sua vez para agir.";
+    }
+    return null;
+  };
+
+  /**
+   * Resolve um ataque: gasta o uso da arma, rola para acertar e, se acertou sem crítico, o alvo
+   * (com Velocidade de Reação) rola a esquiva. Esquiva ≥ ataque anula o dano.
+   */
+  const resolveAttack = (attacker: Combatant, option: AttackOption, targetId: string) => {
+    const target = combat.combatants.find((t) => t.id === targetId);
+    if (!target) return;
+
+    if (option.weaponId && (option.usesMax ?? 0) > 0) {
+      const use = consumeUse(option.usesCurrent ?? 0, option.usesMax ?? 0);
+      if (!use.ok) {
+        toast.error(`${option.name} está sem munição/durabilidade.`);
+        return;
+      }
+      c.spendWeaponUse.mutate({ id: option.weaponId, usesCurrent: use.next });
+    }
+
+    const attackerPenalty = conditionPenalty(attacker.conditions);
+    const targetPenalty = conditionPenalty(target.conditions);
+    const defendBonus = target.defending ? DEFEND_BONUS : 0;
+    const defense =
+      target.defense == null ? null : Math.max(2, target.defense + defendBonus - targetPenalty);
     if (attackerPenalty || targetPenalty) {
       toast(`Penalidades aplicadas: ataque −${attackerPenalty}, defesa do alvo −${targetPenalty}.`);
     }
-    const r = roll2d6(x.attack_bonus - attackerPenalty, defense);
-    const hit = r.outcome === "success" || r.outcome === "critical-success";
-    const damage = hit ? rollD6() + (r.outcome === "critical-success" ? 3 : 0) : 0;
+
+    const r = rollHit(option.hitDice, option.hitBonus - attackerPenalty, defense);
+    const crit = r.outcome === "critical-success";
+    const hit = r.outcome === "success" || crit;
+    const damage = hit ? rollDamage(option.damage) + (crit ? 3 : 0) : 0;
+
+    // Esquiva: só em acerto comum (duplo 6 nunca é esquivado) e só quem tem a skill (personagens).
+    let dodgeRoll: ReturnType<typeof roll2d6> | null = null;
+    if (hit && !crit && target.kind === "character" && target.character_id) {
+      dodgeRoll = roll2d6(
+        skillValueFor(group, target.character_id, DODGE_SKILL) + defendBonus,
+        null,
+      );
+    }
+    const dodged = dodgeRoll !== null && dodges(r.total, dodgeRoll.total);
+
     void logRolls([
       {
-        characterId: x.character_id,
-        characterName: x.name,
-        label: target
-          ? `Ataque em ${target.name}${hit ? ` — ${damage} de dano` : " — errou"}`
-          : "Ataque",
+        characterId: attacker.character_id,
+        characterName: attacker.name,
+        label: `${option.name} em ${target.name}${
+          !hit ? " — errou" : dodged ? " — esquivado" : ` — ${damage} de dano`
+        }`,
         result: r,
       },
+      ...(dodgeRoll
+        ? [
+            {
+              characterId: target.character_id,
+              characterName: target.name,
+              label: dodged
+                ? `${target.name} esquivou do ataque!`
+                : `Esquiva de ${target.name} — não conseguiu desviar`,
+              result: dodgeRoll,
+            },
+          ]
+        : []),
     ]);
-    if (target && hit) {
-      c.update.mutate([
-        {
-          id: target.id,
-          patch: { hp_current: changeHp(target.hp_current, -damage, target.hp_max) },
-        },
-      ]);
-      toast.success(`${x.name} acertou ${target.name}: −${damage} de vida.`);
+
+    if (!hit) return;
+    if (dodged) {
+      toast(`${target.name} esquivou do ataque!`);
+      return;
     }
+    c.update.mutate([
+      {
+        id: target.id,
+        patch: { hp_current: changeHp(target.hp_current, -damage, target.hp_max) },
+      },
+    ]);
+    toast.success(`${attacker.name} acertou ${target.name}: −${damage} de vida.`);
+  };
+
+  const defend = (x: Combatant) => {
+    c.update.mutate([{ id: x.id, patch: { defending: true } }]);
+    toast(`${x.name} se defende: +${DEFEND_BONUS} em defesa e esquiva até o próximo turno.`);
+  };
+
+  /** Casas por turno: Motor do personagem; monstro sem Motor definido anda 3. */
+  const moveRangeOf = (x: Combatant) =>
+    x.kind === "character"
+      ? moveRangeFor(group.characters.find((ch) => ch.id === x.character_id)?.motor)
+      : monsterMoveRange(monsters.find((m) => m.id === x.monster_id)?.motor);
+
+  /** Andar conta como o passo da rodada; colocar no mapa (ou tirar dele) não conta. */
+  const moveCombatant = (id: string, x: number | null, y: number | null) => {
+    const who = combat.combatants.find((item) => item.id === id);
+    const stepped = state.active && x !== null && y !== null && who?.pos_x != null;
+    c.update.mutate([
+      { id, patch: { pos_x: x, pos_y: y, ...(stepped ? { moved_round: state.round } : {}) } },
+    ]);
   };
 
   const tokens: MapToken[] = order.map((x) => ({
@@ -254,6 +378,8 @@ function CombatPage() {
     out: x.hp_current <= 0,
     current: x.id === state.current_combatant_id,
     conditions: x.conditions,
+    moveRange: moveRangeOf(x),
+    moved: !canMoveThisTurn(x.moved_round, state.round, state.active),
   }));
 
   const myId = getPlayerCharacterId();
@@ -355,31 +481,48 @@ function CombatPage() {
             tokens={tokens}
             combatActive={state.active}
             currentCombatantId={state.current_combatant_id}
-            onMove={(id, x, y) => c.update.mutate([{ id, patch: { pos_x: x, pos_y: y } }])}
+            onMove={moveCombatant}
           />
         </div>
 
         <aside className="space-y-2">
-          <div className="flex items-center gap-2 text-sm">
-            <span className="label-caps">Dano/cura:</span>
-            <Button
-              size="icon"
-              variant="outline"
-              className="size-7"
-              onClick={() => setHpDelta((d) => Math.max(1, d - 1))}
-            >
-              <Minus />
-            </Button>
-            <span className="w-6 text-center font-bold">{hpDelta}</span>
-            <Button
-              size="icon"
-              variant="outline"
-              className="size-7"
-              onClick={() => setHpDelta((d) => d + 1)}
-            >
-              <Plus />
-            </Button>
-          </div>
+          <Collapsible open={quickRollOpen} onOpenChange={setQuickRollOpen}>
+            <CollapsibleTrigger asChild>
+              <Button variant="outline" size="sm" className="w-full justify-between">
+                <span className="flex items-center gap-2">
+                  <Dices /> Testes rápidos de skill
+                </span>
+                <ChevronDown
+                  className={cn("transition-transform", quickRollOpen && "rotate-180")}
+                />
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="pt-2">
+              <QuickRollPanel group={group} />
+            </CollapsibleContent>
+          </Collapsible>
+          {isMaster && (
+            <div className="flex items-center gap-2 text-sm">
+              <span className="label-caps">Dano/cura:</span>
+              <Button
+                size="icon"
+                variant="outline"
+                className="size-7"
+                onClick={() => setHpDelta((d) => Math.max(1, d - 1))}
+              >
+                <Minus />
+              </Button>
+              <span className="w-6 text-center font-bold">{hpDelta}</span>
+              <Button
+                size="icon"
+                variant="outline"
+                className="size-7"
+                onClick={() => setHpDelta((d) => d + 1)}
+              >
+                <Plus />
+              </Button>
+            </div>
+          )}
           {order.length === 0 && (
             <p className="text-sm text-muted-foreground">
               Adicione jogadores e monstros para começar.
@@ -414,24 +557,28 @@ function CombatPage() {
                         {conditionEmoji(cd)}
                       </span>
                     ))}
+                    {x.defending && (
+                      <span title={`Defendendo: +${DEFEND_BONUS} em defesa e esquiva`}>🛡️</span>
+                    )}
                   </p>
                   <p className="text-xs text-muted-foreground">
                     Inic. {x.initiative ?? "—"} · Def {x.defense}
+                    {x.defending && ` (+${DEFEND_BONUS})`}
                     {conditionPenalty(x.conditions) > 0 && ` (−${conditionPenalty(x.conditions)})`}
                     {" · "}Atq +{x.attack_bonus}
                     {conditionPenalty(x.conditions) > 0 && ` (−${conditionPenalty(x.conditions)})`}
                   </p>
                 </div>
                 {mine(x) && (
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="size-8"
-                    onClick={() => attack(x)}
-                    aria-label="Atacar"
-                  >
-                    <Swords />
-                  </Button>
+                  <AttackDialog
+                    attackerName={x.name}
+                    options={attackOptionsOf(x)}
+                    targets={attackTargetsOf(x)}
+                    canIgnoreRange={isMaster}
+                    disabledReason={attackBlockedReason(x)}
+                    onAttack={(option, targetId) => resolveAttack(x, option, targetId)}
+                    onDefend={() => defend(x)}
+                  />
                 )}
                 {isMaster && (
                   <Button
@@ -445,7 +592,8 @@ function CombatPage() {
                   </Button>
                 )}
               </div>
-              {!mine(x) ? (
+              {/* PV e condições à mão: só o mestre. Jogador só vê; o PV muda pelos ataques e esquivas. */}
+              {!isMaster ? (
                 <div className="mt-2 flex items-center gap-2">
                   <div className="h-2 flex-1 overflow-hidden rounded bg-muted">
                     <div

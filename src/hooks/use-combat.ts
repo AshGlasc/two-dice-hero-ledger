@@ -3,7 +3,7 @@ import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
-import type { CombatData, Combatant, CombatState } from "@/lib/rpg-queries";
+import type { CombatData, Combatant, CombatState, GroupData } from "@/lib/rpg-queries";
 
 type CombatantInsert = Database["public"]["Tables"]["combatants"]["Insert"];
 type CombatantPatch = Partial<Omit<Combatant, "id">>;
@@ -68,6 +68,33 @@ export function useCombat() {
     onError: fail("Não foi possível remover."),
   });
 
+  /** Gasta munição/durabilidade de uma arma (a ficha do personagem acompanha pelo ao vivo). */
+  const spendWeaponUse = useMutation({
+    mutationFn: async (v: { id: string; usesCurrent: number }) => {
+      const { error } = await supabase
+        .from("weapons")
+        .update({ uses_current: v.usesCurrent })
+        .eq("id", v.id);
+      if (error) throw error;
+    },
+    onMutate: (v) =>
+      qc.setQueryData<GroupData>(["group"], (old) =>
+        old
+          ? {
+              ...old,
+              weapons: old.weapons.map((w) =>
+                w.id === v.id ? { ...w, uses_current: v.usesCurrent } : w,
+              ),
+            }
+          : old,
+      ),
+    onError: (e) => {
+      console.error(e);
+      toast.error("Não foi possível gastar a munição da arma.");
+      qc.invalidateQueries({ queryKey: ["group"] });
+    },
+  });
+
   const setState = useMutation({
     mutationFn: async (patch: StatePatch) => {
       const { error } = await supabase
@@ -96,5 +123,5 @@ export function useCombat() {
     onError: fail("Não foi possível encerrar o combate."),
   });
 
-  return { add, update, remove, setState, end };
+  return { add, update, remove, spendWeaponUse, setState, end };
 }
