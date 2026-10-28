@@ -18,6 +18,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useMasterAuth } from "@/context/MasterAuthContext";
 import type { useSheetMutations } from "@/hooks/use-sheet-mutations";
+import { itemBonusFor } from "@/lib/combat";
 import {
   attackToWeaponPayload,
   COMBAT_SKILLS,
@@ -60,7 +61,7 @@ export function AttacksSection({
     if (!s) return 0;
     const base = sheet.character[s.attribute];
     const extra = sheet.skills.find((sk) => sk.skill_key === key)?.bonus ?? 0;
-    return skillTotal(base, extra);
+    return skillTotal(base, extra) + itemBonusFor(sheet.backpack, sheet.character.id, key);
   };
 
   const submit = (e: FormEvent) => {
