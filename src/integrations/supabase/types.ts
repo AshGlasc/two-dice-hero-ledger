@@ -16,16 +16,19 @@ export type Database = {
     Tables: {
       app_settings: {
         Row: {
+          difficulty_modifiers: Json
           discord_webhook: string
           id: number
           updated_at: string
         }
         Insert: {
+          difficulty_modifiers?: Json
           discord_webhook?: string
           id?: number
           updated_at?: string
         }
         Update: {
+          difficulty_modifiers?: Json
           discord_webhook?: string
           id?: number
           updated_at?: string
@@ -175,6 +178,7 @@ export type Database = {
           fisico: number
           id: string
           intelecto: number
+          level: number
           money: number
           motor: number
           name: string
@@ -183,6 +187,7 @@ export type Database = {
           pin_salt: string
           player_name: string
           psique: number
+          skill_points: number
           updated_at: string
         }
         Insert: {
@@ -192,6 +197,7 @@ export type Database = {
           fisico?: number
           id?: string
           intelecto?: number
+          level?: number
           money?: number
           motor?: number
           name: string
@@ -200,6 +206,7 @@ export type Database = {
           pin_salt?: string
           player_name?: string
           psique?: number
+          skill_points?: number
           updated_at?: string
         }
         Update: {
@@ -209,6 +216,7 @@ export type Database = {
           fisico?: number
           id?: string
           intelecto?: number
+          level?: number
           money?: number
           motor?: number
           name?: string
@@ -217,6 +225,7 @@ export type Database = {
           pin_salt?: string
           player_name?: string
           psique?: number
+          skill_points?: number
           updated_at?: string
         }
         Relationships: []

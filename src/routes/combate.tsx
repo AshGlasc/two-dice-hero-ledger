@@ -1,4 +1,4 @@
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import {
   ChevronDown,
@@ -54,6 +54,12 @@ import {
   type AttackOption,
   type Terrain,
 } from "@/lib/combat";
+import { EFFECT_TO_CONDITION_NAME } from "@/lib/custom-attacks";
+import {
+  appSettingsQuery,
+  calculateDifficultyBonus,
+  parseDifficultyModifiers,
+} from "@/lib/difficulty";
 import { getPlayerCharacterId } from "@/lib/player-character";
 import { postCombatStartToDiscord } from "@/lib/discord-webhook";
 import { logRolls } from "@/lib/roll-log";
@@ -104,6 +110,7 @@ function CombatPage() {
   const { data: group } = useSuspenseQuery(groupQuery);
   const { data: monsters } = useSuspenseQuery(monstersQuery);
   const { data: map } = useSuspenseQuery(battleMapQuery);
+  const { data: appSettings } = useQuery(appSettingsQuery);
   const { isMaster } = useMasterAuth();
   const c = useCombat();
   const [hpDelta, setHpDelta] = useState(1);
@@ -276,6 +283,13 @@ function CombatPage() {
     const target = combat.combatants.find((t) => t.id === targetId);
     if (!target) return;
 
+    // Trava estrita de alcance no grid de combate
+    const dist = distanceBetween(attacker, target);
+    if (!isMaster && dist !== null && dist > option.range) {
+      toast.error(`Alvo fora de alcance! Alcance máximo: ${option.range} casa(s), distância atual: ${dist}.`);
+      return;
+    }
+
     if (option.weaponId && (option.usesMax ?? 0) > 0) {
       const use = consumeUse(option.usesCurrent ?? 0, option.usesMax ?? 0);
       if (!use.ok) {
@@ -285,11 +299,22 @@ function CombatPage() {
       c.spendWeaponUse.mutate({ id: option.weaponId, usesCurrent: use.next });
     }
 
+    const mods = appSettings?.difficulty_modifiers
+      ? parseDifficultyModifiers(appSettings.difficulty_modifiers)
+      : null;
+    const masterBonus = calculateDifficultyBonus(
+      mods,
+      attacker.kind === "character" ? attacker.character_id : null,
+      option.kind === "basic" ? "fisico" : null,
+    );
+
     const attackerPenalty = conditionPenalty(attacker.conditions);
     const targetPenalty = conditionPenalty(target.conditions);
     const defendBonus = target.defending ? DEFEND_BONUS : 0;
     const defense =
-      target.defense == null ? null : Math.max(2, target.defense + defendBonus - targetPenalty);
+      target.defense == null
+        ? null
+        : Math.max(2, target.defense + defendBonus - targetPenalty + masterBonus);
     if (attackerPenalty || targetPenalty) {
       toast(`Penalidades aplicadas: ataque −${attackerPenalty}, defesa do alvo −${targetPenalty}.`);
     }
@@ -309,14 +334,42 @@ function CombatPage() {
     }
     const dodged = dodgeRoll !== null && dodges(r.total, dodgeRoll.total);
 
+    let conditionAdded: string | null = null;
+    let nextConditions = [...target.conditions];
+    if (hit && !dodged && option.effectCondition && option.effectCondition !== "none") {
+      const mapped = EFFECT_TO_CONDITION_NAME[option.effectCondition];
+      if (mapped && !nextConditions.includes(mapped)) {
+        nextConditions.push(mapped);
+        conditionAdded = mapped;
+      }
+    }
+
+    let defenseDebuffed = 0;
+    let nextDefense = target.defense;
+    if (hit && !dodged && option.defenseDebuff && option.defenseDebuff > 0 && target.defense != null) {
+      defenseDebuffed = option.defenseDebuff;
+      nextDefense = Math.max(0, target.defense - defenseDebuffed);
+    }
+
+    const effectsSummary: string[] = [];
+    if (conditionAdded) effectsSummary.push(`causou ${conditionAdded}`);
+    if (defenseDebuffed > 0) effectsSummary.push(`reduziu a defesa do alvo em ${defenseDebuffed}`);
+    const effectsText =
+      effectsSummary.length > 0 ? ` (${effectsSummary.join(" e ")}!)` : "";
+
     void logRolls([
       {
         characterId: attacker.character_id,
         characterName: attacker.name,
         label: `${option.name} em ${target.name}${
-          !hit ? " — errou" : dodged ? " — esquivado" : ` — ${damage} de dano`
+          !hit
+            ? " — errou"
+            : dodged
+              ? " — esquivado"
+              : ` — ${damage} de dano${effectsText}`
         }`,
         result: r,
+        masterBonus: masterBonus !== 0 ? masterBonus : undefined,
       },
       ...(dodgeRoll
         ? [
@@ -337,13 +390,19 @@ function CombatPage() {
       toast(`${target.name} esquivou do ataque!`);
       return;
     }
+
     c.update.mutate([
       {
         id: target.id,
-        patch: { hp_current: changeHp(target.hp_current, -damage, target.hp_max) },
+        patch: {
+          hp_current: changeHp(target.hp_current, -damage, target.hp_max),
+          ...(conditionAdded ? { conditions: nextConditions } : {}),
+          ...(defenseDebuffed > 0 ? { defense: nextDefense } : {}),
+        },
       },
     ]);
-    toast.success(`${attacker.name} acertou ${target.name}: −${damage} de vida.`);
+
+    toast.success(`${attacker.name} acertou ${target.name}: −${damage} de vida${effectsText}.`);
   };
 
   const defend = (x: Combatant) => {

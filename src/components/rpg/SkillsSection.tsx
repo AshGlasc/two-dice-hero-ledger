@@ -1,5 +1,7 @@
-import { Dices } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Dices, Plus } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 
 import { BodyMap } from "@/components/rpg/BodyMap";
 import { DiceFace } from "@/components/rpg/DiceFace";
@@ -15,6 +17,11 @@ import {
 } from "@/components/ui/select";
 import type { useSheetMutations } from "@/hooks/use-sheet-mutations";
 import { ATTRIBUTE_THEME } from "@/lib/attribute-theme";
+import {
+  appSettingsQuery,
+  calculateDifficultyBonus,
+  parseDifficultyModifiers,
+} from "@/lib/difficulty";
 import { logRolls } from "@/lib/roll-log";
 import type { CharacterSheet } from "@/lib/rpg-queries";
 import {
@@ -34,22 +41,44 @@ import { itemBonusFor } from "@/lib/combat";
 import { cn } from "@/lib/utils";
 
 type Mutations = ReturnType<typeof useSheetMutations>;
-type LoggedRoll = RollResult & { id: number; label: string };
+type LoggedRoll = RollResult & { id: number; label: string; masterBonus?: number };
 
 export function SkillsSection({ sheet, mutations }: { sheet: CharacterSheet; mutations: Mutations }) {
   const [difficulty, setDifficulty] = useState<string>("none");
   const [rolls, setRolls] = useState<LoggedRoll[]>([]);
+  const { data: appSettings } = useQuery(appSettingsQuery);
   const { character, skills } = sheet;
 
   const bonusOf = (key: string) => skills.find((s) => s.skill_key === key)?.bonus ?? 0;
   const itemsOf = (key: string) => itemBonusFor(sheet.backpack, character.id, key);
 
-  const doRoll = (label: string, modifier: number) => {
+  const allocateSkillPoint = (skillKey: string, skillName: string, currentBonus: number) => {
+    if ((character.skill_points ?? 0) <= 0) {
+      toast.error("Nenhum ponto de habilidade disponível.");
+      return;
+    }
+    mutations.upsertSkill.mutate({ skillKey, bonus: currentBonus + 1 });
+    mutations.updateCharacter.mutate({ skill_points: (character.skill_points ?? 0) - 1 });
+    toast.success(`Ponto atribuído a ${skillName}!`);
+  };
+
+  const doRoll = (label: string, modifier: number, attributeKey?: string) => {
     const dc = difficulty === "none" ? null : Number(difficulty);
-    const result = roll2d6(modifier, dc);
-    setRolls((prev) => [{ ...result, id: Date.now(), label }, ...prev].slice(0, 8));
+    const mods = appSettings?.difficulty_modifiers
+      ? parseDifficultyModifiers(appSettings.difficulty_modifiers)
+      : null;
+    const masterBonus = dc !== null ? calculateDifficultyBonus(mods, character.id, attributeKey) : 0;
+    const finalDc = dc !== null ? dc + masterBonus : null;
+    const result = roll2d6(modifier, finalDc);
+    setRolls((prev) => [{ ...result, id: Date.now(), label, masterBonus }, ...prev].slice(0, 8));
     void logRolls([
-      { characterId: character.id, characterName: character.name, label, result },
+      {
+        characterId: character.id,
+        characterName: character.name,
+        label,
+        result,
+        masterBonus: masterBonus !== 0 ? masterBonus : undefined,
+      },
     ]);
   };
 

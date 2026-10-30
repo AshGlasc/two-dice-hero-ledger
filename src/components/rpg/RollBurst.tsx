@@ -83,6 +83,7 @@ export function RollBurst() {
               {single.difficulty !== null && (
                 <span className="block text-sm tracking-normal text-muted-foreground">
                   precisava {single.difficulty}
+                  {single.masterBonus ? ` (${single.masterBonus > 0 ? `+${single.masterBonus}` : single.masterBonus} Mestre)` : ""}
                 </span>
               )}
             </p>

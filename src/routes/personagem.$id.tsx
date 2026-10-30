@@ -1,9 +1,10 @@
 import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, notFound, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, Backpack, Brain, Crosshair, Trash2 } from "lucide-react";
+import { ArrowLeft, Backpack, Brain, Crosshair, Swords, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
+import { AttacksSection } from "@/components/rpg/AttacksSection";
 import { AvatarUpload } from "@/components/rpg/AvatarUpload";
 import { BackpackSection } from "@/components/rpg/BackpackSection";
 import { SetPinDialog } from "@/components/rpg/CharacterPinDialogs";
@@ -11,6 +12,7 @@ import { InlineField } from "@/components/rpg/InlineField";
 import { MoneyField } from "@/components/rpg/MoneyField";
 import { SkillsSection } from "@/components/rpg/SkillsSection";
 import { WeaponsSection } from "@/components/rpg/WeaponsSection";
+import { Badge } from "@/components/ui/badge";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -148,7 +150,20 @@ function CharacterPage() {
             onChange={(v) => mutations.updateCharacter.mutate({ avatar_url: v })}
           />
           <div className="min-w-0 flex-1">
-            <p className="label-caps px-1 text-muted-foreground">Rosto aparece no mapa de combate</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="label-caps px-1 text-muted-foreground">Rosto aparece no mapa de combate</p>
+              {(character.skill_points ?? 0) > 0 && (
+                <Badge
+                  variant="outline"
+                  className="animate-pulse border-primary/60 bg-primary/20 text-xs font-semibold text-primary shadow-sm"
+                >
+                  ✨ Nível {character.level ?? 1} — {character.skill_points}{" "}
+                  {character.skill_points === 1
+                    ? "Ponto de Habilidade Disponível"
+                    : "Pontos de Habilidade Disponíveis"}
+                </Badge>
+              )}
+            </div>
             <InlineField
               label="Nome do personagem"
               value={character.name}
@@ -206,6 +221,9 @@ function CharacterPage() {
           <TabsTrigger value="armas" className="font-display uppercase tracking-wider data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
             <Crosshair /> Armas ({sheet.weapons.length})
           </TabsTrigger>
+          <TabsTrigger value="ataques" className="font-display uppercase tracking-wider data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+            <Swords className="mr-1.5 size-4" /> Ataques
+          </TabsTrigger>
           <TabsTrigger value="mochila" className="font-display uppercase tracking-wider data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
             <Backpack /> Mochila ({sheet.backpack.length})
           </TabsTrigger>
@@ -226,6 +244,9 @@ function CharacterPage() {
         </TabsContent>
         <TabsContent value="armas">
           <WeaponsSection sheet={sheet} mutations={mutations} />
+        </TabsContent>
+        <TabsContent value="ataques">
+          <AttacksSection sheet={sheet} mutations={mutations} />
         </TabsContent>
         <TabsContent value="mochila">
           <BackpackSection sheet={sheet} mutations={mutations} />

@@ -1,4 +1,3 @@
-// Fila de rolagens para o aviso grande na tela de todos.
 export type BurstRoll = {
   name: string;
   label: string;
@@ -10,6 +9,7 @@ export type BurstRoll = {
   outcome: string;
   /** Rolagem silenciosa: só quem rolou e o mestre veem. */
   hidden?: boolean;
+  masterBonus?: number;
 };
 
 type Listener = (rolls: BurstRoll[]) => void;

@@ -241,6 +241,8 @@ function PendingAttacks({ group }: { group: GroupData }) {
         diceCount: parsed.diceCount,
         description: parsed.description,
         status,
+        effectCondition: parsed.effectCondition,
+        defenseDebuff: parsed.defenseDebuff,
       });
       const { error } = await supabase.from("weapons").update(payload).eq("id", id);
       if (error) throw error;

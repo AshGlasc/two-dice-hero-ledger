@@ -1,5 +1,9 @@
-// Regras de combate do Eco dos Caídos (funções puras, testadas em combat.test.ts).
-import { isCustomAttack, parseMonsterAttacks, parseWeaponToAttack } from "@/lib/custom-attacks";
+import {
+  isCustomAttack,
+  parseMonsterAttacks,
+  parseWeaponToAttack,
+  type EffectCondition,
+} from "@/lib/custom-attacks";
 import type { GroupData } from "@/lib/rpg-queries";
 import { ALL_SKILLS, rollD6, roll2d6, skillTotal, type RollResult } from "@/lib/skills";
 
@@ -251,6 +255,8 @@ export type AttackOption = {
   usesCurrent?: number;
   usesMax?: number;
   note?: string;
+  effectCondition?: EffectCondition;
+  defenseDebuff?: number;
 };
 
 /** Soco e Chute: todo jogador já começa com eles, baseados no Físico. */
@@ -306,6 +312,8 @@ export function attackOptionsForCharacter(group: GroupData, characterId: string)
         range: Math.max(1, w.range),
         damage: parseDamage(w.damage),
         note: "Ataque especial",
+        effectCondition: attack.effectCondition,
+        defenseDebuff: attack.defenseDebuff,
       });
       continue;
     }
@@ -360,6 +368,8 @@ export function attackOptionsForMonster(
     hitDice: 2,
     range: 1,
     damage: parseDamage(a.description.match(DAMAGE_IN_TEXT)?.[0]),
+    effectCondition: a.effectCondition,
+    defenseDebuff: a.defenseDebuff,
   }));
 }
 

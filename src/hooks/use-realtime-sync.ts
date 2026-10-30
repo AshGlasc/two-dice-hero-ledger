@@ -131,6 +131,9 @@ export function useRealtimeSync() {
         }
         queue(["rolls"], ["public_rolls"]);
       })
+      .on("postgres_changes", { event: "*", schema: "public", table: "app_settings" }, () =>
+        queue(["app_settings"]),
+      )
       .on("postgres_changes", { event: "*", schema: "public", table: "gm_notes" }, () =>
         queue(["gm_notes"]),
       )

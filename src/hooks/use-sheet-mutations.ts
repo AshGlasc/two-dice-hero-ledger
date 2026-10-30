@@ -13,7 +13,18 @@ import {
 type CharacterPatch = Partial<
   Pick<
     Character,
-    "name" | "player_name" | "concept" | "notes" | "intelecto" | "psique" | "fisico" | "motor" | "avatar_url" | "money"
+    | "name"
+    | "player_name"
+    | "concept"
+    | "notes"
+    | "intelecto"
+    | "psique"
+    | "fisico"
+    | "motor"
+    | "avatar_url"
+    | "money"
+    | "level"
+    | "skill_points"
   >
 >;
 type WeaponInput = Pick<Weapon, "name" | "weapon_type" | "damage" | "ammo" | "notes"> &
@@ -82,6 +93,9 @@ export function useSheetMutations(characterId: string) {
     onError: (e) => {
       onSaveError(e);
       refresh();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["group"] });
     },
   });
 
@@ -163,6 +177,7 @@ export function useSheetMutations(characterId: string) {
   return {
     updateCharacter,
     setSkillBonus,
+    upsertSkill: setSkillBonus,
     addWeapon,
     updateWeapon,
     deleteWeapon,

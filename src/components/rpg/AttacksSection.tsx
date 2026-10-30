@@ -22,22 +22,36 @@ import { itemBonusFor } from "@/lib/combat";
 import {
   attackToWeaponPayload,
   COMBAT_SKILLS,
+  EFFECT_CONDITIONS,
+  EFFECT_TO_CONDITION_NAME,
   getSkillLabel,
   isCustomAttack,
   parseWeaponToAttack,
   type CustomAttack,
+  type EffectCondition,
 } from "@/lib/custom-attacks";
 import type { CharacterSheet } from "@/lib/rpg-queries";
 import { ALL_SKILLS, ATTRIBUTES, skillTotal } from "@/lib/skills";
+import { itemBonusFor } from "@/lib/combat";
 
 type Mutations = ReturnType<typeof useSheetMutations>;
 
-const EMPTY_FORM = {
+const EMPTY_FORM: {
+  name: string;
+  skillKey: string;
+  turnsCost: number;
+  diceCount: number;
+  description: string;
+  effectCondition: EffectCondition;
+  defenseDebuff: number;
+} = {
   name: "",
   skillKey: "ferramenta_fisica",
   turnsCost: 1,
   diceCount: 2,
   description: "",
+  effectCondition: "none",
+  defenseDebuff: 0,
 };
 
 export function AttacksSection({
@@ -94,6 +108,8 @@ export function AttacksSection({
       diceCount: attack.diceCount,
       description: attack.description,
       status,
+      effectCondition: attack.effectCondition,
+      defenseDebuff: attack.defenseDebuff,
     });
 
     mutations.updateWeapon.mutate({
@@ -230,6 +246,45 @@ export function AttacksSection({
             </div>
           </div>
 
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="space-y-1.5">
+              <span className="label-caps text-muted-foreground">Efeito Especial</span>
+              <Select
+                value={form.effectCondition}
+                onValueChange={(val) => setForm({ ...form, effectCondition: val as EffectCondition })}
+              >
+                <SelectTrigger aria-label="Efeito especial do ataque">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {EFFECT_CONDITIONS.map((eff) => (
+                    <SelectItem key={eff.value} value={eff.value}>
+                      {eff.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </label>
+
+            <div className="flex flex-col items-center justify-center gap-1.5 rounded-lg border border-border bg-background/40 p-3">
+              <span className="label-caps text-muted-foreground">
+                Redução de Defesa do Alvo (Debuff)
+              </span>
+              <Stepper
+                label="debuff de defesa"
+                value={form.defenseDebuff}
+                min={0}
+                max={10}
+                onChange={(v) => setForm({ ...form, defenseDebuff: v })}
+              />
+              <span className="text-[11px] text-muted-foreground">
+                {form.defenseDebuff === 0
+                  ? "Sem redução de defesa"
+                  : `Reduz ${form.defenseDebuff} ponto(s) de defesa do alvo`}
+              </span>
+            </div>
+          </div>
+
           <label className="block space-y-1.5">
             <span className="label-caps text-muted-foreground">Descrição / Efeito Especial</span>
             <Textarea
@@ -308,6 +363,22 @@ export function AttacksSection({
 
                   {atk.description && (
                     <p className="mt-2 text-xs text-foreground/80 italic">{atk.description}</p>
+                  )}
+
+                  {/* Badges de efeitos e debuff */}
+                  {((atk.effectCondition && atk.effectCondition !== "none") || (atk.defenseDebuff && atk.defenseDebuff > 0)) && (
+                    <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                      {atk.effectCondition && atk.effectCondition !== "none" && (
+                        <Badge variant="outline" className="border-warning/50 bg-warning/10 text-[11px] text-warning">
+                          Efeito: {EFFECT_TO_CONDITION_NAME[atk.effectCondition]}
+                        </Badge>
+                      )}
+                      {atk.defenseDebuff && atk.defenseDebuff > 0 && (
+                        <Badge variant="outline" className="border-destructive/50 bg-destructive/10 text-[11px] text-destructive">
+                          Defesa do Alvo −{atk.defenseDebuff}
+                        </Badge>
+                      )}
+                    </div>
                   )}
 
                   {/* Informações mecânicas */}

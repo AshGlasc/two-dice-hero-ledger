@@ -3,6 +3,34 @@ import { ALL_SKILLS, roll2d6, type RollOutcome, type RollResult } from "@/lib/sk
 
 export type AttackApprovalStatus = "pending" | "approved" | "rejected";
 
+export type EffectCondition =
+  | "bleeding"
+  | "stunned"
+  | "burning"
+  | "poisoned"
+  | "blind"
+  | "fear"
+  | "none";
+
+export const EFFECT_CONDITIONS: { value: EffectCondition; label: string }[] = [
+  { value: "none", label: "Nenhum" },
+  { value: "bleeding", label: "Sangrando" },
+  { value: "stunned", label: "Atordoado" },
+  { value: "burning", label: "Em Chamas" },
+  { value: "poisoned", label: "Envenenado" },
+  { value: "blind", label: "Cego" },
+  { value: "fear", label: "Amedrontado" },
+];
+
+export const EFFECT_TO_CONDITION_NAME: Record<Exclude<EffectCondition, "none">, string> = {
+  bleeding: "Sangrando",
+  stunned: "Atordoado",
+  burning: "Em chamas",
+  poisoned: "Envenenado",
+  blind: "Cego",
+  fear: "Amedrontado",
+};
+
 export type CustomAttack = {
   id: string;
   ownerId: string;
@@ -14,6 +42,8 @@ export type CustomAttack = {
   description: string;
   status: AttackApprovalStatus;
   createdAt: string;
+  effectCondition?: EffectCondition;
+  defenseDebuff?: number;
 };
 
 /** Skills recomendadas ou padrão para combate, embora qualquer skill seja permitida. */
@@ -46,6 +76,8 @@ export function parseWeaponToAttack(w: Weapon): CustomAttack {
   let diceCount = 2;
   let status: AttackApprovalStatus = "pending";
   let description = w.notes || "";
+  let effectCondition: EffectCondition | undefined = undefined;
+  let defenseDebuff: number | undefined = undefined;
 
   try {
     const meta = JSON.parse(w.notes);
@@ -55,6 +87,10 @@ export function parseWeaponToAttack(w: Weapon): CustomAttack {
       if (meta.dice_count != null) diceCount = Number(meta.dice_count) || 2;
       if (meta.status) status = meta.status;
       if (meta.description != null) description = meta.description;
+      if (meta.effect_condition != null) effectCondition = meta.effect_condition;
+      else if (meta.effectCondition != null) effectCondition = meta.effectCondition;
+      if (meta.defense_debuff != null) defenseDebuff = Number(meta.defense_debuff) || 0;
+      else if (meta.defenseDebuff != null) defenseDebuff = Number(meta.defenseDebuff) || 0;
     }
   } catch {
     // notas não são JSON
@@ -71,6 +107,8 @@ export function parseWeaponToAttack(w: Weapon): CustomAttack {
     description,
     status,
     createdAt: w.created_at,
+    effectCondition,
+    defenseDebuff,
   };
 }
 
@@ -82,11 +120,19 @@ export function attackToWeaponPayload(attack: {
   diceCount: number;
   description?: string;
   status?: AttackApprovalStatus;
+  effectCondition?: EffectCondition;
+  defenseDebuff?: number;
 }) {
   const status = attack.status ?? "pending";
   const turnsCost = Math.max(1, attack.turnsCost || 1);
   const diceCount = Math.max(1, attack.diceCount || 2);
   const description = (attack.description ?? "").trim();
+  const effectCondition =
+    attack.effectCondition && attack.effectCondition !== "none"
+      ? attack.effectCondition
+      : "none";
+  const defenseDebuff =
+    attack.defenseDebuff && attack.defenseDebuff > 0 ? attack.defenseDebuff : 0;
 
   const notesPayload = JSON.stringify({
     is_custom_attack: true,
@@ -95,6 +141,8 @@ export function attackToWeaponPayload(attack: {
     dice_count: diceCount,
     status,
     description,
+    effect_condition: effectCondition,
+    defense_debuff: defenseDebuff,
   });
 
   return {
@@ -126,6 +174,8 @@ export function parseMonsterAttacks(monsterId: string, raw: string | null | unde
           description: a.description || "",
           status: "approved",
           createdAt: a.createdAt || new Date().toISOString(),
+          effectCondition: a.effectCondition,
+          defenseDebuff: a.defenseDebuff,
         }));
       }
     } catch {

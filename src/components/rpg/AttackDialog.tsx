@@ -125,10 +125,10 @@ export function AttackDialog({
                       <span className="flex-1 font-semibold">{t.name}</span>
                       <span className="text-xs text-muted-foreground">
                         {t.distance === null
-                          ? "fora do mapa"
+                          ? "fora do mapa — Fora de alcance"
                           : inRange
                             ? `${t.distance} casa${t.distance > 1 ? "s" : ""}`
-                            : `${t.distance} casas — longe${canIgnoreRange ? " (mestre)" : ""}`}
+                            : `${t.distance} casa${t.distance > 1 ? "s" : ""} — Fora de alcance${canIgnoreRange ? " (mestre)" : ""}`}
                       </span>
                     </button>
                   );

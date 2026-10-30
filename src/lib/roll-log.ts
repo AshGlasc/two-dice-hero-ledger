@@ -27,18 +27,29 @@ export function isLocalRoll(r: {
 
 /** Salva a rolagem para aparecer ao vivo para todos na mesa (ou só para o mestre, se silenciosa). */
 export async function logRolls(
-  entries: { characterId: string | null; characterName: string; label: string; result: RollResult }[],
+  entries: {
+    characterId: string | null;
+    characterName: string;
+    label: string;
+    result: RollResult;
+    masterBonus?: number;
+  }[],
 ) {
   if (entries.length === 0) return;
   const hidden = isSilentRoll();
   for (const e of entries) {
+    const displayLabel =
+      e.masterBonus && e.result.difficulty !== null && !e.label.includes("Mestre")
+        ? `${e.label} (Dificuldade ${e.result.difficulty} [${e.masterBonus > 0 ? `+${e.masterBonus}` : e.masterBonus} Mestre])`
+        : e.label;
+
     localRolls.set(
-      signature(e.characterName, e.label, e.result.dice[0], e.result.dice[1], e.result.total),
+      signature(e.characterName, displayLabel, e.result.dice[0], e.result.dice[1], e.result.total),
       Date.now() + 15000,
     );
     emitRoll({
       name: e.characterName,
-      label: e.label,
+      label: displayLabel,
       die1: e.result.dice[0],
       die2: e.result.dice[1],
       modifier: e.result.modifier,
@@ -46,23 +57,31 @@ export async function logRolls(
       difficulty: e.result.difficulty,
       outcome: e.result.outcome,
       hidden,
+      masterBonus: e.masterBonus,
     });
   }
   const { data, error } = await supabase
     .from("rolls")
     .insert(
-      entries.map((e) => ({
-        character_id: e.characterId,
-        character_name: e.characterName,
-        label: e.label,
-        die1: e.result.dice[0],
-        die2: e.result.dice[1],
-        modifier: e.result.modifier,
-        total: e.result.total,
-        difficulty: e.result.difficulty,
-        outcome: e.result.outcome,
-        hidden,
-      })),
+      entries.map((e) => {
+        const displayLabel =
+          e.masterBonus && e.result.difficulty !== null && !e.label.includes("Mestre")
+            ? `${e.label} (Dificuldade ${e.result.difficulty} [${e.masterBonus > 0 ? `+${e.masterBonus}` : e.masterBonus} Mestre])`
+            : e.label;
+
+        return {
+          character_id: e.characterId,
+          character_name: e.characterName,
+          label: displayLabel,
+          die1: e.result.dice[0],
+          die2: e.result.dice[1],
+          modifier: e.result.modifier,
+          total: e.result.total,
+          difficulty: e.result.difficulty,
+          outcome: e.result.outcome,
+          hidden,
+        };
+      }),
     )
     .select("*");
   if (error) {
