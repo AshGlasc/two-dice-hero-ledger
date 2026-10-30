@@ -57,7 +57,7 @@ export async function logRolls(
       difficulty: e.result.difficulty,
       outcome: e.result.outcome,
       hidden,
-      masterBonus: e.masterBonus,
+      ...(e.masterBonus !== undefined ? { masterBonus: e.masterBonus } : {}),
     });
   }
   const { data, error } = await supabase

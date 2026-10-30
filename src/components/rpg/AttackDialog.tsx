@@ -32,6 +32,7 @@ export function AttackDialog({
   targets,
   canIgnoreRange,
   disabledReason,
+  attackDisabledReason,
   onAttack,
   onDefend,
 }: {
@@ -40,6 +41,7 @@ export function AttackDialog({
   targets: AttackTarget[];
   canIgnoreRange: boolean;
   disabledReason?: string | null;
+  attackDisabledReason?: string | null;
   onAttack: (option: AttackOption, targetId: string) => void;
   onDefend: () => void;
 }) {
@@ -50,7 +52,12 @@ export function AttackDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="icon" variant="ghost" className="size-8" aria-label={`Atacar com ${attackerName}`}>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="size-8"
+          aria-label={`Atacar com ${attackerName}`}
+        >
           <Swords />
         </Button>
       </DialogTrigger>
@@ -65,6 +72,11 @@ export function AttackDialog({
           <p className="rounded border border-border bg-muted/40 p-3 text-sm">{disabledReason}</p>
         ) : (
           <div className="space-y-4">
+            {attackDisabledReason && (
+              <p className="rounded border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+                {attackDisabledReason}
+              </p>
+            )}
             <div className="grid gap-1.5">
               {options.map((o) => {
                 const empty = (o.usesMax ?? 0) > 0 && (o.usesCurrent ?? 0) <= 0;
@@ -72,17 +84,19 @@ export function AttackDialog({
                   <button
                     key={o.id}
                     type="button"
-                    disabled={empty}
+                    disabled={empty || !!attackDisabledReason}
                     onClick={() => setOptId(o.id)}
                     className={cn(
                       "flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-left text-sm",
                       opt?.id === o.id ? "border-primary bg-primary/10" : "border-border",
-                      empty && "opacity-50",
+                      (empty || attackDisabledReason) && "opacity-50",
                     )}
                   >
                     <span>
                       <b>{o.name}</b>
-                      {o.note && <span className="ml-1 text-xs text-muted-foreground">{o.note}</span>}
+                      {o.note && (
+                        <span className="ml-1 text-xs text-muted-foreground">{o.note}</span>
+                      )}
                     </span>
                     <span className="shrink-0 text-xs text-muted-foreground">
                       +{o.hitBonus} · {dmgText(o.damage)} · {o.range} casa{o.range > 1 ? "s" : ""}
@@ -110,7 +124,7 @@ export function AttackDialog({
                     <button
                       key={t.id}
                       type="button"
-                      disabled={!allowed}
+                      disabled={!allowed || !!attackDisabledReason}
                       onClick={() => {
                         onAttack(opt, t.id);
                         setOpen(false);
@@ -118,10 +132,15 @@ export function AttackDialog({
                       className={cn(
                         "flex w-full items-center gap-2 rounded-md border px-2 py-1.5 text-left text-sm",
                         inRange ? "border-destructive/60 hover:bg-destructive/10" : "border-border",
-                        !allowed && "cursor-not-allowed opacity-40",
+                        (!allowed || attackDisabledReason) && "cursor-not-allowed opacity-40",
                       )}
                     >
-                      <Avatar src={t.avatar} name={t.name} tone={t.tone} className="size-7 text-[10px]" />
+                      <Avatar
+                        src={t.avatar}
+                        name={t.name}
+                        tone={t.tone}
+                        className="size-7 text-[10px]"
+                      />
                       <span className="flex-1 font-semibold">{t.name}</span>
                       <span className="text-xs text-muted-foreground">
                         {t.distance === null

@@ -6,6 +6,7 @@ import {
 } from "@/lib/custom-attacks";
 import type { GroupData } from "@/lib/rpg-queries";
 import { ALL_SKILLS, rollD6, roll2d6, skillTotal, type RollResult } from "@/lib/skills";
+import { sanityMentalPenalty } from "@/lib/sanity";
 
 export const CONDITIONS = [
   "Atordoado",
@@ -43,10 +44,13 @@ export function gridDistance(fromX: number, fromY: number, toX: number, toY: num
   return Math.max(Math.abs(toX - fromX), Math.abs(toY - fromY));
 }
 
-/** Atordoado e Caído dificultam ataques; a penalidade também reduz a defesa. */
+/** Condições mentais e físicas prejudicam ataques e defesas durante o combate. */
 export function conditionPenalty(conditions: string[]) {
   return (
-    conditions.filter((condition) => condition === "Atordoado" || condition === "Caído").length * 2
+    conditions.filter(
+      (condition) =>
+        condition === "Atordoado" || condition === "Caído" || condition === "Amedrontado",
+    ).length * 2
   );
 }
 
@@ -160,7 +164,8 @@ export function skillValueFor(group: GroupData, characterId: string, skillKey: s
     0;
   return (
     skillTotal(character[skill.attribute], bonus) +
-    itemBonusFor(group.backpack ?? [], characterId, skillKey)
+    itemBonusFor(group.backpack ?? [], characterId, skillKey) +
+    sanityMentalPenalty(character, skillKey)
   );
 }
 
@@ -260,7 +265,11 @@ export type AttackOption = {
 };
 
 /** Soco e Chute: todo jogador já começa com eles, baseados no Físico. */
-export function basicAttacks(fisico: number, socoSkill: number, chuteSkill: number): AttackOption[] {
+export function basicAttacks(
+  fisico: number,
+  socoSkill: number,
+  chuteSkill: number,
+): AttackOption[] {
   const strength = Math.floor(fisico / 3);
   return [
     {
@@ -312,8 +321,10 @@ export function attackOptionsForCharacter(group: GroupData, characterId: string)
         range: Math.max(1, w.range),
         damage: parseDamage(w.damage),
         note: "Ataque especial",
-        effectCondition: attack.effectCondition,
-        defenseDebuff: attack.defenseDebuff,
+        ...(attack.effectCondition !== undefined
+          ? { effectCondition: attack.effectCondition }
+          : {}),
+        ...(attack.defenseDebuff !== undefined ? { defenseDebuff: attack.defenseDebuff } : {}),
       });
       continue;
     }
@@ -368,8 +379,8 @@ export function attackOptionsForMonster(
     hitDice: 2,
     range: 1,
     damage: parseDamage(a.description.match(DAMAGE_IN_TEXT)?.[0]),
-    effectCondition: a.effectCondition,
-    defenseDebuff: a.defenseDebuff,
+    ...(a.effectCondition !== undefined ? { effectCondition: a.effectCondition } : {}),
+    ...(a.defenseDebuff !== undefined ? { defenseDebuff: a.defenseDebuff } : {}),
   }));
 }
 
@@ -413,6 +424,21 @@ export function canMoveTo(
   const t = terrain[cellKey(x, y)];
   if (t && TERRAINS.find((d) => d.key === t)?.blocks) return false;
   return !occupied.has(cellKey(x, y));
+}
+
+export function intimidationRetreatCell(
+  attacker: { x: number; y: number },
+  target: { x: number; y: number },
+  cols: number,
+  rows: number,
+  terrain: Terrain,
+  occupied: Set<string>,
+) {
+  const dx = Math.sign(target.x - attacker.x);
+  const dy = Math.sign(target.y - attacker.y);
+  if (dx === 0 && dy === 0) return null;
+  const next = { x: target.x + dx, y: target.y + dy };
+  return canMoveTo(next.x, next.y, cols, rows, terrain, occupied) ? next : null;
 }
 
 /** Primeira casa livre: jogadores entram pela esquerda, monstros pela direita. */

@@ -4,6 +4,7 @@ import {
   Lock,
   LogOut,
   Map as MapIcon,
+  Package,
   Radio,
   Skull,
   Smartphone,
@@ -55,6 +56,14 @@ const LINKS = [
     icon: Smartphone,
     exact: false,
     restricted: false,
+  },
+  {
+    to: "/itens",
+    label: "Itens",
+    short: "Itens",
+    icon: Package,
+    exact: false,
+    restricted: true,
   },
   {
     to: "/mestre",
@@ -210,7 +219,7 @@ export function TopNav() {
       {/* Barra de baixo no celular */}
       <nav
         aria-label="Navegação"
-        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-border bg-background pb-[env(safe-area-inset-bottom)] md:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-6 border-t border-border bg-background pb-[env(safe-area-inset-bottom)] md:hidden"
       >
         {LINKS.map((l) => (
           <Link

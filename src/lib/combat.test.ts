@@ -10,6 +10,7 @@ import {
   dodges,
   findFreeCell,
   gridDistance,
+  intimidationRetreatCell,
   monsterMoveRange,
   moveRangeFor,
   nextTurn,
@@ -84,6 +85,7 @@ describe("pontos de vida", () => {
     it("acumula a penalidade de Atordoado e Caído", () => {
       expect(conditionPenalty(["Atordoado"])).toBe(2);
       expect(conditionPenalty(["Atordoado", "Caído"])).toBe(4);
+      expect(conditionPenalty(["Amedrontado"])).toBe(2);
       expect(conditionPenalty(["Sangrando"])).toBe(0);
     });
 
@@ -116,6 +118,17 @@ describe("mapa de batalha", () => {
     const occ = new Set(["0,0"]);
     expect(findFreeCell(6, 4, {}, occ, "left")).toEqual({ x: 0, y: 1 });
     expect(findFreeCell(6, 4, {}, occ, "right")).toEqual({ x: 5, y: 0 });
+  });
+
+  it("intimidação recua uma casa e respeita limites, paredes e ocupação", () => {
+    expect(intimidationRetreatCell({ x: 1, y: 1 }, { x: 3, y: 2 }, 6, 6, {}, new Set())).toEqual({
+      x: 4,
+      y: 3,
+    });
+    expect(
+      intimidationRetreatCell({ x: 1, y: 1 }, { x: 3, y: 2 }, 6, 6, {}, new Set(["4,3"])),
+    ).toBeNull();
+    expect(intimidationRetreatCell({ x: 1, y: 1 }, { x: 5, y: 5 }, 6, 6, {}, new Set())).toBeNull();
   });
 });
 
@@ -231,6 +244,23 @@ describe("menu de ataques", () => {
     // Ferramenta Física: Físico 6 + extra 1 + itens 2
     expect(skillValueFor(group, "ch", "ferramenta_fisica")).toBe(9);
     expect(skillValueFor(group, "ch", "coordenacao_motora")).toBe(4);
+  });
+
+  it("aplica −2 nas skills mentais quando a sanidade está crítica", () => {
+    const unstable = {
+      ...group,
+      characters: group.characters.map((character) => ({
+        ...character,
+        sanity_current: 2,
+        sanity_max: 10,
+      })),
+    } as GroupData;
+    expect(skillValueFor(unstable, "ch", "autoridade")).toBe(
+      skillValueFor(group, "ch", "autoridade") - 2,
+    );
+    expect(skillValueFor(unstable, "ch", "ferramenta_fisica")).toBe(
+      skillValueFor(group, "ch", "ferramenta_fisica"),
+    );
   });
 
   it("personagem: Soco, Chute, arma ligada e ataque especial aprovado (pendente fica de fora)", () => {

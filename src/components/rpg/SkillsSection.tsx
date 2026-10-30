@@ -39,11 +39,18 @@ import {
 } from "@/lib/skills";
 import { itemBonusFor } from "@/lib/combat";
 import { cn } from "@/lib/utils";
+import { sanityMentalPenalty } from "@/lib/sanity";
 
 type Mutations = ReturnType<typeof useSheetMutations>;
 type LoggedRoll = RollResult & { id: number; label: string; masterBonus?: number };
 
-export function SkillsSection({ sheet, mutations }: { sheet: CharacterSheet; mutations: Mutations }) {
+export function SkillsSection({
+  sheet,
+  mutations,
+}: {
+  sheet: CharacterSheet;
+  mutations: Mutations;
+}) {
   const [difficulty, setDifficulty] = useState<string>("none");
   const [rolls, setRolls] = useState<LoggedRoll[]>([]);
   const { data: appSettings } = useQuery(appSettingsQuery);
@@ -67,17 +74,30 @@ export function SkillsSection({ sheet, mutations }: { sheet: CharacterSheet; mut
     const mods = appSettings?.difficulty_modifiers
       ? parseDifficultyModifiers(appSettings.difficulty_modifiers)
       : null;
-    const masterBonus = dc !== null ? calculateDifficultyBonus(mods, character.id, attributeKey) : 0;
+    const masterBonus =
+      dc !== null ? calculateDifficultyBonus(mods, character.id, attributeKey) : 0;
     const finalDc = dc !== null ? dc + masterBonus : null;
-    const result = roll2d6(modifier, finalDc);
-    setRolls((prev) => [{ ...result, id: Date.now(), label, masterBonus }, ...prev].slice(0, 8));
+    const finalModifier =
+      modifier + (attributeKey ? sanityMentalPenalty(character, attributeKey) : 0);
+    const result = roll2d6(finalModifier, finalDc);
+    setRolls((prev) =>
+      [
+        {
+          ...result,
+          id: Date.now(),
+          label,
+          ...(masterBonus !== undefined ? { masterBonus } : {}),
+        },
+        ...prev,
+      ].slice(0, 8),
+    );
     void logRolls([
       {
         characterId: character.id,
         characterName: character.name,
         label,
         result,
-        masterBonus: masterBonus !== 0 ? masterBonus : undefined,
+        ...(masterBonus !== 0 ? { masterBonus } : {}),
       },
     ]);
   };
@@ -135,9 +155,18 @@ export function SkillsSection({ sheet, mutations }: { sheet: CharacterSheet; mut
             <section
               key={attr.key}
               id={`attr-${attr.key}`}
-              className={cn("scroll-mt-20 overflow-hidden rounded-lg border shadow-paint", theme.border, theme.panel)}
+              className={cn(
+                "scroll-mt-20 overflow-hidden rounded-lg border shadow-paint",
+                theme.border,
+                theme.panel,
+              )}
             >
-              <header className={cn("flex flex-wrap items-center justify-between gap-4 border-b px-5 py-4", theme.border)}>
+              <header
+                className={cn(
+                  "flex flex-wrap items-center justify-between gap-4 border-b px-5 py-4",
+                  theme.border,
+                )}
+              >
                 <div>
                   <p className={cn("label-caps", theme.text)}>Atributo</p>
                   <h2 className={cn("text-4xl font-bold uppercase", theme.text)}>{attr.name}</h2>
@@ -177,11 +206,16 @@ export function SkillsSection({ sheet, mutations }: { sheet: CharacterSheet; mut
                       <div className="col-span-2 flex items-center justify-between gap-4 md:col-span-1">
                         <div className="text-center">
                           <p className="label-caps text-muted-foreground">Base</p>
-                          <p className={cn("tabular font-display text-lg font-semibold", theme.text)}>
+                          <p
+                            className={cn("tabular font-display text-lg font-semibold", theme.text)}
+                          >
                             {attrValue}
                           </p>
                           {items !== 0 && (
-                            <p className="text-[10px] font-bold text-success" title="Bônus dos itens da mochila">
+                            <p
+                              className="text-[10px] font-bold text-success"
+                              title="Bônus dos itens da mochila"
+                            >
                               {items > 0 ? "+" : ""}
                               {items} itens
                             </p>
@@ -206,7 +240,7 @@ export function SkillsSection({ sheet, mutations }: { sheet: CharacterSheet; mut
                         <Button
                           variant={theme.button}
                           className="md:hidden"
-                          onClick={() => doRoll(skill.name, total)}
+                          onClick={() => doRoll(skill.name, total, attr.key)}
                         >
                           <Dices /> Rolar
                         </Button>
@@ -220,7 +254,7 @@ export function SkillsSection({ sheet, mutations }: { sheet: CharacterSheet; mut
                       <Button
                         variant={theme.button}
                         className="hidden md:inline-flex"
-                        onClick={() => doRoll(skill.name, total)}
+                        onClick={() => doRoll(skill.name, total, attr.key)}
                         aria-label={`Rolar ${skill.name}`}
                       >
                         <Dices /> Rolar
@@ -291,9 +325,14 @@ export function SkillsSection({ sheet, mutations }: { sheet: CharacterSheet; mut
               <p className="label-caps mb-2 text-muted-foreground">Últimas rolagens</p>
               <ul className="space-y-1 text-sm">
                 {rolls.slice(1).map((r) => (
-                  <li key={r.id} className="flex justify-between gap-2 border-b border-border/60 py-1">
+                  <li
+                    key={r.id}
+                    className="flex justify-between gap-2 border-b border-border/60 py-1"
+                  >
                     <span className="truncate">{r.label}</span>
-                    <span className={cn("tabular font-display font-semibold", OUTCOME_CLASS[r.outcome])}>
+                    <span
+                      className={cn("tabular font-display font-semibold", OUTCOME_CLASS[r.outcome])}
+                    >
                       {r.total}
                     </span>
                   </li>

@@ -64,6 +64,27 @@
       "when": 1793063657130,
       "tag": "0008_combat_rules_pins_layouts_items",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793318400000,
+      "tag": "0009_level_and_difficulty",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793404800000,
+      "tag": "0010_items_catalog",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1793408400000,
+      "tag": "0011_sanity_whispers",
+      "breakpoints": true
     }
   ]
 }

@@ -4,13 +4,7 @@ import { ALL_SKILLS, roll2d6, type RollOutcome, type RollResult } from "@/lib/sk
 export type AttackApprovalStatus = "pending" | "approved" | "rejected";
 
 export type EffectCondition =
-  | "bleeding"
-  | "stunned"
-  | "burning"
-  | "poisoned"
-  | "blind"
-  | "fear"
-  | "none";
+  "bleeding" | "stunned" | "burning" | "poisoned" | "blind" | "fear" | "none";
 
 export const EFFECT_CONDITIONS: { value: EffectCondition; label: string }[] = [
   { value: "none", label: "Nenhum" },
@@ -48,14 +42,54 @@ export type CustomAttack = {
 
 /** Skills recomendadas ou padrão para combate, embora qualquer skill seja permitida. */
 export const COMBAT_SKILLS = [
-  { key: "ferramenta_fisica", name: "Ferramenta Física", attribute: "fisico", desc: "Força bruta, porrada, armas pesadas" },
-  { key: "coordenacao_motora", name: "Coordenação Motora", attribute: "motor", desc: "Precisão, armas de fogo, arremesso" },
-  { key: "instinto", name: "Instinto", attribute: "fisico", desc: "Reflexos animais, combate selvagem" },
-  { key: "velocidade_reacao", name: "Velocidade de Reação", attribute: "motor", desc: "Golpes rápidos e contra-ataques" },
-  { key: "interacao", name: "Interação", attribute: "motor", desc: "Furtividade, ataques acrobáticos" },
-  { key: "autoridade", name: "Autoridade", attribute: "psique", desc: "Comando intimidador, ataques morais" },
-  { key: "calculo_visual", name: "Cálculo Visual", attribute: "intelecto", desc: "Tiros calculados, trajetórias" },
-  { key: "retorica", name: "Retórica", attribute: "intelecto", desc: "Ataques verbais provocativos" },
+  {
+    key: "ferramenta_fisica",
+    name: "Ferramenta Física",
+    attribute: "fisico",
+    desc: "Força bruta, porrada, armas pesadas",
+  },
+  {
+    key: "coordenacao_motora",
+    name: "Coordenação Motora",
+    attribute: "motor",
+    desc: "Precisão, armas de fogo, arremesso",
+  },
+  {
+    key: "instinto",
+    name: "Instinto",
+    attribute: "fisico",
+    desc: "Reflexos animais, combate selvagem",
+  },
+  {
+    key: "velocidade_reacao",
+    name: "Velocidade de Reação",
+    attribute: "motor",
+    desc: "Golpes rápidos e contra-ataques",
+  },
+  {
+    key: "interacao",
+    name: "Interação",
+    attribute: "motor",
+    desc: "Furtividade, ataques acrobáticos",
+  },
+  {
+    key: "autoridade",
+    name: "Autoridade",
+    attribute: "psique",
+    desc: "Comando intimidador, ataques morais",
+  },
+  {
+    key: "calculo_visual",
+    name: "Cálculo Visual",
+    attribute: "intelecto",
+    desc: "Tiros calculados, trajetórias",
+  },
+  {
+    key: "retorica",
+    name: "Retórica",
+    attribute: "intelecto",
+    desc: "Ataques verbais provocativos",
+  },
 ] as const;
 
 /** Identifica se uma linha da tabela de weapons é na verdade um ataque customizado. */
@@ -107,8 +141,8 @@ export function parseWeaponToAttack(w: Weapon): CustomAttack {
     description,
     status,
     createdAt: w.created_at,
-    effectCondition,
-    defenseDebuff,
+    ...(effectCondition !== undefined ? { effectCondition } : {}),
+    ...(defenseDebuff !== undefined ? { defenseDebuff } : {}),
   };
 }
 
@@ -128,11 +162,8 @@ export function attackToWeaponPayload(attack: {
   const diceCount = Math.max(1, attack.diceCount || 2);
   const description = (attack.description ?? "").trim();
   const effectCondition =
-    attack.effectCondition && attack.effectCondition !== "none"
-      ? attack.effectCondition
-      : "none";
-  const defenseDebuff =
-    attack.defenseDebuff && attack.defenseDebuff > 0 ? attack.defenseDebuff : 0;
+    attack.effectCondition && attack.effectCondition !== "none" ? attack.effectCondition : "none";
+  const defenseDebuff = attack.defenseDebuff && attack.defenseDebuff > 0 ? attack.defenseDebuff : 0;
 
   const notesPayload = JSON.stringify({
     is_custom_attack: true,
@@ -155,7 +186,10 @@ export function attackToWeaponPayload(attack: {
 }
 
 /** Converte o campo de texto/JSON de ataques de um monstro em lista de CustomAttack. */
-export function parseMonsterAttacks(monsterId: string, raw: string | null | undefined): CustomAttack[] {
+export function parseMonsterAttacks(
+  monsterId: string,
+  raw: string | null | undefined,
+): CustomAttack[] {
   if (!raw || !raw.trim()) return [];
 
   const trimmed = raw.trim();
@@ -174,8 +208,8 @@ export function parseMonsterAttacks(monsterId: string, raw: string | null | unde
           description: a.description || "",
           status: "approved",
           createdAt: a.createdAt || new Date().toISOString(),
-          effectCondition: a.effectCondition,
-          defenseDebuff: a.defenseDebuff,
+          ...(a.effectCondition !== undefined ? { effectCondition: a.effectCondition } : {}),
+          ...(a.defenseDebuff !== undefined ? { defenseDebuff: a.defenseDebuff } : {}),
         }));
       }
     } catch {

@@ -25,6 +25,8 @@ type CharacterPatch = Partial<
     | "money"
     | "level"
     | "skill_points"
+    | "sanity_current"
+    | "sanity_max"
   >
 >;
 type WeaponInput = Pick<Weapon, "name" | "weapon_type" | "damage" | "ammo" | "notes"> &
@@ -51,8 +53,7 @@ export function useSheetMutations(characterId: string) {
       const { error } = await supabase.from("characters").update(patch).eq("id", characterId);
       if (error) throw error;
     },
-    onMutate: (patch) =>
-      patchCache((s) => ({ ...s, character: { ...s.character, ...patch } })),
+    onMutate: (patch) => patchCache((s) => ({ ...s, character: { ...s.character, ...patch } })),
     onError: (e) => {
       onSaveError(e);
       refresh();

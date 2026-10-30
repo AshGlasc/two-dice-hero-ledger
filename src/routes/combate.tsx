@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { AttackDialog, type AttackTarget } from "@/components/rpg/AttackDialog";
 import { Avatar } from "@/components/rpg/AvatarUpload";
 import { BattleMap, type MapToken } from "@/components/rpg/BattleMap";
+import { IntimidateDialog } from "@/components/rpg/IntimidateDialog";
 import { MasterUnlockModal } from "@/components/rpg/MasterUnlockModal";
 import { QuickRollPanel } from "@/components/rpg/QuickRollPanel";
 import { Button } from "@/components/ui/button";
@@ -34,12 +35,15 @@ import {
   attackOptionsForMonster,
   canMoveThisTurn,
   changeHp,
+  cellKey,
   consumeUse,
   DEFEND_BONUS,
   DODGE_SKILL,
   dodges,
   findFreeCell,
   gridDistance,
+  intimidationRetreatCell,
+  MOVEMENT_RANGE,
   moveRangeFor,
   monsterMoveRange,
   nextTurn,
@@ -50,9 +54,10 @@ import {
   skillValueFor,
   sortByInitiative,
   uniqueName,
-  cellKey,
   type AttackOption,
+  type Fog,
   type Terrain,
+  tokenVisible,
 } from "@/lib/combat";
 import { EFFECT_TO_CONDITION_NAME } from "@/lib/custom-attacks";
 import {
@@ -126,6 +131,8 @@ function CombatPage() {
   const slots = order.map((x) => ({ id: x.id, out: x.kind === "monster" && x.hp_current <= 0 }));
   const { state } = combat;
   const terrain = (map.terrain ?? {}) as Terrain;
+  const fog = (map.fog ?? {}) as Fog;
+  const myId = getPlayerCharacterId();
 
   const occupied = () =>
     new Set(
@@ -266,6 +273,44 @@ function CombatPage() {
         distance: distanceBetween(x, t),
       }));
 
+  const intimidationTargetsOf = (x: Combatant): AttackTarget[] =>
+    order
+      .filter((target) => {
+        if (
+          target.id === x.id ||
+          target.kind === x.kind ||
+          target.hp_current <= 0 ||
+          target.pos_x == null ||
+          target.pos_y == null
+        ) {
+          return false;
+        }
+        const distance = distanceBetween(x, target);
+        return (
+          distance !== null &&
+          distance <= MOVEMENT_RANGE &&
+          tokenVisible(
+            fog,
+            target.pos_x,
+            target.pos_y,
+            isMaster,
+            target.kind === "character" && target.character_id === myId,
+          )
+        );
+      })
+      .map((target) => ({
+        id: target.id,
+        name: target.name,
+        avatar: avatarOf(target),
+        tone: target.kind === "monster" ? "monster" : "player",
+        distance: distanceBetween(x, target),
+      }));
+
+  const isCollapsed = (combatant: Combatant) =>
+    combatant.kind === "character" &&
+    group.characters.find((character) => character.id === combatant.character_id)
+      ?.sanity_current === 0;
+
   /** Por que o ⚔️ está bloqueado agora (null = liberado). O mestre age a qualquer hora. */
   const attackBlockedReason = (x: Combatant) => {
     if (x.kind === "monster" && (x.hp_current ?? 0) <= 0) return `${x.name} está fora de combate.`;
@@ -286,7 +331,9 @@ function CombatPage() {
     // Trava estrita de alcance no grid de combate
     const dist = distanceBetween(attacker, target);
     if (!isMaster && dist !== null && dist > option.range) {
-      toast.error(`Alvo fora de alcance! Alcance máximo: ${option.range} casa(s), distância atual: ${dist}.`);
+      toast.error(
+        `Alvo fora de alcance! Alcance máximo: ${option.range} casa(s), distância atual: ${dist}.`,
+      );
       return;
     }
 
@@ -328,14 +375,14 @@ function CombatPage() {
     let dodgeRoll: ReturnType<typeof roll2d6> | null = null;
     if (hit && !crit && target.kind === "character" && target.character_id) {
       dodgeRoll = roll2d6(
-        skillValueFor(group, target.character_id, DODGE_SKILL) + defendBonus,
+        skillValueFor(group, target.character_id, DODGE_SKILL) + defendBonus - targetPenalty,
         null,
       );
     }
     const dodged = dodgeRoll !== null && dodges(r.total, dodgeRoll.total);
 
     let conditionAdded: string | null = null;
-    let nextConditions = [...target.conditions];
+    const nextConditions = [...target.conditions];
     if (hit && !dodged && option.effectCondition && option.effectCondition !== "none") {
       const mapped = EFFECT_TO_CONDITION_NAME[option.effectCondition];
       if (mapped && !nextConditions.includes(mapped)) {
@@ -346,7 +393,13 @@ function CombatPage() {
 
     let defenseDebuffed = 0;
     let nextDefense = target.defense;
-    if (hit && !dodged && option.defenseDebuff && option.defenseDebuff > 0 && target.defense != null) {
+    if (
+      hit &&
+      !dodged &&
+      option.defenseDebuff &&
+      option.defenseDebuff > 0 &&
+      target.defense != null
+    ) {
       defenseDebuffed = option.defenseDebuff;
       nextDefense = Math.max(0, target.defense - defenseDebuffed);
     }
@@ -354,22 +407,17 @@ function CombatPage() {
     const effectsSummary: string[] = [];
     if (conditionAdded) effectsSummary.push(`causou ${conditionAdded}`);
     if (defenseDebuffed > 0) effectsSummary.push(`reduziu a defesa do alvo em ${defenseDebuffed}`);
-    const effectsText =
-      effectsSummary.length > 0 ? ` (${effectsSummary.join(" e ")}!)` : "";
+    const effectsText = effectsSummary.length > 0 ? ` (${effectsSummary.join(" e ")}!)` : "";
 
     void logRolls([
       {
         characterId: attacker.character_id,
         characterName: attacker.name,
         label: `${option.name} em ${target.name}${
-          !hit
-            ? " — errou"
-            : dodged
-              ? " — esquivado"
-              : ` — ${damage} de dano${effectsText}`
+          !hit ? " — errou" : dodged ? " — esquivado" : ` — ${damage} de dano${effectsText}`
         }`,
         result: r,
-        masterBonus: masterBonus !== 0 ? masterBonus : undefined,
+        ...(masterBonus !== 0 ? { masterBonus } : {}),
       },
       ...(dodgeRoll
         ? [
@@ -403,6 +451,106 @@ function CombatPage() {
     ]);
 
     toast.success(`${attacker.name} acertou ${target.name}: −${damage} de vida${effectsText}.`);
+  };
+
+  const resolveIntimidation = (attacker: Combatant, targetId: string) => {
+    const target = combat.combatants.find((item) => item.id === targetId);
+    if (
+      !target ||
+      attacker.kind !== "character" ||
+      !attacker.character_id ||
+      target.kind === attacker.kind
+    ) {
+      return;
+    }
+
+    const attackerModifier =
+      Math.max(
+        skillValueFor(group, attacker.character_id, "autoridade"),
+        skillValueFor(group, attacker.character_id, "ferramenta_fisica"),
+      ) - conditionPenalty(attacker.conditions);
+    const targetCharacterId = target.character_id;
+    const defenderModifier =
+      target.kind === "character" && targetCharacterId
+        ? Math.max(
+            skillValueFor(group, targetCharacterId, "vontade"),
+            skillValueFor(group, targetCharacterId, "compostura"),
+          ) - conditionPenalty(target.conditions)
+        : (target.defense ?? 0);
+    const attackerRoll = roll2d6(attackerModifier, null);
+    const defenderRoll = roll2d6(defenderModifier, null);
+    const succeeded = attackerRoll.total > defenderRoll.total;
+    const targetName = target.name;
+
+    if (!succeeded) {
+      void logRolls([
+        {
+          characterId: attacker.character_id,
+          characterName: attacker.name,
+          label: `${attacker.name} tentou intimidar ${targetName}, mas o alvo resistiu.`,
+          result: attackerRoll,
+        },
+        {
+          characterId: targetCharacterId,
+          characterName: targetName,
+          label: `${targetName} resistiu à intimidação.`,
+          result: defenderRoll,
+        },
+      ]);
+      if (state.active && state.current_combatant_id === attacker.id) advanceTurn();
+      toast(`${targetName} resistiu à intimidação. A ação foi consumida.`);
+      return;
+    }
+
+    const nextConditions = target.conditions.includes("Amedrontado")
+      ? target.conditions
+      : [...target.conditions, "Amedrontado"];
+    let retreat: { x: number; y: number } | null = null;
+    if (
+      attacker.pos_x != null &&
+      attacker.pos_y != null &&
+      target.pos_x != null &&
+      target.pos_y != null
+    ) {
+      const occupiedWithoutTarget = occupied();
+      occupiedWithoutTarget.delete(cellKey(target.pos_x, target.pos_y));
+      retreat = intimidationRetreatCell(
+        { x: attacker.pos_x, y: attacker.pos_y },
+        { x: target.pos_x, y: target.pos_y },
+        map.cols,
+        map.rows,
+        terrain,
+        occupiedWithoutTarget,
+      );
+    }
+    const message = retreat
+      ? `${attacker.name} intimidou ${targetName}, aplicando Amedrontado e forçando recuo!`
+      : `${attacker.name} intimidou ${targetName}, aplicando Amedrontado; recuo bloqueado.`;
+    void logRolls([
+      {
+        characterId: attacker.character_id,
+        characterName: attacker.name,
+        label: message,
+        result: attackerRoll,
+      },
+      {
+        characterId: targetCharacterId,
+        characterName: targetName,
+        label: `${targetName} falhou ao resistir à intimidação.`,
+        result: defenderRoll,
+      },
+    ]);
+    c.update.mutate([
+      {
+        id: target.id,
+        patch: {
+          conditions: nextConditions,
+          ...(retreat ? { pos_x: retreat.x, pos_y: retreat.y } : {}),
+        },
+      },
+    ]);
+    if (state.active && state.current_combatant_id === attacker.id) advanceTurn();
+    toast.success(message);
   };
 
   const defend = (x: Combatant) => {
@@ -441,7 +589,6 @@ function CombatPage() {
     moved: !canMoveThisTurn(x.moved_round, state.round, state.active),
   }));
 
-  const myId = getPlayerCharacterId();
   /** Mestre controla todos; jogador só o próprio personagem. */
   const mine = (x: Combatant) => isMaster || (!!myId && x.character_id === myId);
 
@@ -594,6 +741,8 @@ function CombatPage() {
                 "rounded-lg border border-border bg-card p-3",
                 x.id === state.current_combatant_id && "border-primary ring-2 ring-primary",
                 x.hp_current <= 0 && "opacity-50",
+                isCollapsed(x) &&
+                  "border-2 border-destructive/80 bg-destructive/5 shadow-[0_0_26px_rgba(127,29,29,0.28)] animate-pulse",
               )}
             >
               <div className="flex items-center gap-2">
@@ -610,7 +759,11 @@ function CombatPage() {
                       <span
                         key={cd}
                         title={
-                          cd === "Atordoado" || cd === "Caído" ? `${cd}: −2 em ataque e defesa` : cd
+                          cd === "Amedrontado"
+                            ? `${cd}: −2 em rolagens de combate`
+                            : cd === "Atordoado" || cd === "Caído"
+                              ? `${cd}: −2 em ataque e defesa`
+                              : cd
                         }
                       >
                         {conditionEmoji(cd)}
@@ -629,15 +782,30 @@ function CombatPage() {
                   </p>
                 </div>
                 {mine(x) && (
-                  <AttackDialog
-                    attackerName={x.name}
-                    options={attackOptionsOf(x)}
-                    targets={attackTargetsOf(x)}
-                    canIgnoreRange={isMaster}
-                    disabledReason={attackBlockedReason(x)}
-                    onAttack={(option, targetId) => resolveAttack(x, option, targetId)}
-                    onDefend={() => defend(x)}
-                  />
+                  <>
+                    <AttackDialog
+                      attackerName={x.name}
+                      options={attackOptionsOf(x)}
+                      targets={attackTargetsOf(x)}
+                      canIgnoreRange={isMaster}
+                      disabledReason={attackBlockedReason(x)}
+                      attackDisabledReason={
+                        isCollapsed(x)
+                          ? "Colapso total: ataques bloqueados até a sanidade voltar."
+                          : null
+                      }
+                      onAttack={(option, targetId) => resolveAttack(x, option, targetId)}
+                      onDefend={() => defend(x)}
+                    />
+                    {x.kind === "character" && x.character_id && (
+                      <IntimidateDialog
+                        attackerName={x.name}
+                        targets={intimidationTargetsOf(x)}
+                        disabled={!!attackBlockedReason(x) || isCollapsed(x)}
+                        onIntimidate={(targetId) => resolveIntimidation(x, targetId)}
+                      />
+                    )}
+                  </>
                 )}
                 {isMaster && (
                   <Button
@@ -651,6 +819,11 @@ function CombatPage() {
                   </Button>
                 )}
               </div>
+              {isCollapsed(x) && (
+                <p className="mt-2 text-xs font-bold uppercase text-destructive">
+                  Colapso de Sanidade — ataques bloqueados
+                </p>
+              )}
               {/* PV e condições à mão: só o mestre. Jogador só vê; o PV muda pelos ataques e esquivas. */}
               {!isMaster ? (
                 <div className="mt-2 flex items-center gap-2">

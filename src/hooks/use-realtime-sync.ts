@@ -167,6 +167,9 @@ export function useRealtimeSync() {
       .on("postgres_changes", { event: "*", schema: "public", table: "phone_gallery" }, () =>
         queue(["phone_gallery"]),
       )
+      .on("postgres_changes", { event: "*", schema: "public", table: "catalog_items" }, () =>
+        queue(["catalog_items"]),
+      )
       .subscribe((status, error) => {
         if (status === "SUBSCRIBED") {
           // Conectou (ou reconectou depois do celular dormir): puxa tudo de novo.
