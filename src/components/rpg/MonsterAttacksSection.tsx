@@ -58,6 +58,13 @@ export function MonsterAttacksSection({
       description: form.description.trim(),
       status: "approved",
       createdAt: new Date().toISOString(),
+      energyCost: 0,
+      range: 1,
+      reach: "corpo-a-corpo",
+      resistanceType: "Defesa",
+      damageType: "Físico",
+      durationRounds: 1,
+      damageFormula: `${form.diceCount}d6`,
     };
 
     const updated = [...attacks, newAttack];
@@ -198,7 +205,9 @@ export function MonsterAttacksSection({
       {attacks.length === 0 ? (
         <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border py-8 text-center text-muted-foreground">
           <Swords className="size-8 opacity-50" />
-          <p className="text-sm italic">Nenhum ataque configurado. Adicione ações de combate para este monstro.</p>
+          <p className="text-sm italic">
+            Nenhum ataque configurado. Adicione ações de combate para este monstro.
+          </p>
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
@@ -209,7 +218,9 @@ export function MonsterAttacksSection({
             >
               <div>
                 <div className="flex items-start justify-between gap-2">
-                  <h3 className="font-display text-xl font-bold uppercase leading-tight">{atk.name}</h3>
+                  <h3 className="font-display text-xl font-bold uppercase leading-tight">
+                    {atk.name}
+                  </h3>
                   <Button
                     variant="ghost"
                     size="icon"
@@ -220,7 +231,9 @@ export function MonsterAttacksSection({
                     <Trash2 className="size-3.5" />
                   </Button>
                 </div>
-                <p className="text-xs font-semibold text-destructive">{getSkillLabel(atk.skillKey)}</p>
+                <p className="text-xs font-semibold text-destructive">
+                  {getSkillLabel(atk.skillKey)}
+                </p>
                 {atk.description && (
                   <p className="mt-1 text-xs italic text-foreground/70">{atk.description}</p>
                 )}

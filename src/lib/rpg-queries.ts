@@ -170,6 +170,8 @@ export const combatQuery = queryOptions({
 });
 
 export type BattleMap = Tables["battle_map"]["Row"];
+export type BattleMapItem = Tables["battle_map_items"]["Row"];
+export type CombatEvent = Tables["combat_events"]["Row"];
 
 export const EMPTY_MAP: BattleMap = {
   id: 1,
@@ -188,6 +190,31 @@ export const battleMapQuery = queryOptions({
     const { data, error } = await supabase.from("battle_map").select("*").eq("id", 1).maybeSingle();
     if (error) throw error;
     return data ?? EMPTY_MAP;
+  },
+});
+
+export const battleMapItemsQuery = queryOptions({
+  queryKey: ["battle_map_items"],
+  queryFn: async (): Promise<BattleMapItem[]> => {
+    const { data, error } = await supabase
+      .from("battle_map_items")
+      .select("*")
+      .order("created_at", { ascending: true });
+    if (error) throw error;
+    return data ?? [];
+  },
+});
+
+export const combatEventsQuery = queryOptions({
+  queryKey: ["combat_events"],
+  queryFn: async (): Promise<CombatEvent[]> => {
+    const { data, error } = await supabase
+      .from("combat_events")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(30);
+    if (error) throw error;
+    return data ?? [];
   },
 });
 

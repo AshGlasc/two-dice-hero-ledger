@@ -55,6 +55,13 @@ const EMPTY_FORM: {
   description: string;
   effectCondition: EffectCondition;
   defenseDebuff: number;
+  energyCost: number;
+  range: number;
+  reach: CustomAttack["reach"];
+  resistanceType: CustomAttack["resistanceType"];
+  damageType: CustomAttack["damageType"];
+  durationRounds: number;
+  damageFormula: string;
 } = {
   name: "",
   skillKey: "ferramenta_fisica",
@@ -63,6 +70,13 @@ const EMPTY_FORM: {
   description: "",
   effectCondition: "none",
   defenseDebuff: 0,
+  energyCost: 0,
+  range: 1,
+  reach: "corpo-a-corpo",
+  resistanceType: "Defesa",
+  damageType: "Físico",
+  durationRounds: 1,
+  damageFormula: "2d6",
 };
 
 export function AttacksSection({
@@ -123,6 +137,13 @@ export function AttacksSection({
       status,
       ...(attack.effectCondition !== undefined ? { effectCondition: attack.effectCondition } : {}),
       ...(attack.defenseDebuff !== undefined ? { defenseDebuff: attack.defenseDebuff } : {}),
+      energyCost: attack.energyCost,
+      range: attack.range,
+      reach: attack.reach,
+      resistanceType: attack.resistanceType,
+      damageType: attack.damageType,
+      durationRounds: attack.durationRounds,
+      damageFormula: attack.damageFormula,
     });
 
     mutations.updateWeapon.mutate({
@@ -242,6 +263,120 @@ export function AttacksSection({
               </label>
             </div>
 
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <label className="space-y-1">
+                <span className="label-caps text-muted-foreground">Custo de energia</span>
+                <Input
+                  type="number"
+                  min={0}
+                  value={form.energyCost}
+                  onChange={(event) =>
+                    setForm({ ...form, energyCost: Math.max(0, Number(event.target.value) || 0) })
+                  }
+                />
+              </label>
+              <label className="space-y-1">
+                <span className="label-caps text-muted-foreground">Alcance (casas)</span>
+                <Input
+                  type="number"
+                  min={1}
+                  value={form.range}
+                  onChange={(event) =>
+                    setForm({ ...form, range: Math.max(1, Number(event.target.value) || 1) })
+                  }
+                />
+              </label>
+              <label className="space-y-1">
+                <span className="label-caps text-muted-foreground">Fórmula de dano</span>
+                <Input
+                  value={form.damageFormula}
+                  onChange={(event) => setForm({ ...form, damageFormula: event.target.value })}
+                  placeholder="2d6+3"
+                />
+              </label>
+              <label className="space-y-1">
+                <span className="label-caps text-muted-foreground">Tipo de dano</span>
+                <Select
+                  value={form.damageType}
+                  onValueChange={(value) =>
+                    setForm({ ...form, damageType: value as CustomAttack["damageType"] })
+                  }
+                >
+                  <SelectTrigger aria-label="Tipo de dano customizado">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {["Físico", "Mágico", "Mental", "Social/Moral"].map((value) => (
+                      <SelectItem key={value} value={value}>
+                        {value}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </label>
+              <label className="space-y-1">
+                <span className="label-caps text-muted-foreground">Alcance</span>
+                <Select
+                  value={form.reach}
+                  onValueChange={(value) =>
+                    setForm({ ...form, reach: value as CustomAttack["reach"] })
+                  }
+                >
+                  <SelectTrigger aria-label="Tipo de alcance">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(
+                      [
+                        ["corpo-a-corpo", "Corpo a corpo"],
+                        ["distancia", "À distância"],
+                        ["adjacente", "Adjacente"],
+                        ["area", "Área"],
+                      ] as const
+                    ).map(([value, label]) => (
+                      <SelectItem key={value} value={value}>
+                        {label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </label>
+              <label className="space-y-1">
+                <span className="label-caps text-muted-foreground">Resistência do alvo</span>
+                <Select
+                  value={form.resistanceType}
+                  onValueChange={(value) =>
+                    setForm({ ...form, resistanceType: value as CustomAttack["resistanceType"] })
+                  }
+                >
+                  <SelectTrigger aria-label="Resistência do alvo">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {["Defesa", "Vontade", "Esquiva"].map((value) => (
+                      <SelectItem key={value} value={value}>
+                        {value}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </label>
+              <label className="space-y-1">
+                <span className="label-caps text-muted-foreground">Duração (rodadas)</span>
+                <Input
+                  type="number"
+                  min={0}
+                  value={form.durationRounds}
+                  onChange={(event) =>
+                    setForm({
+                      ...form,
+                      durationRounds: Math.max(0, Number(event.target.value) || 0),
+                    })
+                  }
+                />
+              </label>
+            </div>
+
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-2">
               <div className="flex flex-col items-center gap-1.5 rounded-lg border border-border bg-background/40 p-3">
                 <span className="label-caps flex items-center gap-1 text-muted-foreground">
@@ -270,7 +405,7 @@ export function AttacksSection({
                   value={form.diceCount}
                   min={1}
                   max={6}
-                  onChange={(v) => setForm({ ...form, diceCount: v })}
+                  onChange={(v) => setForm({ ...form, diceCount: v, damageFormula: `${v}d6` })}
                 />
                 <span className="text-[11px] text-muted-foreground">
                   Rola {form.diceCount}d6 + {getSkillLabel(form.skillKey)}
@@ -378,7 +513,8 @@ export function AttacksSection({
                           {atk.name}
                         </h3>
                         <p className="text-xs font-semibold text-primary">
-                          Skill: {getSkillLabel(atk.skillKey)} (+{skillBonus})
+                          Skill: {getSkillLabel(atk.skillKey)} (+{skillBonus}) · {atk.energyCost}{" "}
+                          energia
                         </p>
                       </div>
 
@@ -446,7 +582,14 @@ export function AttacksSection({
                       </span>
                       <span className="flex items-center gap-1 font-semibold text-muted-foreground">
                         <Dices className="size-3.5 text-primary" />
-                        {atk.diceCount}d6 + {skillBonus}
+                        {atk.damageFormula} + {skillBonus}
+                      </span>
+                      <span className="font-semibold text-sky-300">
+                        {atk.energyCost} energia · {atk.range} casa(s)
+                      </span>
+                      <span className="text-muted-foreground">
+                        {atk.reach} · {atk.damageType} · resist. {atk.resistanceType}
+                        {atk.durationRounds > 0 && ` · ${atk.durationRounds} rodada(s)`}
                       </span>
                     </div>
                   </div>

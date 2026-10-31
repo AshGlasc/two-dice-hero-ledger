@@ -1,4 +1,4 @@
-import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import {
   ChevronDown,
@@ -19,12 +19,14 @@ import { AttackDialog, type AttackTarget } from "@/components/rpg/AttackDialog";
 import { Avatar } from "@/components/rpg/AvatarUpload";
 import { BattleMap, type MapToken } from "@/components/rpg/BattleMap";
 import { IntimidateDialog } from "@/components/rpg/IntimidateDialog";
+import { ConvinceDialog } from "@/components/rpg/ConvinceDialog";
 import { MasterUnlockModal } from "@/components/rpg/MasterUnlockModal";
 import { QuickRollPanel } from "@/components/rpg/QuickRollPanel";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useMasterAuth } from "@/context/MasterAuthContext";
 import { useCombat } from "@/hooks/use-combat";
+import { supabase } from "@/integrations/supabase/client";
 import {
   ATTACK_SKILLS,
   CONDITIONS,
@@ -34,6 +36,7 @@ import {
   attackOptionsForCharacter,
   attackOptionsForMonster,
   canMoveThisTurn,
+  canMoveTo,
   changeHp,
   cellKey,
   consumeUse,
@@ -70,10 +73,13 @@ import { postCombatStartToDiscord } from "@/lib/discord-webhook";
 import { logRolls } from "@/lib/roll-log";
 import {
   battleMapQuery,
+  battleMapItemsQuery,
   combatQuery,
+  combatEventsQuery,
   groupQuery,
   monstersQuery,
   type Combatant,
+  type BattleMapItem,
 } from "@/lib/rpg-queries";
 import { roll2d6, rollD6 } from "@/lib/skills";
 import { cn } from "@/lib/utils";
@@ -98,12 +104,14 @@ export const Route = createFileRoute("/combate")({
       context.queryClient.ensureQueryData(groupQuery),
       context.queryClient.ensureQueryData(monstersQuery),
       context.queryClient.ensureQueryData(battleMapQuery),
+      context.queryClient.ensureQueryData(battleMapItemsQuery),
     ]),
   component: CombatPage,
 });
 
 function CombatPage() {
   const { data: raw } = useSuspenseQuery(combatQuery);
+  const { data: combatEvents = [] } = useQuery(combatEventsQuery);
   const combat = {
     ...raw,
     combatants: raw.combatants.map((x) => ({
@@ -115,11 +123,22 @@ function CombatPage() {
   const { data: group } = useSuspenseQuery(groupQuery);
   const { data: monsters } = useSuspenseQuery(monstersQuery);
   const { data: map } = useSuspenseQuery(battleMapQuery);
+  const { data: mapItems } = useSuspenseQuery(battleMapItemsQuery);
+  const { data: catalogItems = [] } = useQuery({
+    queryKey: ["catalog_items"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("catalog_items").select("*");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
   const { data: appSettings } = useQuery(appSettingsQuery);
   const { isMaster } = useMasterAuth();
   const c = useCombat();
+  const qc = useQueryClient();
   const [hpDelta, setHpDelta] = useState(1);
   const [quickRollOpen, setQuickRollOpen] = useState(false);
+  const [selectedCatalogItemId, setSelectedCatalogItemId] = useState("");
   const [turnEffect, setTurnEffect] = useState<{
     combatantId: string;
     name: string;
@@ -134,10 +153,94 @@ function CombatPage() {
   const fog = (map.fog ?? {}) as Fog;
   const myId = getPlayerCharacterId();
 
+  const energyValue = (characterId: string, key: "vigor" | "vontade") => {
+    const character = group.characters.find((item) => item.id === characterId);
+    if (!character) return 0;
+    return skillValueFor(group, characterId, key) + (character.energia_atual <= 0 ? 2 : 0);
+  };
+  const maxEnergy = (characterId: string) =>
+    Math.max(
+      1,
+      10 + 2 * energyValue(characterId, "vigor") + 2 * energyValue(characterId, "vontade"),
+    );
+  const persistEnergy = async (characterId: string, value: number) => {
+    const maximum = maxEnergy(characterId);
+    const { error } = await supabase
+      .from("characters")
+      .update({ energia_atual: Math.max(0, Math.min(maximum, value)), energia_maxima: maximum })
+      .eq("id", characterId);
+    if (error) throw error;
+    void qc.invalidateQueries({ queryKey: ["group"] });
+    void qc.invalidateQueries({ queryKey: ["sheet", characterId] });
+  };
+  const spendEnergy = async (attacker: Combatant, cost: number) => {
+    if (!attacker.character_id || cost <= 0) return { accepted: true, hpCost: 0 };
+    const character = group.characters.find((item) => item.id === attacker.character_id);
+    if (!character) return { accepted: false, hpCost: 0 };
+    const energy = Math.max(0, character.energia_atual);
+    const hpCost = Math.max(0, cost - energy);
+    if (
+      hpCost > 0 &&
+      !window.confirm(
+        `Energia insuficiente. Esforço Desesperado gastará ${energy} energia e causará ${hpCost} de dano direto aos PV. Continuar?`,
+      )
+    ) {
+      return { accepted: false, hpCost: 0 };
+    }
+    try {
+      await persistEnergy(attacker.character_id, Math.max(0, energy - cost));
+      return { accepted: true, hpCost };
+    } catch (error) {
+      toast.error(
+        `Não foi possível atualizar a energia: ${error instanceof Error ? error.message : "erro desconhecido"}`,
+      );
+      return { accepted: false, hpCost: 0 };
+    }
+  };
+  const recoverPassiveEnergy = (combatantId: string) => {
+    const combatant = combat.combatants.find((item) => item.id === combatantId);
+    if (combatant?.kind !== "character" || !combatant.character_id) return;
+    const character = group.characters.find((item) => item.id === combatant.character_id);
+    if (!character) return;
+    const vigor = energyValue(character.id, "vigor");
+    const will = energyValue(character.id, "vontade");
+    void persistEnergy(
+      character.id,
+      character.energia_atual + 1 + Math.floor((vigor + will) / 2),
+    ).catch((error: unknown) => {
+      console.error("Falha na regeneração passiva de energia.", error);
+      toast.error("Não foi possível regenerar a energia.");
+    });
+  };
+  const conditionDurationsOf = (combatant: Combatant): Record<string, number> => {
+    const raw = combatant.condition_durations;
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+    return Object.fromEntries(
+      Object.entries(raw).filter(
+        (entry): entry is [string, number] => typeof entry[1] === "number",
+      ),
+    );
+  };
+  const logCombatEvent = async (combatant: Combatant, description: string) => {
+    const { error } = await supabase.from("combat_events").insert({
+      character_id: combatant.character_id,
+      character_name: combatant.name,
+      description,
+    });
+    if (error) {
+      console.error("Não foi possível registrar a ação no log de combate.", error);
+      toast.error("A ação foi aplicada, mas não foi possível registrar no log.");
+      return;
+    }
+    void qc.invalidateQueries({ queryKey: ["combat_events"] });
+  };
+
   const occupied = () =>
     new Set(
       combat.combatants
-        .filter((x) => x.pos_x != null && x.pos_y != null)
+        .filter(
+          (x) => x.pos_x != null && x.pos_y != null && !(x.kind === "monster" && x.hp_current <= 0),
+        )
         .map((x) => cellKey(x.pos_x!, x.pos_y!)),
     );
 
@@ -208,7 +311,10 @@ function CombatPage() {
       })),
     );
     c.setState.mutate({ active: true, round: 1, current_combatant_id: sorted[0]?.id ?? null });
-    if (sorted[0]) prepareTurnEffect(sorted[0].id);
+    if (sorted[0]) {
+      prepareTurnEffect(sorted[0].id);
+      recoverPassiveEnergy(sorted[0].id);
+    }
     if (isMaster && sorted.length > 0) {
       void postCombatStartToDiscord(sorted).catch((error: unknown) => {
         console.error("Não foi possível publicar o início do combate no Discord.", error);
@@ -236,10 +342,49 @@ function CombatPage() {
   };
 
   const advanceTurn = () => {
+    const previous = combat.combatants.find((item) => item.id === state.current_combatant_id);
+    if (previous?.conditions.includes("Hesitante")) {
+      c.update.mutate([
+        {
+          id: previous.id,
+          patch: {
+            conditions: previous.conditions.filter((condition) => condition !== "Hesitante"),
+          },
+        },
+      ]);
+    }
     const next = nextTurn(slots, state.current_combatant_id, state.round);
     c.setState.mutate({ active: true, current_combatant_id: next.currentId, round: next.round });
+    if (next.round !== state.round) {
+      for (const combatant of combat.combatants) {
+        const durations = conditionDurationsOf(combatant);
+        const nextDurations: Record<string, number> = {};
+        const expired: string[] = [];
+        for (const [condition, remaining] of Object.entries(durations)) {
+          if (remaining <= 1) expired.push(condition);
+          else nextDurations[condition] = remaining - 1;
+        }
+        if (
+          expired.length > 0 ||
+          Object.keys(nextDurations).length !== Object.keys(durations).length
+        ) {
+          c.update.mutate([
+            {
+              id: combatant.id,
+              patch: {
+                conditions: combatant.conditions.filter(
+                  (condition) => !expired.includes(condition),
+                ),
+                condition_durations: nextDurations,
+              },
+            },
+          ]);
+        }
+      }
+    }
     if (next.currentId) {
       prepareTurnEffect(next.currentId);
+      recoverPassiveEnergy(next.currentId);
       // "Defender" dura até a vez de quem se defendeu chegar de novo.
       const upNext = combat.combatants.find((item) => item.id === next.currentId);
       if (upNext?.defending) c.update.mutate([{ id: upNext.id, patch: { defending: false } }]);
@@ -276,26 +421,22 @@ function CombatPage() {
   const intimidationTargetsOf = (x: Combatant): AttackTarget[] =>
     order
       .filter((target) => {
-        if (
-          target.id === x.id ||
-          target.kind === x.kind ||
-          target.hp_current <= 0 ||
-          target.pos_x == null ||
-          target.pos_y == null
-        ) {
+        if (target.id === x.id || target.kind === x.kind || target.hp_current <= 0) {
           return false;
         }
         const distance = distanceBetween(x, target);
         return (
-          distance !== null &&
-          distance <= MOVEMENT_RANGE &&
-          tokenVisible(
-            fog,
-            target.pos_x,
-            target.pos_y,
-            isMaster,
-            target.kind === "character" && target.character_id === myId,
-          )
+          distance === null ||
+          (distance <= MOVEMENT_RANGE &&
+            (target.pos_x == null ||
+              target.pos_y == null ||
+              tokenVisible(
+                fog,
+                target.pos_x,
+                target.pos_y,
+                isMaster,
+                target.kind === "character" && target.character_id === myId,
+              )))
         );
       })
       .map((target) => ({
@@ -314,6 +455,8 @@ function CombatPage() {
   /** Por que o ⚔️ está bloqueado agora (null = liberado). O mestre age a qualquer hora. */
   const attackBlockedReason = (x: Combatant) => {
     if (x.kind === "monster" && (x.hp_current ?? 0) <= 0) return `${x.name} está fora de combate.`;
+    if (x.conditions.includes("Hostilidade Quebrada"))
+      return "O alvo perdeu a intenção hostil até sofrer dano direto.";
     if (state.active && !isMaster && state.current_combatant_id !== x.id) {
       return "Aguarde a sua vez para agir.";
     }
@@ -324,17 +467,75 @@ function CombatPage() {
    * Resolve um ataque: gasta o uso da arma, rola para acertar e, se acertou sem crítico, o alvo
    * (com Velocidade de Reação) rola a esquiva. Esquiva ≥ ataque anula o dano.
    */
-  const resolveAttack = (attacker: Combatant, option: AttackOption, targetId: string) => {
+  const resolveAttack = async (
+    attacker: Combatant,
+    option: AttackOption,
+    targetId: string,
+    areaSubattack = false,
+    skipRange = false,
+    consumeAction = true,
+  ) => {
     const target = combat.combatants.find((t) => t.id === targetId);
-    if (!target) return;
+    if (!target || target.hp_current <= 0) return;
 
-    // Trava estrita de alcance no grid de combate
     const dist = distanceBetween(attacker, target);
-    if (!isMaster && dist !== null && dist > option.range) {
+    if (!skipRange && !isMaster && dist !== null && dist > option.range) {
       toast.error(
         `Alvo fora de alcance! Alcance máximo: ${option.range} casa(s), distância atual: ${dist}.`,
       );
       return;
+    }
+
+    if (option.reach === "area" && !areaSubattack) {
+      const payment = await spendEnergy(attacker, option.energyCost ?? 0);
+      if (!payment.accepted) return;
+      if (payment.hpCost > 0) {
+        c.update.mutate([
+          {
+            id: attacker.id,
+            patch: {
+              hp_current: changeHp(attacker.hp_current ?? 0, -payment.hpCost, attacker.hp_max ?? 0),
+            },
+          },
+        ]);
+      }
+      const affected = combat.combatants.filter((candidate) => {
+        if (candidate.hp_current <= 0 || candidate.id === attacker.id) return false;
+        if (candidate.kind === attacker.kind) return false;
+        if (candidate.id === target.id) return true;
+        const areaDistance = distanceBetween(target, candidate);
+        return areaDistance !== null && areaDistance <= 1;
+      });
+      for (const candidate of affected) {
+        await resolveAttack(
+          attacker,
+          { ...option, energyCost: 0 },
+          candidate.id,
+          true,
+          true,
+          false,
+        );
+      }
+      if (consumeAction && state.active && state.current_combatant_id === attacker.id)
+        advanceTurn();
+      return;
+    }
+
+    const energyPayment = await spendEnergy(attacker, option.energyCost ?? 0);
+    if (!energyPayment.accepted) return;
+    if (energyPayment.hpCost > 0) {
+      c.update.mutate([
+        {
+          id: attacker.id,
+          patch: {
+            hp_current: changeHp(
+              attacker.hp_current ?? 0,
+              -energyPayment.hpCost,
+              attacker.hp_max ?? 0,
+            ),
+          },
+        },
+      ]);
     }
 
     if (option.weaponId && (option.usesMax ?? 0) > 0) {
@@ -358,10 +559,23 @@ function CombatPage() {
     const attackerPenalty = conditionPenalty(attacker.conditions);
     const targetPenalty = conditionPenalty(target.conditions);
     const defendBonus = target.defending ? DEFEND_BONUS : 0;
+    const resistanceSkill =
+      option.kind === "custom" && option.resistanceType === "Vontade"
+        ? "vontade"
+        : option.kind === "custom" && option.resistanceType === "Esquiva"
+          ? DODGE_SKILL
+          : null;
+    const resistanceValue =
+      resistanceSkill && target.character_id
+        ? skillValueFor(group, target.character_id, resistanceSkill)
+        : target.defense;
     const defense =
-      target.defense == null
+      resistanceValue == null
         ? null
-        : Math.max(2, target.defense + defendBonus - targetPenalty + masterBonus);
+        : Math.max(
+            2,
+            resistanceValue + target.temporary_shield + defendBonus - targetPenalty + masterBonus,
+          );
     if (attackerPenalty || targetPenalty) {
       toast(`Penalidades aplicadas: ataque −${attackerPenalty}, defesa do alvo −${targetPenalty}.`);
     }
@@ -373,7 +587,13 @@ function CombatPage() {
 
     // Esquiva: só em acerto comum (duplo 6 nunca é esquivado) e só quem tem a skill (personagens).
     let dodgeRoll: ReturnType<typeof roll2d6> | null = null;
-    if (hit && !crit && target.kind === "character" && target.character_id) {
+    if (
+      hit &&
+      !crit &&
+      !(option.kind === "custom" && option.resistanceType === "Esquiva") &&
+      target.kind === "character" &&
+      target.character_id
+    ) {
       dodgeRoll = roll2d6(
         skillValueFor(group, target.character_id, DODGE_SKILL) + defendBonus - targetPenalty,
         null,
@@ -433,27 +653,44 @@ function CombatPage() {
         : []),
     ]);
 
-    if (!hit) return;
+    if (!hit) {
+      if (consumeAction && state.active && state.current_combatant_id === attacker.id)
+        advanceTurn();
+      toast(`${attacker.name} errou; a ação foi consumida.`);
+      return;
+    }
     if (dodged) {
       toast(`${target.name} esquivou do ataque!`);
+      if (consumeAction && state.active && state.current_combatant_id === attacker.id)
+        advanceTurn();
       return;
     }
 
+    const shieldAbsorbed = Math.min(target.temporary_shield, damage);
+    const durationMap = conditionDurationsOf(target);
+    if (conditionAdded && option.durationRounds != null && option.durationRounds > 0) {
+      durationMap[conditionAdded] = option.durationRounds;
+    }
     c.update.mutate([
       {
         id: target.id,
         patch: {
-          hp_current: changeHp(target.hp_current, -damage, target.hp_max),
-          ...(conditionAdded ? { conditions: nextConditions } : {}),
+          hp_current: changeHp(target.hp_current, -(damage - shieldAbsorbed), target.hp_max),
+          temporary_shield: Math.max(0, target.temporary_shield - shieldAbsorbed),
+          conditions: nextConditions.filter((condition) => condition !== "Hostilidade Quebrada"),
+          condition_durations: durationMap,
           ...(defenseDebuffed > 0 ? { defense: nextDefense } : {}),
         },
       },
     ]);
 
-    toast.success(`${attacker.name} acertou ${target.name}: −${damage} de vida${effectsText}.`);
+    toast.success(
+      `${attacker.name} acertou ${target.name}: −${damage - shieldAbsorbed} PV${shieldAbsorbed ? ` (${shieldAbsorbed} absorvido pelo escudo)` : ""}${effectsText}.`,
+    );
+    if (consumeAction && state.active && state.current_combatant_id === attacker.id) advanceTurn();
   };
 
-  const resolveIntimidation = (attacker: Combatant, targetId: string) => {
+  const resolveIntimidation = async (attacker: Combatant, targetId: string) => {
     const target = combat.combatants.find((item) => item.id === targetId);
     if (
       !target ||
@@ -462,6 +699,18 @@ function CombatPage() {
       target.kind === attacker.kind
     ) {
       return;
+    }
+    const payment = await spendEnergy(attacker, 1);
+    if (!payment.accepted) return;
+    if (payment.hpCost > 0) {
+      c.update.mutate([
+        {
+          id: attacker.id,
+          patch: {
+            hp_current: changeHp(attacker.hp_current ?? 0, -payment.hpCost, attacker.hp_max ?? 0),
+          },
+        },
+      ]);
     }
 
     const attackerModifier =
@@ -479,10 +728,12 @@ function CombatPage() {
         : (target.defense ?? 0);
     const attackerRoll = roll2d6(attackerModifier, null);
     const defenderRoll = roll2d6(defenderModifier, null);
-    const succeeded = attackerRoll.total > defenderRoll.total;
+    const succeeded =
+      attackerRoll.outcome === "critical-success" || attackerRoll.total > defenderRoll.total;
     const targetName = target.name;
 
     if (!succeeded) {
+      void logCombatEvent(attacker, `${attacker.name} tentou intimidar ${targetName}; falhou.`);
       void logRolls([
         {
           characterId: attacker.character_id,
@@ -526,6 +777,7 @@ function CombatPage() {
     const message = retreat
       ? `${attacker.name} intimidou ${targetName}, aplicando Amedrontado e forçando recuo!`
       : `${attacker.name} intimidou ${targetName}, aplicando Amedrontado; recuo bloqueado.`;
+    void logCombatEvent(attacker, message);
     void logRolls([
       {
         characterId: attacker.character_id,
@@ -553,16 +805,366 @@ function CombatPage() {
     toast.success(message);
   };
 
+  const resolveConvince = async (attacker: Combatant, targetId: string) => {
+    const target = combat.combatants.find((item) => item.id === targetId);
+    if (
+      !target ||
+      attacker.kind !== "character" ||
+      !attacker.character_id ||
+      target.kind === attacker.kind ||
+      target.hp_current <= 0
+    )
+      return;
+    const payment = await spendEnergy(attacker, 2);
+    if (!payment.accepted) return;
+    if (payment.hpCost > 0) {
+      c.update.mutate([
+        {
+          id: attacker.id,
+          patch: {
+            hp_current: changeHp(attacker.hp_current ?? 0, -payment.hpCost, attacker.hp_max ?? 0),
+          },
+        },
+      ]);
+    }
+    const empathy = skillValueFor(group, attacker.character_id, "empatia");
+    const suggestion = skillValueFor(group, attacker.character_id, "sugestao");
+    const attackerRoll = roll2d6(
+      empathy + suggestion - conditionPenalty(attacker.conditions),
+      null,
+    );
+    const targetCharacterId = target.character_id;
+    const defense =
+      target.kind === "character" && targetCharacterId
+        ? Math.max(
+            skillValueFor(group, targetCharacterId, "vontade"),
+            skillValueFor(group, targetCharacterId, "compostura"),
+          ) - conditionPenalty(target.conditions)
+        : (target.defense ?? 0);
+    const defenderRoll = roll2d6(defense, null);
+    const success =
+      attackerRoll.outcome === "critical-success" || attackerRoll.total > defenderRoll.total;
+    const critical = success && attackerRoll.outcome === "critical-success";
+    const resultLabel = success
+      ? critical
+        ? `${attacker.name} convenceu ${target.name}; o alvo perdeu a intenção hostil até sofrer dano.`
+        : `${attacker.name} deixou ${target.name} Hesitante por uma rodada.`
+      : `${target.name} resistiu à tentativa de convencimento.`;
+    void logRolls([
+      {
+        characterId: attacker.character_id,
+        characterName: attacker.name,
+        label: resultLabel,
+        result: attackerRoll,
+      },
+      {
+        characterId: targetCharacterId,
+        characterName: target.name,
+        label: `${target.name} contestou o convencimento.`,
+        result: defenderRoll,
+      },
+    ]);
+    if (success) {
+      const appliedCondition = critical ? "Hostilidade Quebrada" : "Hesitante";
+      if (!target.conditions.includes(appliedCondition)) {
+        c.update.mutate([
+          { id: target.id, patch: { conditions: [...target.conditions, appliedCondition] } },
+        ]);
+      }
+      toast.success(resultLabel);
+    } else {
+      toast(`${resultLabel} Ação e energia consumidas.`);
+    }
+    void logCombatEvent(attacker, resultLabel);
+    if (state.active && state.current_combatant_id === attacker.id) advanceTurn();
+  };
+
   const defend = (x: Combatant) => {
     c.update.mutate([{ id: x.id, patch: { defending: true } }]);
     toast(`${x.name} se defende: +${DEFEND_BONUS} em defesa e esquiva até o próximo turno.`);
+    if (state.active && state.current_combatant_id === x.id) advanceTurn();
   };
 
   /** Casas por turno: Motor do personagem; monstro sem Motor definido anda 3. */
-  const moveRangeOf = (x: Combatant) =>
-    x.kind === "character"
-      ? moveRangeFor(group.characters.find((ch) => ch.id === x.character_id)?.motor)
-      : monsterMoveRange(monsters.find((m) => m.id === x.monster_id)?.motor);
+  const moveRangeOf = (x: Combatant) => {
+    if (x.kind !== "character")
+      return monsterMoveRange(monsters.find((m) => m.id === x.monster_id)?.motor);
+    const character = group.characters.find((ch) => ch.id === x.character_id);
+    return Math.max(1, moveRangeFor(character?.motor) - (character?.energia_atual === 0 ? 1 : 0));
+  };
+
+  const recoverBreath = async (combatant: Combatant) => {
+    if (combatant.kind !== "character" || !combatant.character_id) return;
+    const character = group.characters.find((item) => item.id === combatant.character_id);
+    if (!character) return;
+    try {
+      await persistEnergy(
+        character.id,
+        character.energia_atual + 3 + energyValue(character.id, "vigor"),
+      );
+      toast.success(`${character.name} recuperou o fôlego.`);
+      void logCombatEvent(combatant, `${character.name} recuperou o fôlego.`);
+      if (state.active && state.current_combatant_id === combatant.id) advanceTurn();
+    } catch (error) {
+      toast.error(
+        `Não foi possível recuperar energia: ${error instanceof Error ? error.message : "erro desconhecido"}`,
+      );
+    }
+  };
+
+  const consumeItemInCombat = async (
+    combatant: Combatant,
+    item: (typeof group.backpack)[number],
+  ) => {
+    if (combatant.kind !== "character" || !combatant.character_id || item.quantity <= 0) return;
+    const character = group.characters.find((entry) => entry.id === combatant.character_id);
+    if (!character) return;
+    const nextQuantity = item.quantity - 1;
+    const inventoryUpdate =
+      nextQuantity > 0
+        ? await supabase
+            .from("backpack_items")
+            .update({ quantity: nextQuantity })
+            .eq("id", item.id)
+            .eq("quantity", item.quantity)
+            .select("id")
+            .maybeSingle()
+        : await supabase
+            .from("backpack_items")
+            .delete()
+            .eq("id", item.id)
+            .eq("quantity", item.quantity)
+            .select("id")
+            .maybeSingle();
+    if (inventoryUpdate.error) {
+      toast.error(`Não foi possível consumir o item: ${inventoryUpdate.error.message}`);
+      return;
+    }
+    if (!inventoryUpdate.data) {
+      toast.error("O item já foi usado ou alterado; atualize o inventário.");
+      void qc.invalidateQueries({ queryKey: ["group"] });
+      return;
+    }
+    const energyMax = maxEnergy(character.id);
+    const nextEnergy = Math.min(energyMax, character.energia_atual + item.restore_energy);
+    const nextSanity = Math.min(
+      character.sanity_max,
+      character.sanity_current + (item.heal_sanity ?? 0),
+    );
+    const { error: characterError } = await supabase
+      .from("characters")
+      .update({
+        energia_atual: nextEnergy,
+        energia_maxima: energyMax,
+        sanity_current: nextSanity,
+      })
+      .eq("id", character.id);
+    if (characterError) {
+      const restoreInventory =
+        nextQuantity > 0
+          ? await supabase
+              .from("backpack_items")
+              .update({ quantity: item.quantity })
+              .eq("id", item.id)
+          : await supabase.from("backpack_items").insert({ ...item, quantity: item.quantity });
+      if (restoreInventory.error) {
+        console.error(
+          "Falha ao restaurar item após erro na aplicação do efeito.",
+          restoreInventory.error,
+        );
+      }
+      toast.error(`O efeito do consumível falhou: ${characterError.message}`);
+      return;
+    }
+    const shield = Math.max(0, item.temp_shield ?? 0);
+    c.update.mutate([
+      {
+        id: combatant.id,
+        patch: {
+          hp_current: changeHp(combatant.hp_current ?? 0, item.heal_hp ?? 0, combatant.hp_max ?? 0),
+          temporary_shield: combatant.temporary_shield + shield,
+        },
+      },
+    ]);
+    void qc.invalidateQueries({ queryKey: ["group"] });
+    void qc.invalidateQueries({ queryKey: ["sheet", character.id] });
+    toast.success(`${character.name} usou ${item.name}.`);
+    void logCombatEvent(combatant, `${character.name} usou ${item.name}.`);
+    if (state.active && state.current_combatant_id === combatant.id) advanceTurn();
+  };
+
+  const placeCatalogItem = async () => {
+    const item = catalogItems.find((entry) => entry.id === selectedCatalogItemId);
+    if (!item) return;
+    const unavailable = occupied();
+    for (const mapItem of mapItems) unavailable.add(cellKey(mapItem.x, mapItem.y));
+    const cell = findFreeCell(map.cols, map.rows, terrain, unavailable, "left");
+    if (!cell) {
+      toast.error("Não há casas livres para colocar o item.");
+      return;
+    }
+    const { error } = await supabase.from("battle_map_items").insert({
+      catalog_item_id: item.id,
+      name: item.name,
+      icon: "📦",
+      x: cell.x,
+      y: cell.y,
+      movable: item.is_movable,
+      collectible: item.category !== "scenery",
+      collection_difficulty: item.requires_roll_to_interact ? item.interaction_difficulty : null,
+      collection_skill_key: item.requires_roll_to_interact ? item.interaction_skill_key : null,
+    });
+    if (error) {
+      toast.error(`Não foi possível colocar o item: ${error.message}`);
+      return;
+    }
+    void qc.invalidateQueries({ queryKey: ["battle_map_items"] });
+    toast.success(`${item.name} colocado no mapa.`);
+  };
+
+  const pickupMapItem = async (itemId: string, tokenId: string) => {
+    const item = mapItems.find((entry) => entry.id === itemId);
+    const combatant = combat.combatants.find((entry) => entry.id === tokenId);
+    if (!item || !combatant || combatant.kind !== "character" || !combatant.character_id) return;
+    if (
+      combatant.pos_x == null ||
+      combatant.pos_y == null ||
+      gridDistance(combatant.pos_x, combatant.pos_y, item.x, item.y) > 1
+    ) {
+      toast.error("É preciso estar adjacente ao item para pegá-lo.");
+      return;
+    }
+    if (!mine(combatant)) {
+      toast.error("Você não pode pegar itens com esse personagem.");
+      return;
+    }
+    if (state.active && !isMaster && state.current_combatant_id !== combatant.id) {
+      toast.error("Aguarde seu turno para pegar itens.");
+      return;
+    }
+    let catalogItem = catalogItems.find((entry) => entry.id === item.catalog_item_id);
+    if (item.catalog_item_id && !catalogItem) {
+      const { data, error } = await supabase
+        .from("catalog_items")
+        .select("*")
+        .eq("id", item.catalog_item_id)
+        .maybeSingle();
+      if (error) {
+        toast.error(`Não foi possível carregar o item: ${error.message}`);
+        return;
+      }
+      catalogItem = data ?? undefined;
+    }
+    if (item.collection_difficulty != null) {
+      const skill = skillValueFor(
+        group,
+        combatant.character_id,
+        item.collection_skill_key ?? "instinto",
+      );
+      const roll = roll2d6(skill, item.collection_difficulty);
+      await logRolls([
+        {
+          characterId: combatant.character_id,
+          characterName: combatant.name,
+          label: `Coleta de ${item.name}`,
+          result: roll,
+        },
+      ]);
+      if (roll.outcome !== "success" && roll.outcome !== "critical-success") {
+        toast("O teste de coleta falhou; o item continua no mapa.");
+        return;
+      }
+    }
+    const { data: removedItem, error: removeError } = await supabase
+      .from("battle_map_items")
+      .delete()
+      .eq("id", item.id)
+      .select("id")
+      .maybeSingle();
+    if (removeError || !removedItem) {
+      toast.error(
+        removeError
+          ? `Não foi possível pegar o item: ${removeError.message}`
+          : "O item já foi coletado.",
+      );
+      return;
+    }
+    const { error: insertError } = await supabase.from("backpack_items").insert({
+      character_id: combatant.character_id,
+      catalog_item_id: catalogItem?.id ?? item.catalog_item_id,
+      name: catalogItem?.name ?? item.name,
+      notes: catalogItem?.description ?? "",
+      category: catalogItem?.category ?? "equipment",
+      quantity: 1,
+      skill_bonuses: catalogItem?.skill_bonuses ?? {},
+      heal_hp: catalogItem?.heal_hp ?? 0,
+      heal_sanity: catalogItem?.heal_sanity ?? 0,
+      restore_energy: catalogItem?.restore_energy ?? 0,
+      temp_shield: catalogItem?.temp_shield ?? 0,
+    });
+    if (insertError) {
+      const { error: restoreError } = await supabase.from("battle_map_items").insert(item);
+      if (restoreError)
+        console.error("Não foi possível restaurar item no mapa após falha.", restoreError);
+      toast.error(`Não foi possível guardar o item: ${insertError.message}`);
+      void qc.invalidateQueries({ queryKey: ["battle_map_items"] });
+      return;
+    }
+    void qc.invalidateQueries({ queryKey: ["group"] });
+    void qc.invalidateQueries({ queryKey: ["battle_map_items"] });
+    toast.success(`${item.name} guardado na mochila.`);
+    void logCombatEvent(combatant, `${combatant.name} pegou ${item.name}.`);
+  };
+
+  const pushMapItem = async (itemId: string, tokenId: string) => {
+    const item = mapItems.find((entry) => entry.id === itemId);
+    const combatant = combat.combatants.find((entry) => entry.id === tokenId);
+    if (!item || !item.movable || !combatant?.character_id) return;
+    if (!mine(combatant) || combatant.pos_x == null || combatant.pos_y == null) return;
+    if (state.active && !isMaster && state.current_combatant_id !== combatant.id) {
+      toast.error("Aguarde seu turno para empurrar objetos.");
+      return;
+    }
+    if (gridDistance(combatant.pos_x, combatant.pos_y, item.x, item.y) > 1) {
+      toast.error("É preciso estar adjacente ao objeto para empurrá-lo.");
+      return;
+    }
+    const dx = Math.sign(item.x - combatant.pos_x);
+    const dy = Math.sign(item.y - combatant.pos_y);
+    if (dx === 0 && dy === 0) {
+      toast.error("Afaste-se do objeto antes de empurrá-lo.");
+      return;
+    }
+    const x = item.x + dx;
+    const y = item.y + dy;
+    const occupiedCells = occupied();
+    for (const other of mapItems)
+      if (other.id !== item.id) occupiedCells.add(cellKey(other.x, other.y));
+    if (!canMoveTo(x, y, map.cols, map.rows, terrain, occupiedCells)) {
+      toast.error("Não há espaço livre para empurrar o objeto.");
+      return;
+    }
+    const payment = await spendEnergy(combatant, 1);
+    if (!payment.accepted) return;
+    if (payment.hpCost > 0) {
+      c.update.mutate([
+        {
+          id: combatant.id,
+          patch: {
+            hp_current: changeHp(combatant.hp_current ?? 0, -payment.hpCost, combatant.hp_max ?? 0),
+          },
+        },
+      ]);
+    }
+    const { error } = await supabase.from("battle_map_items").update({ x, y }).eq("id", item.id);
+    if (error) {
+      toast.error(`Não foi possível empurrar o objeto: ${error.message}`);
+      return;
+    }
+    void qc.invalidateQueries({ queryKey: ["battle_map_items"] });
+    toast.success(`${item.name} foi empurrado.`);
+    void logCombatEvent(combatant, `${combatant.name} empurrou ${item.name}.`);
+  };
 
   /** Andar conta como o passo da rodada; colocar no mapa (ou tirar dele) não conta. */
   const moveCombatant = (id: string, x: number | null, y: number | null) => {
@@ -688,10 +1290,38 @@ function CombatPage() {
             combatActive={state.active}
             currentCombatantId={state.current_combatant_id}
             onMove={moveCombatant}
+            items={mapItems}
+            onPickItem={(itemId, tokenId) => void pickupMapItem(itemId, tokenId)}
+            onPushItem={(itemId, tokenId) => void pushMapItem(itemId, tokenId)}
           />
         </div>
 
         <aside className="space-y-2">
+          {isMaster && (
+            <div className="flex gap-2 rounded border border-border bg-card p-2">
+              <select
+                className="h-9 min-w-0 flex-1 rounded-md border border-border bg-background px-2 text-sm"
+                value={selectedCatalogItemId}
+                onChange={(event) => setSelectedCatalogItemId(event.target.value)}
+                aria-label="Item para colocar no mapa"
+              >
+                <option value="">Escolha um item do catálogo</option>
+                {catalogItems.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!selectedCatalogItemId}
+                onClick={() => void placeCatalogItem()}
+              >
+                Colocar
+              </Button>
+            </div>
+          )}
           <Collapsible open={quickRollOpen} onOpenChange={setQuickRollOpen}>
             <CollapsibleTrigger asChild>
               <Button variant="outline" size="sm" className="w-full justify-between">
@@ -707,6 +1337,21 @@ function CombatPage() {
               <QuickRollPanel group={group} />
             </CollapsibleContent>
           </Collapsible>
+          <section className="space-y-2 rounded-lg border border-border bg-card p-3">
+            <h2 className="label-caps text-primary">Registro de combate</h2>
+            {combatEvents.length === 0 ? (
+              <p className="text-xs text-muted-foreground">Nenhuma ação especial registrada.</p>
+            ) : (
+              <ol className="max-h-48 space-y-2 overflow-y-auto">
+                {combatEvents.map((event) => (
+                  <li key={event.id} className="border-l-2 border-primary/40 pl-2 text-xs">
+                    <p className="font-semibold">{event.character_name}</p>
+                    <p className="text-muted-foreground">{event.description}</p>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </section>
           {isMaster && (
             <div className="flex items-center gap-2 text-sm">
               <span className="label-caps">Dano/cura:</span>
@@ -761,14 +1406,23 @@ function CombatPage() {
                         title={
                           cd === "Amedrontado"
                             ? `${cd}: −2 em rolagens de combate`
-                            : cd === "Atordoado" || cd === "Caído"
-                              ? `${cd}: −2 em ataque e defesa`
-                              : cd
+                            : cd === "Hesitante"
+                              ? `${cd}: −2 no próximo ataque e sem reações`
+                              : cd === "Hostilidade Quebrada"
+                                ? `${cd}: não age hostilmente até sofrer dano`
+                                : cd === "Atordoado" || cd === "Caído"
+                                  ? `${cd}: −2 em ataque e defesa`
+                                  : cd
                         }
                       >
                         {conditionEmoji(cd)}
                       </span>
                     ))}
+                    {x.kind === "character" &&
+                      group.characters.find((character) => character.id === x.character_id)
+                        ?.energia_atual === 0 && (
+                        <span title="Exausto: −2 em testes e −1 quadrado de movimento">⚡</span>
+                      )}
                     {x.defending && (
                       <span title={`Defendendo: +${DEFEND_BONUS} em defesa e esquiva`}>🛡️</span>
                     )}
@@ -798,12 +1452,20 @@ function CombatPage() {
                       onDefend={() => defend(x)}
                     />
                     {x.kind === "character" && x.character_id && (
-                      <IntimidateDialog
-                        attackerName={x.name}
-                        targets={intimidationTargetsOf(x)}
-                        disabled={!!attackBlockedReason(x) || isCollapsed(x)}
-                        onIntimidate={(targetId) => resolveIntimidation(x, targetId)}
-                      />
+                      <>
+                        <IntimidateDialog
+                          attackerName={x.name}
+                          targets={intimidationTargetsOf(x)}
+                          disabled={!!attackBlockedReason(x) || isCollapsed(x)}
+                          onIntimidate={(targetId) => resolveIntimidation(x, targetId)}
+                        />
+                        <ConvinceDialog
+                          attackerName={x.name}
+                          targets={intimidationTargetsOf(x)}
+                          disabled={!!attackBlockedReason(x) || isCollapsed(x)}
+                          onConvince={(targetId) => resolveConvince(x, targetId)}
+                        />
+                      </>
                     )}
                   </>
                 )}
@@ -824,6 +1486,63 @@ function CombatPage() {
                   Colapso de Sanidade — ataques bloqueados
                 </p>
               )}
+              {x.kind === "character" &&
+                x.character_id &&
+                (() => {
+                  const character = group.characters.find((entry) => entry.id === x.character_id);
+                  if (!character) return null;
+                  const maximum = maxEnergy(character.id);
+                  const current = Math.min(maximum, character.energia_atual);
+                  const consumables = group.backpack.filter(
+                    (item) =>
+                      item.character_id === character.id &&
+                      item.category === "consumable" &&
+                      item.quantity > 0,
+                  );
+                  return (
+                    <div className="mt-2 space-y-2 rounded border border-sky-400/30 bg-sky-950/10 p-2">
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="w-16 text-xs font-bold uppercase text-sky-300">
+                          Energia
+                        </span>
+                        <div className="h-2 flex-1 overflow-hidden rounded bg-muted">
+                          <div
+                            className="h-full bg-sky-400"
+                            style={{ width: `${(current / maximum) * 100}%` }}
+                          />
+                        </div>
+                        <span className="w-16 text-right font-bold text-sky-200">
+                          {current}/{maximum}
+                        </span>
+                      </div>
+                      {mine(x) && (
+                        <div className="flex flex-wrap gap-1.5">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 border-sky-400/30 text-xs"
+                            disabled={!!attackBlockedReason(x)}
+                            onClick={() => void recoverBreath(x)}
+                          >
+                            Recuperar Fôlego (+{3 + energyValue(character.id, "vigor")})
+                          </Button>
+                          {consumables.map((item) => (
+                            <Button
+                              key={item.id}
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs"
+                              disabled={!!attackBlockedReason(x)}
+                              onClick={() => void consumeItemInCombat(x, item)}
+                            >
+                              Usar {item.name} ×{item.quantity}
+                            </Button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               {/* PV e condições à mão: só o mestre. Jogador só vê; o PV muda pelos ataques e esquivas. */}
               {!isMaster ? (
                 <div className="mt-2 flex items-center gap-2">

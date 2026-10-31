@@ -100,6 +100,7 @@ export function AttackDialog({
                     </span>
                     <span className="shrink-0 text-xs text-muted-foreground">
                       +{o.hitBonus} · {dmgText(o.damage)} · {o.range} casa{o.range > 1 ? "s" : ""}
+                      {(o.energyCost ?? 0) > 0 && ` · ${o.energyCost} energia`}
                       {(o.usesMax ?? 0) > 0 && (
                         <span className={cn("ml-1", empty && "text-destructive")}>
                           · {o.usesCurrent}/{o.usesMax}
@@ -119,7 +120,7 @@ export function AttackDialog({
                 )}
                 {targets.map((t) => {
                   const inRange = t.distance !== null && t.distance <= opt.range;
-                  const allowed = inRange || canIgnoreRange;
+                  const allowed = inRange || canIgnoreRange || t.distance === null;
                   return (
                     <button
                       key={t.id}
@@ -144,7 +145,7 @@ export function AttackDialog({
                       <span className="flex-1 font-semibold">{t.name}</span>
                       <span className="text-xs text-muted-foreground">
                         {t.distance === null
-                          ? "fora do mapa — Fora de alcance"
+                          ? "sem posição no grid"
                           : inRange
                             ? `${t.distance} casa${t.distance > 1 ? "s" : ""}`
                             : `${t.distance} casa${t.distance > 1 ? "s" : ""} — Fora de alcance${canIgnoreRange ? " (mestre)" : ""}`}

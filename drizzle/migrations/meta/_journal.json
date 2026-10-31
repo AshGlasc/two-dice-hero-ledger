@@ -85,6 +85,13 @@
       "when": 1793408400000,
       "tag": "0011_sanity_whispers",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1793412000000,
+      "tag": "0012_combat_energy_inventory",
+      "breakpoints": true
     }
   ]
 }

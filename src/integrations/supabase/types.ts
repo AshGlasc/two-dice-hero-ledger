@@ -45,6 +45,7 @@ export type Database = {
           is_movable: boolean;
           name: string;
           range: number | null;
+          restore_energy: number;
           requires_roll_to_interact: boolean;
           skill_bonuses: Json;
           skill_key: string | null;
@@ -66,6 +67,7 @@ export type Database = {
           is_movable?: boolean;
           name: string;
           range?: number | null;
+          restore_energy?: number;
           requires_roll_to_interact?: boolean;
           skill_bonuses?: Json;
           skill_key?: string | null;
@@ -87,6 +89,7 @@ export type Database = {
           is_movable?: boolean;
           name?: string;
           range?: number | null;
+          restore_energy?: number;
           requires_roll_to_interact?: boolean;
           skill_bonuses?: Json;
           skill_key?: string | null;
@@ -98,30 +101,48 @@ export type Database = {
       backpack_items: {
         Row: {
           character_id: string;
+          catalog_item_id: string | null;
+          category: string;
           created_at: string;
+          heal_hp: number;
+          heal_sanity: number;
           id: string;
           name: string;
           notes: string;
           quantity: number;
+          restore_energy: number;
           skill_bonuses: Json;
+          temp_shield: number;
         };
         Insert: {
           character_id: string;
+          catalog_item_id?: string | null;
+          category?: string;
           created_at?: string;
+          heal_hp?: number;
+          heal_sanity?: number;
           id?: string;
           name: string;
           notes?: string;
           quantity?: number;
+          restore_energy?: number;
           skill_bonuses?: Json;
+          temp_shield?: number;
         };
         Update: {
           character_id?: string;
+          catalog_item_id?: string | null;
+          category?: string;
           created_at?: string;
+          heal_hp?: number;
+          heal_sanity?: number;
           id?: string;
           name?: string;
           notes?: string;
           quantity?: number;
+          restore_energy?: number;
           skill_bonuses?: Json;
+          temp_shield?: number;
         };
         Relationships: [
           {
@@ -165,6 +186,56 @@ export type Database = {
           updated_at?: string;
         };
         Relationships: [];
+      };
+      battle_map_items: {
+        Row: {
+          catalog_item_id: string | null;
+          collectible: boolean;
+          collection_difficulty: number | null;
+          collection_skill_key: string | null;
+          created_at: string;
+          icon: string;
+          id: string;
+          movable: boolean;
+          name: string;
+          x: number;
+          y: number;
+        };
+        Insert: {
+          catalog_item_id?: string | null;
+          collectible?: boolean;
+          collection_difficulty?: number | null;
+          collection_skill_key?: string | null;
+          created_at?: string;
+          icon?: string;
+          id?: string;
+          movable?: boolean;
+          name: string;
+          x: number;
+          y: number;
+        };
+        Update: {
+          catalog_item_id?: string | null;
+          collectible?: boolean;
+          collection_difficulty?: number | null;
+          collection_skill_key?: string | null;
+          created_at?: string;
+          icon?: string;
+          id?: string;
+          movable?: boolean;
+          name?: string;
+          x?: number;
+          y?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "battle_map_items_catalog_item_id_fkey";
+            columns: ["catalog_item_id"];
+            isOneToOne: false;
+            referencedRelation: "catalog_items";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       body_parts: {
         Row: {
@@ -236,6 +307,8 @@ export type Database = {
           concept: string;
           created_at: string;
           fisico: number;
+          energia_atual: number;
+          energia_maxima: number;
           id: string;
           intelecto: number;
           level: number;
@@ -257,6 +330,8 @@ export type Database = {
           concept?: string;
           created_at?: string;
           fisico?: number;
+          energia_atual?: number;
+          energia_maxima?: number;
           id?: string;
           intelecto?: number;
           level?: number;
@@ -278,6 +353,8 @@ export type Database = {
           concept?: string;
           created_at?: string;
           fisico?: number;
+          energia_atual?: number;
+          energia_maxima?: number;
           id?: string;
           intelecto?: number;
           level?: number;
@@ -333,6 +410,7 @@ export type Database = {
           attack_bonus: number;
           character_id: string | null;
           conditions: string[];
+          condition_durations: Json;
           created_at: string;
           defending: boolean;
           defense: number | null;
@@ -347,11 +425,13 @@ export type Database = {
           name: string;
           pos_x: number | null;
           pos_y: number | null;
+          temporary_shield: number;
         };
         Insert: {
           attack_bonus?: number;
           character_id?: string | null;
           conditions?: string[];
+          condition_durations?: Json;
           created_at?: string;
           defending?: boolean;
           defense?: number | null;
@@ -366,11 +446,13 @@ export type Database = {
           name: string;
           pos_x?: number | null;
           pos_y?: number | null;
+          temporary_shield?: number;
         };
         Update: {
           attack_bonus?: number;
           character_id?: string | null;
           conditions?: string[];
+          condition_durations?: Json;
           created_at?: string;
           defending?: boolean;
           defense?: number | null;
@@ -385,6 +467,7 @@ export type Database = {
           name?: string;
           pos_x?: number | null;
           pos_y?: number | null;
+          temporary_shield?: number;
         };
         Relationships: [
           {
@@ -399,6 +482,38 @@ export type Database = {
             columns: ["monster_id"];
             isOneToOne: false;
             referencedRelation: "monsters";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      combat_events: {
+        Row: {
+          character_id: string | null;
+          character_name: string;
+          created_at: string;
+          description: string;
+          id: string;
+        };
+        Insert: {
+          character_id?: string | null;
+          character_name: string;
+          created_at?: string;
+          description: string;
+          id?: string;
+        };
+        Update: {
+          character_id?: string | null;
+          character_name?: string;
+          created_at?: string;
+          description?: string;
+          id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "combat_events_character_id_fkey";
+            columns: ["character_id"];
+            isOneToOne: false;
+            referencedRelation: "characters";
             referencedColumns: ["id"];
           },
         ];

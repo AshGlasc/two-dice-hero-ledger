@@ -7,6 +7,7 @@ import {
   ImagePlus,
   Lock,
   LogOut,
+  Move,
   Paintbrush,
   Ruler,
   X,
@@ -38,7 +39,7 @@ import {
 import { fileToSmallImage } from "@/lib/image";
 import { usePlayerCharacterId } from "@/lib/player-character";
 import { MapLayouts } from "@/components/rpg/MapLayouts";
-import type { BattleMap as MapRow } from "@/lib/rpg-queries";
+import type { BattleMap as MapRow, BattleMapItem } from "@/lib/rpg-queries";
 import { cn } from "@/lib/utils";
 
 export type MapToken = {
@@ -79,12 +80,18 @@ export function BattleMap({
   onMove,
   currentCombatantId,
   combatActive,
+  items = [],
+  onPickItem,
+  onPushItem,
 }: {
   map: MapRow;
   tokens: MapToken[];
   onMove: (id: string, x: number | null, y: number | null) => void;
   currentCombatantId?: string | null;
   combatActive?: boolean;
+  items?: BattleMapItem[];
+  onPickItem?: (itemId: string, tokenId: string) => void;
+  onPushItem?: (itemId: string, tokenId: string) => void;
 }) {
   const saveMap = useBattleMap();
   const { isMaster } = useMasterAuth();
@@ -128,7 +135,8 @@ export function BattleMap({
     ),
   );
   const tray = tokens.filter((t) => !inside.includes(t));
-  const occupied = new Set(inside.map((t) => cellKey(t.x!, t.y!)));
+  const occupied = new Set(inside.filter((token) => !token.out).map((t) => cellKey(t.x!, t.y!)));
+  for (const item of items) occupied.add(cellKey(item.x, item.y));
   const sel = tokens.find((t) => t.id === selected) ?? null;
   const selRange = sel?.moveRange ?? MOVEMENT_RANGE;
 
@@ -239,42 +247,38 @@ export function BattleMap({
   const cells = useMemo(
     () =>
       Array.from({ length: map.cols * map.rows }).map((_, i) => {
-              const k = cellKey(i % map.cols, Math.floor(i / map.cols));
-              const t = terrain[k];
-              const img = images[k];
-              const fogged = Boolean(fog[k]);
-              if (fogged && !viewerIsMaster) {
-                return (
-                  <div
-                    key={k}
-                    className="fog-cell border border-background"
-                    aria-label="Casa escondida"
-                  />
-                );
-              }
-              return (
-                <div
-                  key={k}
-                  className={cn("relative border border-border/40", t && TERRAIN_CLASS[t])}
-                >
-                  {img && (
-                    <img
-                      src={img}
-                      alt=""
-                      draggable={false}
-                      className="absolute inset-0 size-full object-cover"
-                    />
-                  )}
-                  {fogged && (
-                    <div
-                      className="fog-cell absolute inset-0 opacity-60"
-                      title="Escondida dos jogadores"
-                    />
-                  )}
-                </div>
-              );
-            }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        const k = cellKey(i % map.cols, Math.floor(i / map.cols));
+        const t = terrain[k];
+        const img = images[k];
+        const fogged = Boolean(fog[k]);
+        if (fogged && !viewerIsMaster) {
+          return (
+            <div
+              key={k}
+              className="fog-cell border border-background"
+              aria-label="Casa escondida"
+            />
+          );
+        }
+        return (
+          <div key={k} className={cn("relative border border-border/40", t && TERRAIN_CLASS[t])}>
+            {img && (
+              <img
+                src={img}
+                alt=""
+                draggable={false}
+                className="absolute inset-0 size-full object-cover"
+              />
+            )}
+            {fogged && (
+              <div
+                className="fog-cell absolute inset-0 opacity-60"
+                title="Escondida dos jogadores"
+              />
+            )}
+          </div>
+        );
+      }),
     [map.cols, map.rows, terrain, images, fog, viewerIsMaster],
   );
 
@@ -567,6 +571,64 @@ export function BattleMap({
           >
             {cells}
           </div>
+
+          {items
+            .filter(
+              (item) =>
+                item.x >= 0 &&
+                item.y >= 0 &&
+                item.x < map.cols &&
+                item.y < map.rows &&
+                (viewerIsMaster || !fog[cellKey(item.x, item.y)]),
+            )
+            .map((item) => {
+              const distance =
+                sel?.x != null && sel.y != null ? gridDistance(sel.x, sel.y, item.x, item.y) : null;
+              const adjacent = distance !== null && distance <= 1;
+              return (
+                <div
+                  key={item.id}
+                  className="absolute left-0 top-0 z-10"
+                  style={{
+                    width: CELL,
+                    height: CELL,
+                    transform: `translate(${item.x * CELL}px, ${item.y * CELL}px)`,
+                  }}
+                >
+                  <button
+                    type="button"
+                    aria-label={`${adjacent && item.collectible ? "Pegar" : "Item"}: ${item.name}`}
+                    title={
+                      adjacent && item.collectible
+                        ? `Pegar ${item.name}`
+                        : `${item.name}${item.movable ? " · objeto movível" : ""}`
+                    }
+                    className={cn(
+                      "grid size-9 place-items-center rounded-full border-2 border-amber-300 bg-amber-950/90 text-xl shadow-[0_0_14px_rgba(251,191,36,0.65)]",
+                      adjacent && item.collectible && "animate-pulse",
+                    )}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={() => {
+                      if (adjacent && item.collectible && sel) onPickItem?.(item.id, sel.id);
+                    }}
+                  >
+                    {item.icon || "📦"}
+                  </button>
+                  {adjacent && item.movable && sel && (
+                    <button
+                      type="button"
+                      aria-label={`Empurrar ${item.name}`}
+                      title={`Empurrar ${item.name} (1 energia)`}
+                      className="absolute -right-2 -top-2 grid size-5 place-items-center rounded-full border border-amber-200 bg-background text-amber-300"
+                      onPointerDown={(event) => event.stopPropagation()}
+                      onClick={() => onPushItem?.(item.id, sel.id)}
+                    >
+                      <Move className="size-3" />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
 
           {placed.map((t) => (
             <button

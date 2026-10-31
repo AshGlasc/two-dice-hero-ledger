@@ -4,7 +4,15 @@ import { ALL_SKILLS, roll2d6, type RollOutcome, type RollResult } from "@/lib/sk
 export type AttackApprovalStatus = "pending" | "approved" | "rejected";
 
 export type EffectCondition =
-  "bleeding" | "stunned" | "burning" | "poisoned" | "blind" | "fear" | "none";
+  | "bleeding"
+  | "stunned"
+  | "burning"
+  | "poisoned"
+  | "blind"
+  | "fear"
+  | "hesitant"
+  | "knocked_down"
+  | "none";
 
 export const EFFECT_CONDITIONS: { value: EffectCondition; label: string }[] = [
   { value: "none", label: "Nenhum" },
@@ -14,6 +22,8 @@ export const EFFECT_CONDITIONS: { value: EffectCondition; label: string }[] = [
   { value: "poisoned", label: "Envenenado" },
   { value: "blind", label: "Cego" },
   { value: "fear", label: "Amedrontado" },
+  { value: "hesitant", label: "Hesitante" },
+  { value: "knocked_down", label: "Derrubado" },
 ];
 
 export const EFFECT_TO_CONDITION_NAME: Record<Exclude<EffectCondition, "none">, string> = {
@@ -23,6 +33,8 @@ export const EFFECT_TO_CONDITION_NAME: Record<Exclude<EffectCondition, "none">, 
   poisoned: "Envenenado",
   blind: "Cego",
   fear: "Amedrontado",
+  hesitant: "Hesitante",
+  knocked_down: "Caído",
 };
 
 export type CustomAttack = {
@@ -36,6 +48,13 @@ export type CustomAttack = {
   description: string;
   status: AttackApprovalStatus;
   createdAt: string;
+  energyCost: number;
+  range: number;
+  reach: "corpo-a-corpo" | "distancia" | "adjacente" | "area";
+  resistanceType: "Defesa" | "Vontade" | "Esquiva";
+  damageType: "Físico" | "Mágico" | "Mental" | "Social/Moral";
+  durationRounds: number;
+  damageFormula: string;
   effectCondition?: EffectCondition;
   defenseDebuff?: number;
 };
@@ -112,6 +131,12 @@ export function parseWeaponToAttack(w: Weapon): CustomAttack {
   let description = w.notes || "";
   let effectCondition: EffectCondition | undefined = undefined;
   let defenseDebuff: number | undefined = undefined;
+  let energyCost = 0;
+  let range = Math.max(1, w.range ?? 1);
+  let reach: CustomAttack["reach"] = "corpo-a-corpo";
+  let resistanceType: CustomAttack["resistanceType"] = "Defesa";
+  let damageType: CustomAttack["damageType"] = "Físico";
+  let durationRounds = 1;
 
   try {
     const meta = JSON.parse(w.notes);
@@ -120,6 +145,13 @@ export function parseWeaponToAttack(w: Weapon): CustomAttack {
       if (meta.turns_cost != null) turnsCost = Number(meta.turns_cost) || 1;
       if (meta.dice_count != null) diceCount = Number(meta.dice_count) || 2;
       if (meta.status) status = meta.status;
+      if (meta.energy_cost != null) energyCost = Math.max(0, Number(meta.energy_cost) || 0);
+      if (meta.range != null) range = Math.max(1, Number(meta.range) || 1);
+      if (meta.reach) reach = meta.reach;
+      if (meta.resistance_type) resistanceType = meta.resistance_type;
+      if (meta.damage_type) damageType = meta.damage_type;
+      if (meta.duration_rounds != null)
+        durationRounds = Math.max(0, Number(meta.duration_rounds) || 0);
       if (meta.description != null) description = meta.description;
       if (meta.effect_condition != null) effectCondition = meta.effect_condition;
       else if (meta.effectCondition != null) effectCondition = meta.effectCondition;
@@ -141,6 +173,13 @@ export function parseWeaponToAttack(w: Weapon): CustomAttack {
     description,
     status,
     createdAt: w.created_at,
+    energyCost,
+    range,
+    reach,
+    resistanceType,
+    damageType,
+    durationRounds,
+    damageFormula: w.damage ?? `${diceCount}d6`,
     ...(effectCondition !== undefined ? { effectCondition } : {}),
     ...(defenseDebuff !== undefined ? { defenseDebuff } : {}),
   };
@@ -156,6 +195,13 @@ export function attackToWeaponPayload(attack: {
   status?: AttackApprovalStatus;
   effectCondition?: EffectCondition;
   defenseDebuff?: number;
+  energyCost?: number;
+  range?: number;
+  reach?: CustomAttack["reach"];
+  resistanceType?: CustomAttack["resistanceType"];
+  damageType?: CustomAttack["damageType"];
+  durationRounds?: number;
+  damageFormula?: string;
 }) {
   const status = attack.status ?? "pending";
   const turnsCost = Math.max(1, attack.turnsCost || 1);
@@ -174,12 +220,19 @@ export function attackToWeaponPayload(attack: {
     description,
     effect_condition: effectCondition,
     defense_debuff: defenseDebuff,
+    energy_cost: Math.max(0, attack.energyCost ?? 0),
+    range: Math.max(1, attack.range ?? 1),
+    reach: attack.reach ?? "corpo-a-corpo",
+    resistance_type: attack.resistanceType ?? "Defesa",
+    damage_type: attack.damageType ?? "Físico",
+    duration_rounds: Math.max(0, attack.durationRounds ?? 1),
   });
 
   return {
     name: attack.name.trim(),
     weapon_type: "custom_attack",
-    damage: `${diceCount}d6`,
+    damage: attack.damageFormula?.trim() || `${diceCount}d6`,
+    range: Math.max(1, attack.range ?? 1),
     ammo: `${turnsCost} turno${turnsCost > 1 ? "s" : ""}`,
     notes: notesPayload,
   };
@@ -208,6 +261,13 @@ export function parseMonsterAttacks(
           description: a.description || "",
           status: "approved",
           createdAt: a.createdAt || new Date().toISOString(),
+          energyCost: a.energyCost ?? 0,
+          range: a.range ?? 1,
+          reach: a.reach ?? "corpo-a-corpo",
+          resistanceType: a.resistanceType ?? "Defesa",
+          damageType: a.damageType ?? "Físico",
+          durationRounds: a.durationRounds ?? 1,
+          damageFormula: a.damageFormula ?? `${a.diceCount ?? 2}d6`,
           ...(a.effectCondition !== undefined ? { effectCondition: a.effectCondition } : {}),
           ...(a.defenseDebuff !== undefined ? { defenseDebuff: a.defenseDebuff } : {}),
         }));
@@ -237,6 +297,13 @@ export function parseMonsterAttacks(
         description: item,
         status: "approved",
         createdAt: new Date().toISOString(),
+        energyCost: 0,
+        range: 1,
+        reach: "corpo-a-corpo",
+        resistanceType: "Defesa",
+        damageType: "Físico",
+        durationRounds: 1,
+        damageFormula: matchDice?.[0] ?? `${dice}d6`,
       };
     });
 }

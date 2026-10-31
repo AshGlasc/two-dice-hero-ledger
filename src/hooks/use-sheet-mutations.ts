@@ -27,6 +27,8 @@ type CharacterPatch = Partial<
     | "skill_points"
     | "sanity_current"
     | "sanity_max"
+    | "energia_atual"
+    | "energia_maxima"
   >
 >;
 type WeaponInput = Pick<Weapon, "name" | "weapon_type" | "damage" | "ammo" | "notes"> &

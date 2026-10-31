@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { Package, Pencil, Plus, Trash2 } from "lucide-react";
+import { Package, Pencil, Plus, Send, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
 
@@ -8,6 +8,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MasterLockScreen } from "@/components/rpg/MasterLockScreen";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -19,6 +26,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useMasterAuth } from "@/context/MasterAuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
+import { groupQuery } from "@/lib/rpg-queries";
 
 export const Route = createFileRoute("/itens")({
   head: () => ({
@@ -45,6 +53,7 @@ type ItemForm = {
   uses_max: string;
   heal_hp: string;
   heal_sanity: string;
+  restore_energy: string;
   temp_shield: string;
   skill_bonuses: string;
   is_movable: boolean;
@@ -65,6 +74,7 @@ const emptyForm: ItemForm = {
   uses_max: "0",
   heal_hp: "0",
   heal_sanity: "0",
+  restore_energy: "0",
   temp_shield: "0",
   skill_bonuses: "{}",
   is_movable: false,
@@ -111,6 +121,7 @@ function ItemsPage() {
 function ItemsPageContent() {
   const qc = useQueryClient();
   const { data: items = [], isLoading, error } = useQuery(catalogItemsQuery);
+  const { data: group } = useQuery(groupQuery);
   const [form, setForm] = useState<ItemForm>(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<ItemCategory | "all">("all");
@@ -139,6 +150,7 @@ function ItemsPageContent() {
         uses_max: Number(values.uses_max) || 0,
         heal_hp: Number(values.heal_hp) || 0,
         heal_sanity: Number(values.heal_sanity) || 0,
+        restore_energy: Number(values.restore_energy) || 0,
         temp_shield: Number(values.temp_shield) || 0,
         skill_bonuses: bonuses as Record<string, number>,
         is_movable: values.is_movable,
@@ -175,6 +187,31 @@ function ItemsPageContent() {
       toast.error(`Não foi possível remover o item: ${deleteError.message}`),
   });
 
+  const deliverItem = useMutation({
+    mutationFn: async ({ item, characterId }: { item: CatalogItem; characterId: string }) => {
+      const { error: insertError } = await supabase.from("backpack_items").insert({
+        character_id: characterId,
+        catalog_item_id: item.id,
+        name: item.name,
+        notes: item.description,
+        category: item.category,
+        quantity: 1,
+        skill_bonuses: item.skill_bonuses,
+        heal_hp: item.heal_hp ?? 0,
+        heal_sanity: item.heal_sanity ?? 0,
+        restore_energy: item.restore_energy,
+        temp_shield: item.temp_shield ?? 0,
+      });
+      if (insertError) throw insertError;
+    },
+    onSuccess: (_, { item }) => {
+      void qc.invalidateQueries({ queryKey: ["group"] });
+      toast.success(`${item.name} entregue.`);
+    },
+    onError: (deliveryError) =>
+      toast.error(`Não foi possível entregar o item: ${deliveryError.message}`),
+  });
+
   const filteredItems = items.filter((item) => {
     const matchesCategory = categoryFilter === "all" || item.category === categoryFilter;
     const query = search.trim().toLocaleLowerCase("pt-BR");
@@ -199,6 +236,7 @@ function ItemsPageContent() {
       uses_max: String(item.uses_max ?? 0),
       heal_hp: String(item.heal_hp ?? 0),
       heal_sanity: String(item.heal_sanity ?? 0),
+      restore_energy: String(item.restore_energy ?? 0),
       temp_shield: String(item.temp_shield ?? 0),
       skill_bonuses: JSON.stringify(item.skill_bonuses, null, 2),
       is_movable: item.is_movable,
@@ -335,6 +373,12 @@ function ItemsPageContent() {
                 type="number"
                 value={form.heal_sanity}
                 onChange={(heal_sanity) => setForm({ ...form, heal_sanity })}
+              />
+              <Field
+                label="Recupera energia"
+                type="number"
+                value={form.restore_energy}
+                onChange={(restore_energy) => setForm({ ...form, restore_energy })}
               />
               <Field
                 label="Escudo temporário"
@@ -481,9 +525,42 @@ function ItemsPageContent() {
                     {item.damage && <span>Dano: {item.damage}</span>}
                     {(item.heal_hp ?? 0) > 0 && <span>PV +{item.heal_hp ?? 0}</span>}
                     {(item.heal_sanity ?? 0) > 0 && <span>Sanidade +{item.heal_sanity ?? 0}</span>}
+                    {item.restore_energy > 0 && <span>Energia +{item.restore_energy}</span>}
                     {(item.temp_shield ?? 0) > 0 && <span>Escudo +{item.temp_shield ?? 0}</span>}
                   </div>
                   <div className="flex gap-2 border-t border-border pt-3">
+                    <Dialog>
+                      <DialogTrigger asChild>
+                        <Button size="sm" variant="secondary">
+                          <Send className="mr-1.5 size-3.5" /> Entregar
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Entregar {item.name}</DialogTitle>
+                        </DialogHeader>
+                        <div className="max-h-72 space-y-2 overflow-y-auto">
+                          {(group?.characters ?? []).map((character) => (
+                            <Button
+                              key={character.id}
+                              className="w-full justify-start"
+                              variant="outline"
+                              disabled={deliverItem.isPending}
+                              onClick={() =>
+                                deliverItem.mutate({ item, characterId: character.id })
+                              }
+                            >
+                              {character.name}
+                            </Button>
+                          ))}
+                          {(group?.characters.length ?? 0) === 0 && (
+                            <p className="text-sm text-muted-foreground">
+                              Não há personagens na mesa.
+                            </p>
+                          )}
+                        </div>
+                      </DialogContent>
+                    </Dialog>
                     <Button size="sm" variant="outline" onClick={() => editItem(item)}>
                       <Pencil className="mr-1.5 size-3.5" /> Editar
                     </Button>

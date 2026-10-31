@@ -33,6 +33,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { clearPlayerCharacterId, getPlayerCharacterId } from "@/lib/player-character";
 import { sheetQuery } from "@/lib/rpg-queries";
 import { isSanityCritical } from "@/lib/sanity";
+import { skillTotal } from "@/lib/skills";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/personagem/$id")({
@@ -85,6 +86,17 @@ function CharacterPage() {
   const canAccessSheet = isMaster || ownsCharacter;
   const sanityCurrent = sheet?.character.sanity_current ?? 10;
   const sanityMax = sheet?.character.sanity_max ?? 10;
+  const characterVigor = sheet?.skills.find((skill) => skill.skill_key === "vigor")?.bonus ?? 0;
+  const characterWill = sheet?.skills.find((skill) => skill.skill_key === "vontade")?.bonus ?? 0;
+  const energyMax = sheet
+    ? Math.max(
+        1,
+        10 +
+          2 * skillTotal(sheet.character.fisico, characterVigor) +
+          2 * skillTotal(sheet.character.psique, characterWill),
+      )
+    : 10;
+  const energyCurrent = Math.min(sheet?.character.energia_atual ?? 10, energyMax);
   const collapsed = sanityCurrent === 0;
   const [collapseReaction, setCollapseReaction] = useState<string | null>(null);
 
@@ -334,6 +346,13 @@ function CharacterPage() {
           })
         }
       />
+      <EnergyBar
+        current={energyCurrent}
+        max={energyMax}
+        onChange={(energia_atual) =>
+          mutations.updateCharacter.mutate({ energia_atual, energia_maxima: energyMax })
+        }
+      />
 
       <Tabs defaultValue="ficha">
         <TabsList className="mb-6 h-auto w-full justify-start gap-1 rounded-md border border-border bg-card p-1 sm:w-auto">
@@ -481,6 +500,57 @@ function SanityBar({
           Mente Instável (−2 em testes de Intelecto e Psique)
         </Badge>
       )}
+    </section>
+  );
+}
+
+function EnergyBar({
+  current,
+  max,
+  onChange,
+}: {
+  current: number;
+  max: number;
+  onChange: (value: number) => void;
+}) {
+  const percent = Math.max(0, Math.min(100, (current / Math.max(1, max)) * 100));
+  return (
+    <section className="mb-6 rounded-lg border border-sky-500/40 bg-card p-4 shadow-paint">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="font-display text-lg font-bold uppercase text-sky-300">Energia</h2>
+          <p className="tabular-nums text-sm text-muted-foreground">
+            {current} / {max} · Exausto quando chega a zero
+          </p>
+        </div>
+        <label className="flex items-center gap-2 text-sm">
+          <span className="label-caps text-muted-foreground">Ajuste rápido</span>
+          <input
+            type="number"
+            min={0}
+            max={max}
+            value={current}
+            onChange={(event) =>
+              onChange(Math.max(0, Math.min(max, Number(event.target.value) || 0)))
+            }
+            aria-label="Energia atual"
+            className="h-9 w-20 rounded-md border border-sky-500/40 bg-background px-2 text-right tabular-nums"
+          />
+        </label>
+      </div>
+      <div
+        className="mt-3 h-3 overflow-hidden rounded-full bg-sky-950"
+        role="progressbar"
+        aria-label="Energia atual"
+        aria-valuenow={current}
+        aria-valuemin={0}
+        aria-valuemax={max}
+      >
+        <div
+          className="h-full rounded-full bg-sky-400 transition-all"
+          style={{ width: `${percent}%` }}
+        />
+      </div>
     </section>
   );
 }

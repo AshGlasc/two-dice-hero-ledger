@@ -59,6 +59,8 @@ export function NewCharacterDialog() {
           name: name.trim(),
           player_name: player.trim(),
           concept: concept.trim(),
+          energia_atual: 10 + 2 * attrs.fisico + 2 * attrs.psique,
+          energia_maxima: 10 + 2 * attrs.fisico + 2 * attrs.psique,
           ...attrs,
         })
         .select("id")

@@ -154,6 +154,12 @@ export function useRealtimeSync() {
         }
         queue(["battle_map"]);
       })
+      .on("postgres_changes", { event: "*", schema: "public", table: "battle_map_items" }, () =>
+        queue(["battle_map_items"]),
+      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "combat_events" }, () =>
+        queue(["combat_events"]),
+      )
       .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, (p) => {
         if (p.eventType === "INSERT") notifyMessage(p.new as Message);
         queue(["messages"]);

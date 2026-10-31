@@ -43,8 +43,8 @@ export function IntimidateDialog({
         <DialogHeader>
           <DialogTitle>Intimidar — {attackerName}</DialogTitle>
           <DialogDescription>
-            Escolha um adversário visível a até 6 casas. Autoridade/Ferramenta Física contra
-            Vontade/Compostura.
+            Custa 1 de energia. Escolha um adversário visível a até 6 casas. Autoridade/Ferramenta
+            Física contra Vontade/Compostura.
           </DialogDescription>
         </DialogHeader>
         {targets.length === 0 ? (

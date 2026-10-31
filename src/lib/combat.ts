@@ -13,6 +13,7 @@ export const CONDITIONS = [
   "Sangrando",
   "Em chamas",
   "Amedrontado",
+  "Hesitante",
   "Envenenado",
   "Caído",
   "Cego",
@@ -27,6 +28,8 @@ export const CONDITION_EMOJI: Record<string, string> = {
   Sangrando: "🩸",
   "Em chamas": "🔥",
   Amedrontado: "😱",
+  Hesitante: "💬",
+  "Hostilidade Quebrada": "🕊️",
   Envenenado: "🤢",
   Caído: "🛌",
   Cego: "🙈",
@@ -49,7 +52,10 @@ export function conditionPenalty(conditions: string[]) {
   return (
     conditions.filter(
       (condition) =>
-        condition === "Atordoado" || condition === "Caído" || condition === "Amedrontado",
+        condition === "Atordoado" ||
+        condition === "Caído" ||
+        condition === "Amedrontado" ||
+        condition === "Hesitante",
     ).length * 2
   );
 }
@@ -165,7 +171,8 @@ export function skillValueFor(group: GroupData, characterId: string, skillKey: s
   return (
     skillTotal(character[skill.attribute], bonus) +
     itemBonusFor(group.backpack ?? [], characterId, skillKey) +
-    sanityMentalPenalty(character, skillKey)
+    sanityMentalPenalty(character, skillKey) -
+    (character.energia_atual <= 0 ? 2 : 0)
   );
 }
 
@@ -262,6 +269,10 @@ export type AttackOption = {
   note?: string;
   effectCondition?: EffectCondition;
   defenseDebuff?: number;
+  energyCost?: number;
+  resistanceType?: "Defesa" | "Vontade" | "Esquiva";
+  durationRounds?: number;
+  reach?: "corpo-a-corpo" | "distancia" | "adjacente" | "area";
 };
 
 /** Soco e Chute: todo jogador já começa com eles, baseados no Físico. */
@@ -312,15 +323,31 @@ export function attackOptionsForCharacter(group: GroupData, characterId: string)
     if (isCustomAttack(w)) {
       const attack = parseWeaponToAttack(w);
       if (attack.status !== "approved") continue;
+      const damageFormula = (w.damage ?? "").replace(
+        /(força|destreza|intelecto|empatia)/gi,
+        (attribute) => {
+          const values: Record<string, number> = {
+            força: character.fisico,
+            destreza: character.motor,
+            intelecto: character.intelecto,
+            empatia: character.psique,
+          };
+          return String(values[attribute.toLocaleLowerCase("pt-BR")] ?? 0);
+        },
+      );
       options.push({
         id: w.id,
         name: `✨ ${attack.name}`,
         kind: "custom",
         hitBonus: skillValueFor(group, characterId, attack.skillKey),
         hitDice: attack.diceCount,
-        range: Math.max(1, w.range),
-        damage: parseDamage(w.damage),
-        note: "Ataque especial",
+        range: attack.range,
+        damage: parseDamage(damageFormula),
+        energyCost: attack.energyCost,
+        resistanceType: attack.resistanceType,
+        durationRounds: attack.durationRounds,
+        reach: attack.reach,
+        note: `${attack.reach} · ${attack.damageType} · resist. ${attack.resistanceType}`,
         ...(attack.effectCondition !== undefined
           ? { effectCondition: attack.effectCondition }
           : {}),
