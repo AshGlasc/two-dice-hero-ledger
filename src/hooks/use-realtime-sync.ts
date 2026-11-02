@@ -98,92 +98,79 @@ export function useRealtimeSync() {
 
     const sheetKey = (row: Row) => (row?.character_id ? ["sheet", row.character_id] : ["sheet"]);
 
-    const channel = supabase
-      .channel(`mesa-sync-${Math.random().toString(36).slice(2)}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "characters" }, (p) => {
-        const row = (p.new && "id" in p.new ? p.new : p.old) as Row;
+    type Payload = {
+      eventType: string;
+      new: Record<string, unknown>;
+      old: Record<string, unknown>;
+    };
+    const pick = (p: Payload, field: string) =>
+      (p.new && field in p.new ? p.new : p.old) as Row;
+
+    // Um canal por tabela: se uma tabela falhar, as outras continuam ao vivo.
+    const handlers: Record<string, (p: Payload) => void> = {
+      characters: (p) => {
+        const row = pick(p, "id");
         queue(["characters"], ["group"], row?.id ? ["sheet", row.id] : ["sheet"]);
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "character_skills" }, (p) => {
-        const row = (p.new && "character_id" in p.new ? p.new : p.old) as Row;
-        queue(["group"], sheetKey(row));
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "body_parts" }, (p) => {
-        const row = (p.new && "character_id" in p.new ? p.new : p.old) as Row;
-        queue(["group"], sheetKey(row));
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "weapons" }, (p) => {
-        const row = (p.new && "character_id" in p.new ? p.new : p.old) as Row;
-        queue(sheetKey(row), ["all_weapons"], ["group"]);
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "backpack_items" }, (p) => {
-        const row = (p.new && "character_id" in p.new ? p.new : p.old) as Row;
-        queue(sheetKey(row), ["group"]);
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "map_layouts" }, () =>
-        queue(["map_layouts"]),
-      )
-      .on("postgres_changes", { event: "*", schema: "public", table: "rolls" }, (p) => {
+      },
+      character_skills: (p) => queue(["group"], sheetKey(pick(p, "character_id"))),
+      body_parts: (p) => queue(["group"], sheetKey(pick(p, "character_id"))),
+      weapons: (p) => queue(sheetKey(pick(p, "character_id")), ["all_weapons"], ["group"]),
+      backpack_items: (p) => queue(sheetKey(pick(p, "character_id")), ["group"]),
+      map_layouts: () => queue(["map_layouts"]),
+      rolls: (p) => {
         if (p.eventType === "INSERT") {
-          const roll = p.new as Roll;
-          const local = isLocalRoll(roll);
-          announceRoll(roll, masterRef.current, local);
+          const roll = p.new as unknown as Roll;
+          announceRoll(roll, masterRef.current, isLocalRoll(roll));
         }
         queue(["rolls"], ["public_rolls"]);
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "app_settings" }, () =>
-        queue(["app_settings"]),
-      )
-      .on("postgres_changes", { event: "*", schema: "public", table: "gm_notes" }, () =>
-        queue(["gm_notes"]),
-      )
-      .on("postgres_changes", { event: "*", schema: "public", table: "monsters" }, () =>
-        queue(["monsters"]),
-      )
-      .on("postgres_changes", { event: "*", schema: "public", table: "combatants" }, () =>
-        queue(["combat"]),
-      )
-      .on("postgres_changes", { event: "*", schema: "public", table: "combat_state" }, () =>
-        queue(["combat"]),
-      )
-      .on("postgres_changes", { event: "*", schema: "public", table: "battle_map" }, (p) => {
+      },
+      app_settings: () => queue(["app_settings"]),
+      gm_notes: () => queue(["gm_notes"]),
+      monsters: () => queue(["monsters"]),
+      combatants: () => queue(["combat"]),
+      combat_state: () => queue(["combat"]),
+      battle_map: (p) => {
         if (p.eventType !== "DELETE" && isBattleMap(p.new)) {
           if (qc.isMutating() > 0) queue(["battle_map"]);
           else qc.setQueryData<BattleMap>(["battle_map"], p.new);
           return;
         }
         queue(["battle_map"]);
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "battle_map_items" }, () =>
-        queue(["battle_map_items"]),
-      )
-      .on("postgres_changes", { event: "*", schema: "public", table: "combat_events" }, () =>
-        queue(["combat_events"]),
-      )
-      .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, (p) => {
-        if (p.eventType === "INSERT") notifyMessage(p.new as Message);
+      },
+      battle_map_items: () => queue(["battle_map_items"]),
+      combat_events: () => queue(["combat_events"]),
+      messages: (p) => {
+        if (p.eventType === "INSERT") notifyMessage(p.new as unknown as Message);
         queue(["messages"]);
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "phone_contacts" }, () =>
-        queue(["phone_contacts"]),
-      )
-      .on("postgres_changes", { event: "*", schema: "public", table: "phone_clues" }, () =>
-        queue(["phone_clues"]),
-      )
-      .on("postgres_changes", { event: "*", schema: "public", table: "phone_gallery" }, () =>
-        queue(["phone_gallery"]),
-      )
-      .on("postgres_changes", { event: "*", schema: "public", table: "catalog_items" }, () =>
-        queue(["catalog_items"]),
-      )
-      .subscribe((status, error) => {
-        if (status === "SUBSCRIBED") {
-          // Conectou (ou reconectou depois do celular dormir): puxa tudo de novo.
-          void qc.invalidateQueries();
-        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-          console.error("A sincronização ao vivo falhou.", error);
-        }
-      });
+      },
+      phone_contacts: () => queue(["phone_contacts"]),
+      phone_clues: () => queue(["phone_clues"]),
+      phone_gallery: () => queue(["phone_gallery"]),
+      catalog_items: () => queue(["catalog_items"]),
+    };
+
+    const suffix = Math.random().toString(36).slice(2);
+    let firstConnect = true;
+    const channels = Object.entries(handlers).map(([table, handler]) =>
+      supabase
+        .channel(`mesa-${table}-${suffix}`)
+        .on("postgres_changes", { event: "*", schema: "public", table }, (p) =>
+          handler(p as unknown as Payload),
+        )
+        .subscribe((status, error) => {
+          if (status === "SUBSCRIBED") {
+            // Reconectou (ex.: celular dormiu): puxa os dados dessa parte de novo.
+            if (!firstConnect) void qc.invalidateQueries();
+          } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+            console.error(`A sincronização ao vivo de "${table}" falhou.`, error);
+          }
+        }),
+    );
+    // Depois do primeiro conectar, só reconexões disparam recarga geral.
+    const firstTimer = setTimeout(() => {
+      firstConnect = false;
+      void qc.invalidateQueries();
+    }, 1500);
 
     // Celular voltou da tela bloqueada: atualiza na hora.
     const onVisible = () => {
@@ -193,8 +180,9 @@ export function useRealtimeSync() {
 
     return () => {
       if (timer) clearTimeout(timer);
+      clearTimeout(firstTimer);
       document.removeEventListener("visibilitychange", onVisible);
-      supabase.removeChannel(channel);
+      for (const c of channels) void supabase.removeChannel(c);
     };
   }, [qc]);
 }
