@@ -23,8 +23,16 @@ CREATE TABLE IF NOT EXISTS public.catalog_items (
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.catalog_items TO anon, authenticated;
 GRANT ALL ON public.catalog_items TO service_role;
 ALTER TABLE public.catalog_items ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Mesa aberta: ler itens catalogo" ON public.catalog_items;
 CREATE POLICY "Mesa aberta: ler itens catalogo" ON public.catalog_items FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Mesa aberta: criar itens catalogo" ON public.catalog_items;
 CREATE POLICY "Mesa aberta: criar itens catalogo" ON public.catalog_items FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Mesa aberta: editar itens catalogo" ON public.catalog_items;
 CREATE POLICY "Mesa aberta: editar itens catalogo" ON public.catalog_items FOR UPDATE USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Mesa aberta: deletar itens catalogo" ON public.catalog_items;
 CREATE POLICY "Mesa aberta: deletar itens catalogo" ON public.catalog_items FOR DELETE USING (true);
-ALTER PUBLICATION supabase_realtime ADD TABLE public.catalog_items;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'catalog_items') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.catalog_items;
+  END IF;
+END $$;
