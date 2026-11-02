@@ -83,6 +83,7 @@ export function BattleMap({
   items = [],
   onPickItem,
   onPushItem,
+  placement = null,
 }: {
   map: MapRow;
   tokens: MapToken[];
@@ -92,6 +93,8 @@ export function BattleMap({
   items?: BattleMapItem[];
   onPickItem?: (itemId: string, tokenId: string) => void;
   onPushItem?: (itemId: string, tokenId: string) => void;
+  /** Modo "clique numa casa para colocar" (personagem, monstro ou item). */
+  placement?: { label: string; onPlace: (x: number, y: number) => void; onCancel: () => void } | null;
 }) {
   const saveMap = useBattleMap();
   const { isMaster } = useMasterAuth();
@@ -210,6 +213,15 @@ export function BattleMap({
   };
 
   const onGridDown = (e: React.PointerEvent) => {
+    if (placement) {
+      const { x, y } = cellAt(e);
+      if (!canMoveTo(x, y, map.cols, map.rows, terrain, occupied)) {
+        toast.error("Essa casa está bloqueada ou ocupada. Escolha outra.");
+        return;
+      }
+      placement.onPlace(x, y);
+      return;
+    }
     if (editing) {
       if (brush === "image" && !stamp) {
         toast("Escolha uma imagem primeiro.");
@@ -299,8 +311,10 @@ export function BattleMap({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <p className="label-caps text-primary">Mapa de batalha</p>
-          <p className="text-sm text-muted-foreground">
-            {editing
+          <p className={cn("text-sm", placement ? "font-semibold text-primary" : "text-muted-foreground")}>
+            {placement
+              ? `Clique numa casa livre do mapa para colocar ${placement.label}.`
+              : editing
               ? brush === "fog"
                 ? "Pinte as casas que os jogadores não podem ver."
                 : brush === "reveal"
@@ -326,6 +340,11 @@ export function BattleMap({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {placement && (
+            <Button variant="destructive" size="sm" onClick={placement.onCancel}>
+              <X /> Cancelar
+            </Button>
+          )}
           <Button
             variant={measuring ? "secondary" : "outline"}
             size="sm"
@@ -565,7 +584,10 @@ export function BattleMap({
           onPointerCancel={commit}
           className={cn(
             "relative select-none",
-            editing ? "cursor-crosshair touch-none" : sel && "cursor-pointer",
+            editing || placement
+              ? "cursor-crosshair touch-none"
+              : sel && "cursor-pointer",
+            placement && "ring-2 ring-primary",
           )}
           style={{
             width: map.cols * CELL,
