@@ -47,7 +47,6 @@ import {
   DEFEND_BONUS,
   DODGE_SKILL,
   dodges,
-  findFreeCell,
   gridDistance,
   intimidationRetreatCell,
   MOVEMENT_RANGE,
