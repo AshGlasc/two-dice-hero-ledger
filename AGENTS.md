@@ -16,3 +16,4 @@
 - The table is open-access (no login): RLS policies allow anon read/write on all RPG tables by user choice. Why: shared tabletop link; revisit if accounts are added.
 - Sheet data is read through react-query `sheetQuery` and written via `useSheetMutations` with optimistic cache patches. Why: steppers feel instant while still persisting.
 - Client UI libraries used by the app are listed in `optimizeDeps.include` in `vite.config.ts`; add new runtime UI deps there. Why: mid-session dependency re-optimization in dev loads two React copies and blanks the preview.
+- Database changes live in `drizzle/migrations/` and must be listed in `meta/_journal.json`; write them idempotent (IF NOT EXISTS, DROP POLICY IF EXISTS, guarded publication adds). Why: changes pushed from GitHub may be partly applied already, and the migration tool replays every unrecorded file.
