@@ -16,16 +16,19 @@ export type Database = {
     Tables: {
       app_settings: {
         Row: {
+          difficulty_modifiers: Json
           discord_webhook: string
           id: number
           updated_at: string
         }
         Insert: {
+          difficulty_modifiers?: Json
           discord_webhook?: string
           id?: number
           updated_at?: string
         }
         Update: {
+          difficulty_modifiers?: Json
           discord_webhook?: string
           id?: number
           updated_at?: string
@@ -34,13 +37,18 @@ export type Database = {
       }
       backpack_items: {
         Row: {
+          armor_part: string
+          armor_reduction: number
           catalog_item_id: string | null
           category: string
           character_id: string
           created_at: string
+          equipped: boolean
+          hand_slot: string
           heal_hp: number
           heal_sanity: number
           id: string
+          image_url: string
           name: string
           notes: string
           quantity: number
@@ -49,13 +57,18 @@ export type Database = {
           temp_shield: number
         }
         Insert: {
+          armor_part?: string
+          armor_reduction?: number
           catalog_item_id?: string | null
           category?: string
           character_id: string
           created_at?: string
+          equipped?: boolean
+          hand_slot?: string
           heal_hp?: number
           heal_sanity?: number
           id?: string
+          image_url?: string
           name: string
           notes?: string
           quantity?: number
@@ -64,13 +77,18 @@ export type Database = {
           temp_shield?: number
         }
         Update: {
+          armor_part?: string
+          armor_reduction?: number
           catalog_item_id?: string | null
           category?: string
           character_id?: string
           created_at?: string
+          equipped?: boolean
+          hand_slot?: string
           heal_hp?: number
           heal_sanity?: number
           id?: string
+          image_url?: string
           name?: string
           notes?: string
           quantity?: number
@@ -135,10 +153,13 @@ export type Database = {
           collection_difficulty: number | null
           collection_skill_key: string | null
           created_at: string
+          hand_slot: string
           icon: string
           id: string
+          image_url: string
           movable: boolean
           name: string
+          weapon_id: string | null
           x: number
           y: number
         }
@@ -148,10 +169,13 @@ export type Database = {
           collection_difficulty?: number | null
           collection_skill_key?: string | null
           created_at?: string
+          hand_slot?: string
           icon?: string
           id?: string
+          image_url?: string
           movable?: boolean
           name: string
+          weapon_id?: string | null
           x: number
           y: number
         }
@@ -161,10 +185,13 @@ export type Database = {
           collection_difficulty?: number | null
           collection_skill_key?: string | null
           created_at?: string
+          hand_slot?: string
           icon?: string
           id?: string
+          image_url?: string
           movable?: boolean
           name?: string
+          weapon_id?: string | null
           x?: number
           y?: number
         }
@@ -174,6 +201,13 @@ export type Database = {
             columns: ["catalog_item_id"]
             isOneToOne: false
             referencedRelation: "catalog_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "battle_map_items_weapon_id_fkey"
+            columns: ["weapon_id"]
+            isOneToOne: false
+            referencedRelation: "weapons"
             referencedColumns: ["id"]
           },
         ]
@@ -213,10 +247,13 @@ export type Database = {
       catalog_items: {
         Row: {
           ammo: string | null
+          armor_part: string
+          armor_reduction: number
           category: string
           created_at: string
           damage: string | null
           description: string
+          hand_slot: string
           heal_hp: number | null
           heal_sanity: number | null
           id: string
@@ -235,10 +272,13 @@ export type Database = {
         }
         Insert: {
           ammo?: string | null
+          armor_part?: string
+          armor_reduction?: number
           category?: string
           created_at?: string
           damage?: string | null
           description?: string
+          hand_slot?: string
           heal_hp?: number | null
           heal_sanity?: number | null
           id?: string
@@ -257,10 +297,13 @@ export type Database = {
         }
         Update: {
           ammo?: string | null
+          armor_part?: string
+          armor_reduction?: number
           category?: string
           created_at?: string
           damage?: string | null
           description?: string
+          hand_slot?: string
           heal_hp?: number | null
           heal_sanity?: number | null
           id?: string
@@ -321,6 +364,7 @@ export type Database = {
           fisico: number
           id: string
           intelecto: number
+          level: number
           money: number
           motor: number
           name: string
@@ -329,6 +373,9 @@ export type Database = {
           pin_salt: string
           player_name: string
           psique: number
+          sanity_current: number
+          sanity_max: number
+          skill_points: number
           updated_at: string
         }
         Insert: {
@@ -340,6 +387,7 @@ export type Database = {
           fisico?: number
           id?: string
           intelecto?: number
+          level?: number
           money?: number
           motor?: number
           name: string
@@ -348,6 +396,9 @@ export type Database = {
           pin_salt?: string
           player_name?: string
           psique?: number
+          sanity_current?: number
+          sanity_max?: number
+          skill_points?: number
           updated_at?: string
         }
         Update: {
@@ -359,6 +410,7 @@ export type Database = {
           fisico?: number
           id?: string
           intelecto?: number
+          level?: number
           money?: number
           motor?: number
           name?: string
@@ -367,6 +419,9 @@ export type Database = {
           pin_salt?: string
           player_name?: string
           psique?: number
+          sanity_current?: number
+          sanity_max?: number
+          skill_points?: number
           updated_at?: string
         }
         Relationships: []
@@ -631,9 +686,15 @@ export type Database = {
       monsters: {
         Row: {
           abilities: string
+          armor_arms: number
+          armor_head: number
+          armor_legs: number
+          armor_torso: number
           attack_bonus: number
           attacks: string
           avatar_url: string
+          body_parts: string[]
+          body_type: string
           created_at: string
           defense: number
           description: string
@@ -650,9 +711,15 @@ export type Database = {
         }
         Insert: {
           abilities?: string
+          armor_arms?: number
+          armor_head?: number
+          armor_legs?: number
+          armor_torso?: number
           attack_bonus?: number
           attacks?: string
           avatar_url?: string
+          body_parts?: string[]
+          body_type?: string
           created_at?: string
           defense?: number
           description?: string
@@ -669,9 +736,15 @@ export type Database = {
         }
         Update: {
           abilities?: string
+          armor_arms?: number
+          armor_head?: number
+          armor_legs?: number
+          armor_torso?: number
           attack_bonus?: number
           attacks?: string
           avatar_url?: string
+          body_parts?: string[]
+          body_type?: string
           created_at?: string
           defense?: number
           description?: string
@@ -826,13 +899,44 @@ export type Database = {
           },
         ]
       }
+      sanity_whispers: {
+        Row: {
+          character_id: string
+          created_at: string
+          id: string
+          message: string
+        }
+        Insert: {
+          character_id: string
+          created_at?: string
+          id?: string
+          message: string
+        }
+        Update: {
+          character_id?: string
+          created_at?: string
+          id?: string
+          message?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sanity_whispers_character_id_fkey"
+            columns: ["character_id"]
+            isOneToOne: false
+            referencedRelation: "characters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       weapons: {
         Row: {
           ammo: string
           character_id: string
           created_at: string
           damage: string
+          hand_slot: string
           id: string
+          image_url: string
           name: string
           notes: string
           range: number
@@ -846,7 +950,9 @@ export type Database = {
           character_id: string
           created_at?: string
           damage?: string
+          hand_slot?: string
           id?: string
+          image_url?: string
           name: string
           notes?: string
           range?: number
@@ -860,7 +966,9 @@ export type Database = {
           character_id?: string
           created_at?: string
           damage?: string
+          hand_slot?: string
           id?: string
+          image_url?: string
           name?: string
           notes?: string
           range?: number
