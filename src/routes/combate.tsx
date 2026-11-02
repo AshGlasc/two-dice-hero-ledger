@@ -160,8 +160,11 @@ function CombatPage() {
   const [hpDelta, setHpDelta] = useState(1);
   const [quickRollOpen, setQuickRollOpen] = useState(false);
   const [selectedCatalogItemId, setSelectedCatalogItemId] = useState("");
-  const [itemX, setItemX] = useState("");
-  const [itemY, setItemY] = useState("");
+  const [placing, setPlacing] = useState<{
+    kind: "character" | "monster" | "item";
+    id: string;
+    label: string;
+  } | null>(null);
   const [turnEffect, setTurnEffect] = useState<{
     combatantId: string;
     name: string;
@@ -272,11 +275,10 @@ function CombatPage() {
       ? (group.characters.find((ch) => ch.id === x.character_id)?.avatar_url ?? "")
       : (monsters.find((m) => m.id === x.monster_id)?.avatar_url ?? "");
 
-  const addCharacter = (id: string) => {
+  const addCharacter = (id: string, cell: { x: number; y: number }) => {
     const ch = group.characters.find((x) => x.id === id);
     if (!ch) return;
     const s = playerCombatStats(ch.fisico, ch.motor);
-    const cell = findFreeCell(map.cols, map.rows, terrain, occupied(), "left");
     c.add.mutate([
       {
         kind: "character",
@@ -287,16 +289,15 @@ function CombatPage() {
         defense: s.defense,
         attack_bonus: Math.max(...ATTACK_SKILLS.map((a) => skillValueFor(group, ch.id, a.key))),
         initiative_bonus: skillValueFor(group, ch.id, INITIATIVE_SKILL),
-        pos_x: cell?.x ?? null,
-        pos_y: cell?.y ?? null,
+        pos_x: cell.x,
+        pos_y: cell.y,
       },
     ]);
   };
 
-  const addMonster = (id: string) => {
+  const addMonster = (id: string, cell: { x: number; y: number }) => {
     const m = monsters.find((x) => x.id === id);
     if (!m) return;
-    const cell = findFreeCell(map.cols, map.rows, terrain, occupied(), "right");
     c.add.mutate([
       {
         kind: "monster",
@@ -310,8 +311,8 @@ function CombatPage() {
         defense: m.defense,
         attack_bonus: m.attack_bonus,
         initiative_bonus: m.initiative_bonus,
-        pos_x: cell?.x ?? null,
-        pos_y: cell?.y ?? null,
+        pos_x: cell.x,
+        pos_y: cell.y,
       },
     ]);
   };
@@ -1166,34 +1167,9 @@ function CombatPage() {
     if (state.active && state.current_combatant_id === combatant.id) advanceTurn();
   };
 
-  const placeCatalogItem = async () => {
-    const item = catalogItems.find((entry) => entry.id === selectedCatalogItemId);
+  const placeCatalogItem = async (itemId: string, cell: { x: number; y: number }) => {
+    const item = catalogItems.find((entry) => entry.id === itemId);
     if (!item) return;
-    const unavailable = occupied();
-    for (const mapItem of mapItems) unavailable.add(cellKey(mapItem.x, mapItem.y));
-    const hasX = itemX.trim() !== "";
-    const hasY = itemY.trim() !== "";
-    if (hasX !== hasY) {
-      toast.error("Informe X e Y para posicionar o item, ou deixe ambos vazios.");
-      return;
-    }
-    let cell = findFreeCell(map.cols, map.rows, terrain, unavailable, "left");
-    if (hasX && hasY) {
-      const requested = { x: Number(itemX), y: Number(itemY) };
-      if (
-        !Number.isInteger(requested.x) ||
-        !Number.isInteger(requested.y) ||
-        !canMoveTo(requested.x, requested.y, map.cols, map.rows, terrain, unavailable)
-      ) {
-        toast.error("A coordenada escolhida está fora do grid, bloqueada ou ocupada.");
-        return;
-      }
-      cell = requested;
-    }
-    if (!cell) {
-      toast.error("Não há casas livres para colocar o item.");
-      return;
-    }
     const { error } = await supabase.from("battle_map_items").insert({
       catalog_item_id: item.id,
       name: item.name,
@@ -1210,8 +1186,6 @@ function CombatPage() {
       toast.error(`Não foi possível colocar o item: ${error.message}`);
       return;
     }
-    setItemX("");
-    setItemY("");
     void qc.invalidateQueries({ queryKey: ["battle_map_items"] });
     toast.success(`${item.name} colocado no mapa.`);
   };
@@ -1461,7 +1435,10 @@ function CombatPage() {
               <select
                 className="h-9 rounded-md border border-border bg-card px-2 text-sm"
                 value=""
-                onChange={(e) => addCharacter(e.target.value)}
+                onChange={(e) => {
+                  const ch = group.characters.find((x) => x.id === e.target.value);
+                  if (ch) setPlacing({ kind: "character", id: ch.id, label: ch.name });
+                }}
               >
                 <option value="">+ Jogador</option>
                 {group.characters
@@ -1472,30 +1449,13 @@ function CombatPage() {
                     </option>
                   ))}
               </select>
-              <input
-                type="number"
-                min={0}
-                max={map.cols - 1}
-                value={itemX}
-                onChange={(event) => setItemX(event.target.value)}
-                aria-label="Coordenada X do item"
-                placeholder="X auto"
-                className="h-9 w-16 rounded-md border border-border bg-background px-2 text-sm"
-              />
-              <input
-                type="number"
-                min={0}
-                max={map.rows - 1}
-                value={itemY}
-                onChange={(event) => setItemY(event.target.value)}
-                aria-label="Coordenada Y do item"
-                placeholder="Y auto"
-                className="h-9 w-16 rounded-md border border-border bg-background px-2 text-sm"
-              />
               <select
                 className="h-9 rounded-md border border-border bg-card px-2 text-sm"
                 value=""
-                onChange={(e) => addMonster(e.target.value)}
+                onChange={(e) => {
+                  const m = monsters.find((x) => x.id === e.target.value);
+                  if (m) setPlacing({ kind: "monster", id: m.id, label: m.name });
+                }}
               >
                 <option value="">+ Monstro</option>
                 {monsters.map((m) => (
@@ -1556,6 +1516,21 @@ function CombatPage() {
             items={mapItemsWithIcons}
             onPickItem={(itemId, tokenId) => void pickupMapItem(itemId, tokenId)}
             onPushItem={(itemId, tokenId) => void pushMapItem(itemId, tokenId)}
+            placement={
+              isMaster && placing
+                ? {
+                    label: placing.label,
+                    onCancel: () => setPlacing(null),
+                    onPlace: (x, y) => {
+                      const cell = { x, y };
+                      if (placing.kind === "character") addCharacter(placing.id, cell);
+                      else if (placing.kind === "monster") addMonster(placing.id, cell);
+                      else void placeCatalogItem(placing.id, cell);
+                      setPlacing(null);
+                    },
+                  }
+                : null
+            }
           />
         </div>
 
@@ -1579,9 +1554,12 @@ function CombatPage() {
                 size="sm"
                 variant="outline"
                 disabled={!selectedCatalogItemId}
-                onClick={() => void placeCatalogItem()}
+                onClick={() => {
+                  const item = catalogItems.find((entry) => entry.id === selectedCatalogItemId);
+                  if (item) setPlacing({ kind: "item", id: item.id, label: item.name });
+                }}
               >
-                Colocar
+                Adicionar item
               </Button>
             </div>
           )}
