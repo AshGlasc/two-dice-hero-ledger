@@ -12,7 +12,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { AttackDialog, type AttackTarget } from "@/components/rpg/AttackDialog";
@@ -29,6 +29,10 @@ import { useCombat } from "@/hooks/use-combat";
 import { supabase } from "@/integrations/supabase/client";
 import {
   ATTACK_SKILLS,
+  BODY_TARGETS,
+  armorPartForTarget,
+  armorReductionForTarget,
+  bodyTargetDefenseModifier,
   CONDITIONS,
   conditionPenalty,
   conditionEmoji,
@@ -58,11 +62,12 @@ import {
   sortByInitiative,
   uniqueName,
   type AttackOption,
+  type BodyTarget,
   type Fog,
   type Terrain,
   tokenVisible,
 } from "@/lib/combat";
-import { EFFECT_TO_CONDITION_NAME } from "@/lib/custom-attacks";
+import { EFFECT_TO_CONDITION_NAME, isCustomAttack } from "@/lib/custom-attacks";
 import {
   appSettingsQuery,
   calculateDifficultyBonus,
@@ -71,6 +76,11 @@ import {
 import { getPlayerCharacterId } from "@/lib/player-character";
 import { postCombatStartToDiscord } from "@/lib/discord-webhook";
 import { logRolls } from "@/lib/roll-log";
+import {
+  defaultMonsterBodyParts,
+  monsterBodyTargetOptions,
+  monsterBodyType,
+} from "@/lib/monster-body";
 import {
   battleMapQuery,
   battleMapItemsQuery,
@@ -82,6 +92,7 @@ import {
   type BattleMapItem,
 } from "@/lib/rpg-queries";
 import { roll2d6, rollD6 } from "@/lib/skills";
+import { SANITY_LEVEL_LABELS, sanityLevel } from "@/lib/sanity";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/combate")({
@@ -132,6 +143,16 @@ function CombatPage() {
       return data ?? [];
     },
   });
+  const mapItemsWithIcons = useMemo(
+    () =>
+      mapItems.map((item) => {
+        const catalogItem = catalogItems.find((candidate) => candidate.id === item.catalog_item_id);
+        return item.image_url || !catalogItem?.image_url
+          ? item
+          : { ...item, image_url: catalogItem.image_url };
+      }),
+    [mapItems, catalogItems],
+  );
   const { data: appSettings } = useQuery(appSettingsQuery);
   const { isMaster } = useMasterAuth();
   const c = useCombat();
@@ -139,6 +160,8 @@ function CombatPage() {
   const [hpDelta, setHpDelta] = useState(1);
   const [quickRollOpen, setQuickRollOpen] = useState(false);
   const [selectedCatalogItemId, setSelectedCatalogItemId] = useState("");
+  const [itemX, setItemX] = useState("");
+  const [itemY, setItemY] = useState("");
   const [turnEffect, setTurnEffect] = useState<{
     combatantId: string;
     name: string;
@@ -410,13 +433,20 @@ function CombatPage() {
   const attackTargetsOf = (x: Combatant): AttackTarget[] =>
     order
       .filter((t) => t.id !== x.id && t.kind !== x.kind && t.hp_current > 0)
-      .map((t) => ({
-        id: t.id,
-        name: t.name,
-        avatar: avatarOf(t),
-        tone: t.kind === "monster" ? "monster" : "player",
-        distance: distanceBetween(x, t),
-      }));
+      .map((t) => {
+        const monster = monsters.find((entry) => entry.id === t.monster_id);
+        const bodyParts =
+          monster?.body_parts ??
+          defaultMonsterBodyParts(monsterBodyType(monster?.body_type ?? "human"));
+        return {
+          id: t.id,
+          name: t.name,
+          avatar: avatarOf(t),
+          tone: t.kind === "monster" ? "monster" : "player",
+          distance: distanceBetween(x, t),
+          ...(t.kind === "monster" ? { bodyTargets: monsterBodyTargetOptions(bodyParts) } : {}),
+        };
+      });
 
   const intimidationTargetsOf = (x: Combatant): AttackTarget[] =>
     order
@@ -471,6 +501,7 @@ function CombatPage() {
     attacker: Combatant,
     option: AttackOption,
     targetId: string,
+    bodyTarget: BodyTarget = "general",
     areaSubattack = false,
     skipRange = false,
     consumeAction = true,
@@ -511,6 +542,7 @@ function CombatPage() {
           attacker,
           { ...option, energyCost: 0 },
           candidate.id,
+          bodyTarget,
           true,
           true,
           false,
@@ -553,7 +585,7 @@ function CombatPage() {
     const masterBonus = calculateDifficultyBonus(
       mods,
       attacker.kind === "character" ? attacker.character_id : null,
-      option.kind === "basic" ? "fisico" : null,
+      option.attributeKey ?? (option.kind === "basic" ? "fisico" : null),
     );
 
     const attackerPenalty = conditionPenalty(attacker.conditions);
@@ -574,7 +606,12 @@ function CombatPage() {
         ? null
         : Math.max(
             2,
-            resistanceValue + target.temporary_shield + defendBonus - targetPenalty + masterBonus,
+            resistanceValue +
+              target.temporary_shield +
+              defendBonus -
+              targetPenalty +
+              masterBonus +
+              bodyTargetDefenseModifier(bodyTarget),
           );
     if (attackerPenalty || targetPenalty) {
       toast(`Penalidades aplicadas: ataque −${attackerPenalty}, defesa do alvo −${targetPenalty}.`);
@@ -583,7 +620,31 @@ function CombatPage() {
     const r = rollHit(option.hitDice, option.hitBonus - attackerPenalty, defense);
     const crit = r.outcome === "critical-success";
     const hit = r.outcome === "success" || crit;
-    const damage = hit ? rollDamage(option.damage) + (crit ? 3 : 0) : 0;
+    const armorPart = armorPartForTarget(bodyTarget);
+    const monsterArmor = target.monster_id
+      ? monsters.find((monster) => monster.id === target.monster_id)
+      : undefined;
+    const armorReduction =
+      option.damageType === "Mental"
+        ? 0
+        : target.character_id
+          ? armorReductionForTarget(
+              group.backpack.filter((item) => item.character_id === target.character_id),
+              bodyTarget,
+            )
+          : armorPart && monsterArmor
+            ? Math.max(
+                0,
+                monsterArmor[
+                  `armor_${armorPart}` as "armor_head" | "armor_torso" | "armor_arms" | "armor_legs"
+                ],
+              )
+            : 0;
+    const rolledDamage = hit
+      ? rollDamage(option.damage) + (crit ? 3 + (bodyTarget === "head" ? 3 : 0) : 0)
+      : 0;
+    const damage = hit ? Math.max(0, rolledDamage - armorReduction) : 0;
+    const sanityDamage = target.character_id && option.damageType === "Mental" ? damage : 0;
 
     // Esquiva: só em acerto comum (duplo 6 nunca é esquivado) e só quem tem a skill (personagens).
     let dodgeRoll: ReturnType<typeof roll2d6> | null = null;
@@ -600,6 +661,39 @@ function CombatPage() {
       );
     }
     const dodged = dodgeRoll !== null && dodges(r.total, dodgeRoll.total);
+
+    if (hit && !dodged && sanityDamage > 0 && target.character_id) {
+      const character = group.characters.find((entry) => entry.id === target.character_id);
+      if (!character) {
+        toast.error("Não foi possível aplicar dano à Sanidade: personagem não encontrado.");
+        if (consumeAction && state.active && state.current_combatant_id === attacker.id)
+          advanceTurn();
+        return;
+      }
+      const { error: sanityError } = await supabase
+        .from("characters")
+        .update({
+          sanity_current: Math.max(0, (character.sanity_current ?? 10) - sanityDamage),
+        })
+        .eq("id", character.id);
+      if (sanityError) {
+        console.error("Não foi possível aplicar dano à Sanidade.", sanityError);
+        void logRolls([
+          {
+            characterId: attacker.character_id,
+            characterName: attacker.name,
+            label: `${option.name} acertou ${target.name}, mas o dano à Sanidade não pôde ser salvo.`,
+            result: r,
+          },
+        ]);
+        toast.error(`Dano à Sanidade não aplicado; esquema indisponível (${sanityError.message}).`);
+        if (consumeAction && state.active && state.current_combatant_id === attacker.id)
+          advanceTurn();
+        return;
+      }
+      void qc.invalidateQueries({ queryKey: ["group"] });
+      void qc.invalidateQueries({ queryKey: ["sheet", character.id] });
+    }
 
     let conditionAdded: string | null = null;
     const nextConditions = [...target.conditions];
@@ -634,7 +728,11 @@ function CombatPage() {
         characterId: attacker.character_id,
         characterName: attacker.name,
         label: `${option.name} em ${target.name}${
-          !hit ? " — errou" : dodged ? " — esquivado" : ` — ${damage} de dano${effectsText}`
+          !hit
+            ? " — errou"
+            : dodged
+              ? " — esquivado"
+              : ` — ${damage} ${sanityDamage ? "de dano à Sanidade" : "de dano"}${effectsText}`
         }`,
         result: r,
         ...(masterBonus !== 0 ? { masterBonus } : {}),
@@ -666,7 +764,7 @@ function CombatPage() {
       return;
     }
 
-    const shieldAbsorbed = Math.min(target.temporary_shield, damage);
+    const shieldAbsorbed = sanityDamage > 0 ? 0 : Math.min(target.temporary_shield, damage);
     const durationMap = conditionDurationsOf(target);
     if (conditionAdded && option.durationRounds != null && option.durationRounds > 0) {
       durationMap[conditionAdded] = option.durationRounds;
@@ -675,7 +773,11 @@ function CombatPage() {
       {
         id: target.id,
         patch: {
-          hp_current: changeHp(target.hp_current, -(damage - shieldAbsorbed), target.hp_max),
+          hp_current: changeHp(
+            target.hp_current,
+            -(sanityDamage > 0 ? 0 : damage - shieldAbsorbed),
+            target.hp_max,
+          ),
           temporary_shield: Math.max(0, target.temporary_shield - shieldAbsorbed),
           conditions: nextConditions.filter((condition) => condition !== "Hostilidade Quebrada"),
           condition_durations: durationMap,
@@ -684,8 +786,79 @@ function CombatPage() {
       },
     ]);
 
+    const struckHand =
+      bodyTarget === "right_arm" ? "right" : bodyTarget === "left_arm" ? "left" : null;
+    const disarmedWeapon =
+      hit &&
+      !dodged &&
+      (damage - shieldAbsorbed >= 5 ||
+        conditionAdded === "Atordoado" ||
+        conditionAdded === "Caído") &&
+      struckHand &&
+      target.character_id &&
+      target.pos_x != null &&
+      target.pos_y != null
+        ? group.weapons.find(
+            (weapon) =>
+              weapon.character_id === target.character_id &&
+              !isCustomAttack(weapon) &&
+              (weapon.hand_slot === struckHand || weapon.hand_slot === "two_hands"),
+          )
+        : undefined;
+    if (disarmedWeapon) {
+      const { data: droppedItem, error: dropError } = await supabase
+        .from("battle_map_items")
+        .insert({
+          weapon_id: disarmedWeapon.id,
+          name: disarmedWeapon.name,
+          icon: "⚔️",
+          image_url: disarmedWeapon.image_url,
+          hand_slot: disarmedWeapon.hand_slot,
+          x: target.pos_x!,
+          y: target.pos_y!,
+          movable: false,
+          collectible: true,
+        })
+        .select("id")
+        .single();
+      if (dropError) {
+        toast.error(`Não foi possível derrubar ${disarmedWeapon.name}: ${dropError.message}`);
+      } else {
+        const { data: heldWeapon, error: handError } = await supabase
+          .from("weapons")
+          .update({ hand_slot: "ground" })
+          .eq("id", disarmedWeapon.id)
+          .neq("hand_slot", "ground")
+          .select("id")
+          .maybeSingle();
+        if (handError || !heldWeapon) {
+          const { error: rollbackError } = await supabase
+            .from("battle_map_items")
+            .delete()
+            .eq("id", droppedItem.id);
+          if (rollbackError) {
+            console.error(
+              "Não foi possível remover arma do mapa após falha ao desarmar.",
+              rollbackError,
+            );
+            toast.error(`Arma duplicada no mapa: ${rollbackError.message}`);
+          }
+          toast.error(
+            handError
+              ? `Não foi possível desarmar ${target.name}: ${handError.message}`
+              : `${disarmedWeapon.name} já não estava na mão do alvo.`,
+          );
+        } else {
+          void qc.invalidateQueries({ queryKey: ["group"] });
+          void qc.invalidateQueries({ queryKey: ["sheet", disarmedWeapon.character_id] });
+          void qc.invalidateQueries({ queryKey: ["battle_map_items"] });
+          toast(`${target.name} derrubou ${disarmedWeapon.name} no próprio quadrado.`);
+        }
+      }
+    }
+
     toast.success(
-      `${attacker.name} acertou ${target.name}: −${damage - shieldAbsorbed} PV${shieldAbsorbed ? ` (${shieldAbsorbed} absorvido pelo escudo)` : ""}${effectsText}.`,
+      `${attacker.name} acertou ${target.name} em ${BODY_TARGETS.find((part) => part.key === bodyTarget)?.label ?? "Geral"}: −${sanityDamage > 0 ? sanityDamage + " SAN" : damage - shieldAbsorbed + " PV"}${armorReduction && sanityDamage === 0 ? ` (${armorReduction} RD)` : ""}${shieldAbsorbed ? ` (${shieldAbsorbed} absorvido pelo escudo)` : ""}${effectsText}.`,
     );
     if (consumeAction && state.active && state.current_combatant_id === attacker.id) advanceTurn();
   };
@@ -998,7 +1171,25 @@ function CombatPage() {
     if (!item) return;
     const unavailable = occupied();
     for (const mapItem of mapItems) unavailable.add(cellKey(mapItem.x, mapItem.y));
-    const cell = findFreeCell(map.cols, map.rows, terrain, unavailable, "left");
+    const hasX = itemX.trim() !== "";
+    const hasY = itemY.trim() !== "";
+    if (hasX !== hasY) {
+      toast.error("Informe X e Y para posicionar o item, ou deixe ambos vazios.");
+      return;
+    }
+    let cell = findFreeCell(map.cols, map.rows, terrain, unavailable, "left");
+    if (hasX && hasY) {
+      const requested = { x: Number(itemX), y: Number(itemY) };
+      if (
+        !Number.isInteger(requested.x) ||
+        !Number.isInteger(requested.y) ||
+        !canMoveTo(requested.x, requested.y, map.cols, map.rows, terrain, unavailable)
+      ) {
+        toast.error("A coordenada escolhida está fora do grid, bloqueada ou ocupada.");
+        return;
+      }
+      cell = requested;
+    }
     if (!cell) {
       toast.error("Não há casas livres para colocar o item.");
       return;
@@ -1006,7 +1197,8 @@ function CombatPage() {
     const { error } = await supabase.from("battle_map_items").insert({
       catalog_item_id: item.id,
       name: item.name,
-      icon: "📦",
+      icon: item.category === "weapon" ? "⚔️" : "🔹",
+      image_url: item.image_url,
       x: cell.x,
       y: cell.y,
       movable: item.is_movable,
@@ -1018,6 +1210,8 @@ function CombatPage() {
       toast.error(`Não foi possível colocar o item: ${error.message}`);
       return;
     }
+    setItemX("");
+    setItemY("");
     void qc.invalidateQueries({ queryKey: ["battle_map_items"] });
     toast.success(`${item.name} colocado no mapa.`);
   };
@@ -1089,6 +1283,40 @@ function CombatPage() {
       );
       return;
     }
+    if (item.weapon_id) {
+      const previousOwnerId = group.weapons.find(
+        (weapon) => weapon.id === item.weapon_id,
+      )?.character_id;
+      const { data: reclaimedWeapon, error: weaponError } = await supabase
+        .from("weapons")
+        .update({
+          character_id: combatant.character_id,
+          hand_slot: item.hand_slot === "none" ? "right" : item.hand_slot,
+        })
+        .eq("id", item.weapon_id)
+        .eq("hand_slot", "ground")
+        .select("id")
+        .maybeSingle();
+      if (weaponError || !reclaimedWeapon) {
+        const { error: restoreError } = await supabase.from("battle_map_items").insert(item);
+        if (restoreError)
+          console.error("Não foi possível restaurar arma no mapa após falha.", restoreError);
+        toast.error(
+          weaponError
+            ? `Não foi possível pegar a arma: ${weaponError.message}`
+            : "Essa arma já não está mais disponível no chão.",
+        );
+        void qc.invalidateQueries({ queryKey: ["battle_map_items"] });
+        return;
+      }
+      void qc.invalidateQueries({ queryKey: ["group"] });
+      void qc.invalidateQueries({ queryKey: ["sheet", combatant.character_id] });
+      if (previousOwnerId) void qc.invalidateQueries({ queryKey: ["sheet", previousOwnerId] });
+      void qc.invalidateQueries({ queryKey: ["battle_map_items"] });
+      toast.success(`${item.name} voltou para a mão principal de ${combatant.name}.`);
+      void logCombatEvent(combatant, `${combatant.name} pegou ${item.name} do chão.`);
+      return;
+    }
     const { error: insertError } = await supabase.from("backpack_items").insert({
       character_id: combatant.character_id,
       catalog_item_id: catalogItem?.id ?? item.catalog_item_id,
@@ -1101,6 +1329,11 @@ function CombatPage() {
       heal_sanity: catalogItem?.heal_sanity ?? 0,
       restore_energy: catalogItem?.restore_energy ?? 0,
       temp_shield: catalogItem?.temp_shield ?? 0,
+      image_url: catalogItem?.image_url ?? item.image_url,
+      armor_part: catalogItem?.armor_part ?? "",
+      armor_reduction: catalogItem?.armor_reduction ?? 0,
+      hand_slot: catalogItem?.hand_slot ?? "none",
+      equipped: false,
     });
     if (insertError) {
       const { error: restoreError } = await supabase.from("battle_map_items").insert(item);
@@ -1169,6 +1402,16 @@ function CombatPage() {
   /** Andar conta como o passo da rodada; colocar no mapa (ou tirar dele) não conta. */
   const moveCombatant = (id: string, x: number | null, y: number | null) => {
     const who = combat.combatants.find((item) => item.id === id);
+    if (x !== null && y !== null) {
+      const occupiedCells = occupied();
+      if (who?.pos_x != null && who.pos_y != null)
+        occupiedCells.delete(cellKey(who.pos_x, who.pos_y));
+      for (const mapItem of mapItems) occupiedCells.add(cellKey(mapItem.x, mapItem.y));
+      if (!canMoveTo(x, y, map.cols, map.rows, terrain, occupiedCells)) {
+        toast.error("Essa casa está fora do mapa, bloqueada ou ocupada.");
+        return;
+      }
+    }
     const stepped = state.active && x !== null && y !== null && who?.pos_x != null;
     c.update.mutate([
       { id, patch: { pos_x: x, pos_y: y, ...(stepped ? { moved_round: state.round } : {}) } },
@@ -1229,6 +1472,26 @@ function CombatPage() {
                     </option>
                   ))}
               </select>
+              <input
+                type="number"
+                min={0}
+                max={map.cols - 1}
+                value={itemX}
+                onChange={(event) => setItemX(event.target.value)}
+                aria-label="Coordenada X do item"
+                placeholder="X auto"
+                className="h-9 w-16 rounded-md border border-border bg-background px-2 text-sm"
+              />
+              <input
+                type="number"
+                min={0}
+                max={map.rows - 1}
+                value={itemY}
+                onChange={(event) => setItemY(event.target.value)}
+                aria-label="Coordenada Y do item"
+                placeholder="Y auto"
+                className="h-9 w-16 rounded-md border border-border bg-background px-2 text-sm"
+              />
               <select
                 className="h-9 rounded-md border border-border bg-card px-2 text-sm"
                 value=""
@@ -1290,7 +1553,7 @@ function CombatPage() {
             combatActive={state.active}
             currentCombatantId={state.current_combatant_id}
             onMove={moveCombatant}
-            items={mapItems}
+            items={mapItemsWithIcons}
             onPickItem={(itemId, tokenId) => void pickupMapItem(itemId, tokenId)}
             onPushItem={(itemId, tokenId) => void pushMapItem(itemId, tokenId)}
           />
@@ -1434,6 +1697,24 @@ function CombatPage() {
                     {" · "}Atq +{x.attack_bonus}
                     {conditionPenalty(x.conditions) > 0 && ` (−${conditionPenalty(x.conditions)})`}
                   </p>
+                  {x.kind === "character" &&
+                    x.character_id &&
+                    (() => {
+                      const character = group.characters.find(
+                        (entry) => entry.id === x.character_id,
+                      );
+                      if (!character) return null;
+                      const level = sanityLevel(
+                        character.sanity_current ?? 10,
+                        character.sanity_max ?? 10,
+                      );
+                      return (
+                        <p className="text-[11px] text-purple-300">
+                          SAN {character.sanity_current ?? 10}/{character.sanity_max ?? 10} ·{" "}
+                          {SANITY_LEVEL_LABELS[level]}
+                        </p>
+                      );
+                    })()}
                 </div>
                 {mine(x) && (
                   <>
@@ -1448,7 +1729,14 @@ function CombatPage() {
                           ? "Colapso total: ataques bloqueados até a sanidade voltar."
                           : null
                       }
-                      onAttack={(option, targetId) => resolveAttack(x, option, targetId)}
+                      getSkillValue={(skillKey) =>
+                        x.character_id
+                          ? skillValueFor(group, x.character_id, skillKey)
+                          : x.attack_bonus
+                      }
+                      onAttack={(option, targetId, bodyTarget) =>
+                        resolveAttack(x, option, targetId, bodyTarget)
+                      }
                       onDefend={() => defend(x)}
                     />
                     {x.kind === "character" && x.character_id && (
@@ -1543,6 +1831,16 @@ function CombatPage() {
                     </div>
                   );
                 })()}
+              {isMaster && (
+                <PositionEditor
+                  key={`${x.pos_x ?? "none"}-${x.pos_y ?? "none"}`}
+                  x={x.pos_x}
+                  y={x.pos_y}
+                  cols={map.cols}
+                  rows={map.rows}
+                  onSave={(posX, posY) => moveCombatant(x.id, posX, posY)}
+                />
+              )}
               {/* PV e condições à mão: só o mestre. Jogador só vê; o PV muda pelos ataques e esquivas. */}
               {!isMaster ? (
                 <div className="mt-2 flex items-center gap-2">
@@ -1693,5 +1991,60 @@ function CombatPage() {
         </div>
       )}
     </div>
+  );
+}
+
+function PositionEditor({
+  x,
+  y,
+  cols,
+  rows,
+  onSave,
+}: {
+  x: number | null;
+  y: number | null;
+  cols: number;
+  rows: number;
+  onSave: (x: number, y: number) => void;
+}) {
+  const [coordinates, setCoordinates] = useState({ x: x ?? 0, y: y ?? 0 });
+  return (
+    <form
+      className="mt-2 flex items-center gap-2 text-xs"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const nextX = Math.max(0, Math.min(cols - 1, coordinates.x));
+        const nextY = Math.max(0, Math.min(rows - 1, coordinates.y));
+        setCoordinates({ x: nextX, y: nextY });
+        onSave(nextX, nextY);
+      }}
+    >
+      <span className="label-caps text-muted-foreground">Grid X/Y</span>
+      <input
+        aria-label="Coordenada X do token"
+        className="h-7 w-14 rounded border border-border bg-background px-1 text-center"
+        type="number"
+        min={0}
+        max={cols - 1}
+        value={coordinates.x}
+        onChange={(event) =>
+          setCoordinates((current) => ({ ...current, x: Number(event.target.value) || 0 }))
+        }
+      />
+      <input
+        aria-label="Coordenada Y do token"
+        className="h-7 w-14 rounded border border-border bg-background px-1 text-center"
+        type="number"
+        min={0}
+        max={rows - 1}
+        value={coordinates.y}
+        onChange={(event) =>
+          setCoordinates((current) => ({ ...current, y: Number(event.target.value) || 0 }))
+        }
+      />
+      <Button type="submit" size="sm" variant="outline" className="h-7">
+        Posicionar
+      </Button>
+    </form>
   );
 }

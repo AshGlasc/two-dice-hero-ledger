@@ -32,9 +32,16 @@ type CharacterPatch = Partial<
   >
 >;
 type WeaponInput = Pick<Weapon, "name" | "weapon_type" | "damage" | "ammo" | "notes"> &
-  Partial<Pick<Weapon, "skill_key" | "range" | "uses_max" | "uses_current">>;
+  Partial<
+    Pick<Weapon, "skill_key" | "range" | "uses_max" | "uses_current" | "hand_slot" | "image_url">
+  >;
 type BackpackInput = Pick<BackpackItem, "name" | "quantity" | "notes"> &
-  Partial<Pick<BackpackItem, "skill_bonuses">>;
+  Partial<
+    Pick<
+      BackpackItem,
+      "skill_bonuses" | "armor_part" | "armor_reduction" | "equipped" | "hand_slot" | "image_url"
+    >
+  >;
 
 function onSaveError(error: unknown) {
   console.error(error);
@@ -49,6 +56,7 @@ export function useSheetMutations(characterId: string) {
     qc.setQueryData<CharacterSheet | null>(key, (old) => (old ? fn(old) : old));
   };
   const refresh = () => qc.invalidateQueries({ queryKey: key });
+  const refreshGroup = () => qc.invalidateQueries({ queryKey: ["group"] });
 
   const updateCharacter = useMutation({
     mutationFn: async (patch: CharacterPatch) => {
@@ -112,6 +120,7 @@ export function useSheetMutations(characterId: string) {
     onSuccess: () => {
       toast.success("Arma guardada no arsenal.");
       refresh();
+      refreshGroup();
     },
     onError: onSaveError,
   });
@@ -121,7 +130,10 @@ export function useSheetMutations(characterId: string) {
       const { error } = await supabase.from("weapons").update(input).eq("id", id);
       if (error) throw error;
     },
-    onSuccess: refresh,
+    onSuccess: () => {
+      refresh();
+      refreshGroup();
+    },
     onError: onSaveError,
   });
 
@@ -135,6 +147,7 @@ export function useSheetMutations(characterId: string) {
       onSaveError(e);
       refresh();
     },
+    onSuccess: refreshGroup,
   });
 
   const addItem = useMutation({
@@ -144,7 +157,10 @@ export function useSheetMutations(characterId: string) {
         .insert({ ...input, character_id: characterId });
       if (error) throw error;
     },
-    onSuccess: refresh,
+    onSuccess: () => {
+      refresh();
+      refreshGroup();
+    },
     onError: onSaveError,
   });
 
@@ -162,6 +178,7 @@ export function useSheetMutations(characterId: string) {
       onSaveError(e);
       refresh();
     },
+    onSuccess: refreshGroup,
   });
 
   const deleteItem = useMutation({
@@ -175,6 +192,7 @@ export function useSheetMutations(characterId: string) {
       onSaveError(e);
       refresh();
     },
+    onSuccess: refreshGroup,
   });
 
   return {

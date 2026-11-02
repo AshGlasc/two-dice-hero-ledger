@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MasterLockScreen } from "@/components/rpg/MasterLockScreen";
+import { Stepper } from "@/components/rpg/Stepper";
 import {
   Dialog,
   DialogContent,
@@ -27,6 +28,7 @@ import { useMasterAuth } from "@/context/MasterAuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { groupQuery } from "@/lib/rpg-queries";
+import { ALL_SKILLS } from "@/lib/skills";
 
 export const Route = createFileRoute("/itens")({
   head: () => ({
@@ -55,7 +57,10 @@ type ItemForm = {
   heal_sanity: string;
   restore_energy: string;
   temp_shield: string;
-  skill_bonuses: string;
+  skill_bonuses: Record<string, number>;
+  armor_part: string;
+  armor_reduction: string;
+  hand_slot: string;
   is_movable: boolean;
   requires_roll_to_interact: boolean;
   interaction_skill_key: string;
@@ -76,7 +81,10 @@ const emptyForm: ItemForm = {
   heal_sanity: "0",
   restore_energy: "0",
   temp_shield: "0",
-  skill_bonuses: "{}",
+  skill_bonuses: {},
+  armor_part: "",
+  armor_reduction: "0",
+  hand_slot: "none",
   is_movable: false,
   requires_roll_to_interact: false,
   interaction_skill_key: "",
@@ -126,18 +134,11 @@ function ItemsPageContent() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<ItemCategory | "all">("all");
   const [search, setSearch] = useState("");
+  const [bonusSkill, setBonusSkill] = useState("");
+  const [bonusValue, setBonusValue] = useState(1);
 
   const saveItem = useMutation({
     mutationFn: async ({ id, values }: { id: string | null; values: ItemForm }) => {
-      const bonuses: unknown = JSON.parse(values.skill_bonuses);
-      if (
-        !bonuses ||
-        typeof bonuses !== "object" ||
-        Array.isArray(bonuses) ||
-        Object.values(bonuses).some((value) => typeof value !== "number" || !Number.isFinite(value))
-      ) {
-        throw new Error("Bônus de habilidade deve ser um objeto JSON com valores numéricos.");
-      }
       const payload = {
         name: values.name.trim(),
         category: values.category,
@@ -152,7 +153,11 @@ function ItemsPageContent() {
         heal_sanity: Number(values.heal_sanity) || 0,
         restore_energy: Number(values.restore_energy) || 0,
         temp_shield: Number(values.temp_shield) || 0,
-        skill_bonuses: bonuses as Record<string, number>,
+        skill_bonuses: values.skill_bonuses,
+        armor_part: values.armor_part,
+        armor_reduction: Number(values.armor_reduction) || 0,
+        hand_slot:
+          values.category === "weapon" && values.hand_slot === "none" ? "right" : values.hand_slot,
         is_movable: values.is_movable,
         requires_roll_to_interact: values.requires_roll_to_interact,
         interaction_skill_key: values.interaction_skill_key.trim() || null,
@@ -189,6 +194,24 @@ function ItemsPageContent() {
 
   const deliverItem = useMutation({
     mutationFn: async ({ item, characterId }: { item: CatalogItem; characterId: string }) => {
+      if (item.category === "weapon") {
+        const { error: weaponError } = await supabase.from("weapons").insert({
+          character_id: characterId,
+          name: item.name,
+          weapon_type: "Arma",
+          damage: item.damage ?? "",
+          ammo: item.ammo ?? "",
+          notes: item.description,
+          skill_key: item.skill_key ?? "ferramenta_fisica",
+          range: item.range ?? 1,
+          uses_max: item.uses_max ?? 0,
+          uses_current: item.uses_max ?? 0,
+          hand_slot: item.hand_slot,
+          image_url: item.image_url,
+        });
+        if (weaponError) throw weaponError;
+        return;
+      }
       const { error: insertError } = await supabase.from("backpack_items").insert({
         character_id: characterId,
         catalog_item_id: item.id,
@@ -201,11 +224,17 @@ function ItemsPageContent() {
         heal_sanity: item.heal_sanity ?? 0,
         restore_energy: item.restore_energy,
         temp_shield: item.temp_shield ?? 0,
+        image_url: item.image_url,
+        armor_part: item.armor_part,
+        armor_reduction: item.armor_reduction,
+        hand_slot: item.hand_slot,
+        equipped: false,
       });
       if (insertError) throw insertError;
     },
-    onSuccess: (_, { item }) => {
+    onSuccess: (_, { item, characterId }) => {
       void qc.invalidateQueries({ queryKey: ["group"] });
+      void qc.invalidateQueries({ queryKey: ["sheet", characterId] });
       toast.success(`${item.name} entregue.`);
     },
     onError: (deliveryError) =>
@@ -238,7 +267,15 @@ function ItemsPageContent() {
       heal_sanity: String(item.heal_sanity ?? 0),
       restore_energy: String(item.restore_energy ?? 0),
       temp_shield: String(item.temp_shield ?? 0),
-      skill_bonuses: JSON.stringify(item.skill_bonuses, null, 2),
+      skill_bonuses:
+        item.skill_bonuses &&
+        typeof item.skill_bonuses === "object" &&
+        !Array.isArray(item.skill_bonuses)
+          ? (item.skill_bonuses as Record<string, number>)
+          : {},
+      armor_part: item.armor_part,
+      armor_reduction: String(item.armor_reduction),
+      hand_slot: item.hand_slot,
       is_movable: item.is_movable,
       requires_roll_to_interact: item.requires_roll_to_interact,
       interaction_skill_key: item.interaction_skill_key ?? "",
@@ -322,7 +359,7 @@ function ItemsPageContent() {
           </label>
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="space-y-1">
-              <span className="label-caps text-muted-foreground">Imagem (URL)</span>
+              <span className="label-caps text-muted-foreground">Ícone / imagem (URL)</span>
               <Input
                 type="url"
                 value={form.image_url}
@@ -331,15 +368,56 @@ function ItemsPageContent() {
             </label>
             <label className="space-y-1">
               <span className="label-caps text-muted-foreground">Skill de uso</span>
-              <Input
+              <select
+                className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
                 value={form.skill_key}
                 onChange={(event) => setForm({ ...form, skill_key: event.target.value })}
-              />
+              >
+                {ALL_SKILLS.map((skill) => (
+                  <option key={skill.key} value={skill.key}>
+                    {skill.name}
+                  </option>
+                ))}
+              </select>
             </label>
           </div>
           <fieldset className="space-y-2">
-            <legend className="label-caps text-primary">Arma e recursos</legend>
+            <legend className="label-caps text-primary">Equipamento e recursos</legend>
             <div className="grid gap-3 sm:grid-cols-3">
+              <label className="space-y-1">
+                <span className="label-caps text-muted-foreground">Slot de mão</span>
+                <select
+                  className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+                  value={form.hand_slot}
+                  onChange={(event) => setForm({ ...form, hand_slot: event.target.value })}
+                >
+                  <option value="none">Sem mão</option>
+                  <option value="right">Mão principal direita</option>
+                  <option value="left">Mão principal esquerda</option>
+                  <option value="offhand">Mão secundária</option>
+                  <option value="two_hands">Duas mãos</option>
+                </select>
+              </label>
+              <label className="space-y-1">
+                <span className="label-caps text-muted-foreground">Região protegida</span>
+                <select
+                  className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+                  value={form.armor_part}
+                  onChange={(event) => setForm({ ...form, armor_part: event.target.value })}
+                >
+                  <option value="">Sem proteção</option>
+                  <option value="head">Cabeça</option>
+                  <option value="torso">Peito / tronco</option>
+                  <option value="arms">Braços</option>
+                  <option value="legs">Pernas</option>
+                </select>
+              </label>
+              <Field
+                label="Redução de dano"
+                type="number"
+                value={form.armor_reduction}
+                onChange={(armor_reduction) => setForm({ ...form, armor_reduction })}
+              />
               <Field
                 label="Dano"
                 value={form.damage}
@@ -387,14 +465,64 @@ function ItemsPageContent() {
                 onChange={(temp_shield) => setForm({ ...form, temp_shield })}
               />
             </div>
-            <label className="block space-y-1">
-              <span className="label-caps text-muted-foreground">Bônus de habilidade (JSON)</span>
-              <Textarea
-                className="font-mono text-xs"
-                value={form.skill_bonuses}
-                onChange={(event) => setForm({ ...form, skill_bonuses: event.target.value })}
-              />
-            </label>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="label-caps text-muted-foreground">Bônus de habilidade</span>
+              <select
+                className="h-9 min-w-48 rounded-md border border-border bg-background px-2 text-sm"
+                value={bonusSkill}
+                onChange={(event) => setBonusSkill(event.target.value)}
+              >
+                <option value="">Escolher perícia</option>
+                {ALL_SKILLS.map((skill) => (
+                  <option key={skill.key} value={skill.key}>
+                    {skill.name}
+                  </option>
+                ))}
+              </select>
+              {bonusSkill && (
+                <>
+                  <Stepper
+                    label="valor do bônus"
+                    value={bonusValue}
+                    min={-5}
+                    max={10}
+                    onChange={setBonusValue}
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setForm((current) => ({
+                        ...current,
+                        skill_bonuses: { ...current.skill_bonuses, [bonusSkill]: bonusValue },
+                      }));
+                      setBonusSkill("");
+                    }}
+                  >
+                    Adicionar bônus
+                  </Button>
+                </>
+              )}
+              {Object.entries(form.skill_bonuses).map(([skillKey, value]) => (
+                <button
+                  key={skillKey}
+                  type="button"
+                  className="rounded-full border border-success/50 bg-success/10 px-2 py-1 text-xs"
+                  onClick={() =>
+                    setForm((current) => {
+                      const skill_bonuses = { ...current.skill_bonuses };
+                      delete skill_bonuses[skillKey];
+                      return { ...current, skill_bonuses };
+                    })
+                  }
+                >
+                  {ALL_SKILLS.find((skill) => skill.key === skillKey)?.name ?? skillKey}{" "}
+                  {value > 0 ? "+" : ""}
+                  {value} ×
+                </button>
+              ))}
+            </div>
           </fieldset>
           <fieldset className="space-y-2">
             <legend className="label-caps text-primary">Interação com cenário</legend>
@@ -419,11 +547,23 @@ function ItemsPageContent() {
               </label>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
-              <Field
-                label="Skill de interação"
-                value={form.interaction_skill_key}
-                onChange={(interaction_skill_key) => setForm({ ...form, interaction_skill_key })}
-              />
+              <label className="space-y-1">
+                <span className="label-caps text-muted-foreground">Perícia de interação</span>
+                <select
+                  className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+                  value={form.interaction_skill_key}
+                  onChange={(event) =>
+                    setForm({ ...form, interaction_skill_key: event.target.value })
+                  }
+                >
+                  <option value="">Sem teste</option>
+                  {ALL_SKILLS.map((skill) => (
+                    <option key={skill.key} value={skill.key}>
+                      {skill.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <Field
                 label="Dificuldade de interação"
                 type="number"

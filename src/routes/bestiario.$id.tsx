@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, notFound, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, Crown, Dices, Lock, Swords, Trash2 } from "lucide-react";
@@ -6,6 +7,7 @@ import { AvatarUpload } from "@/components/rpg/AvatarUpload";
 import { InlineField } from "@/components/rpg/InlineField";
 import { MasterUnlockModal } from "@/components/rpg/MasterUnlockModal";
 import { MoneyField } from "@/components/rpg/MoneyField";
+import { MonsterBodyEditor } from "@/components/rpg/MonsterBodyEditor";
 import { MonsterAttacksSection } from "@/components/rpg/MonsterAttacksSection";
 import { Stepper } from "@/components/rpg/Stepper";
 import { Button } from "@/components/ui/button";
@@ -16,6 +18,7 @@ import { MONSTER_LIMITS } from "@/lib/combat";
 import { parseMonsterAttacks, getSkillLabel } from "@/lib/custom-attacks";
 import { logRolls } from "@/lib/roll-log";
 import { monstersQuery } from "@/lib/rpg-queries";
+import { defaultMonsterBodyParts, monsterBodyLabel, monsterBodyType } from "@/lib/monster-body";
 import { ATTRIBUTES, ATTRIBUTE_MAX, ATTRIBUTE_MIN, roll2d6 } from "@/lib/skills";
 import { cn } from "@/lib/utils";
 
@@ -31,9 +34,16 @@ export const Route = createFileRoute("/bestiario/$id")({
     return {
       meta: [
         { title },
-        { name: "description", content: "Perfil do monstro: quem era antes, atributos, PV, defesa, ataques e habilidades." },
+        {
+          name: "description",
+          content:
+            "Perfil do monstro: quem era antes, atributos, PV, defesa, ataques e habilidades.",
+        },
         { property: "og:title", content: title },
-        { property: "og:description", content: "Perfil de monstro do bestiário do Eco dos Caídos." },
+        {
+          property: "og:description",
+          content: "Perfil de monstro do bestiário do Eco dos Caídos.",
+        },
         { property: "og:type", content: "profile" },
         { name: "twitter:card", content: "summary" },
       ],
@@ -64,6 +74,11 @@ function MonsterPage() {
   const { isMaster } = useMasterAuth();
   const navigate = useNavigate();
   const m = monsters.find((x) => x.id === id);
+  const bodyType = m?.body_type ?? "human";
+  const bodyParts = useMemo(
+    () => m?.body_parts ?? defaultMonsterBodyParts(monsterBodyType(bodyType)),
+    [bodyType, m?.body_parts],
+  );
   if (!m) return null;
 
   const save = (patch: Parameters<typeof update.mutate>[0]["patch"]) => {
@@ -71,14 +86,17 @@ function MonsterPage() {
     update.mutate({ id, patch });
   };
   const roll = (label: string, mod: number) =>
-    void logRolls([{ characterId: null, characterName: m.name, label, result: roll2d6(mod, null) }]);
+    void logRolls([
+      { characterId: null, characterName: m.name, label, result: roll2d6(mod, null) },
+    ]);
 
   return (
     <main className="mx-auto max-w-5xl space-y-6 px-4 py-6 md:px-6 md:py-8">
       {!isMaster ? (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/80 bg-card/60 p-3 text-xs text-muted-foreground">
           <span className="flex items-center gap-1.5">
-            <Lock className="size-3.5 text-primary" /> Visualização de monstro (Edição e exclusão restritas ao mestre)
+            <Lock className="size-3.5 text-primary" /> Visualização de monstro (Edição e exclusão
+            restritas ao mestre)
           </span>
           <MasterUnlockModal
             trigger={
@@ -117,7 +135,12 @@ function MonsterPage() {
       </div>
 
       <header className="flex items-center gap-4 border-b border-border pb-6 md:gap-6">
-        <AvatarUpload src={m.avatar_url} name={m.name} tone="monster" onChange={(v) => save({ avatar_url: v })} />
+        <AvatarUpload
+          src={m.avatar_url}
+          name={m.name}
+          tone="monster"
+          onChange={(v) => save({ avatar_url: v })}
+        />
         <div className="min-w-0 flex-1 space-y-1">
           <p className="label-caps px-1 text-destructive">Monstro</p>
           <InlineField
@@ -134,9 +157,43 @@ function MonsterPage() {
             onSave={(v) => save({ former_life: v })}
             className="px-1 italic"
           />
-          <MoneyField value={m.money} canEdit={isMaster} onSave={(v) => save({ money: v })} className="mt-1" />
+          <MoneyField
+            value={m.money}
+            canEdit={isMaster}
+            onSave={(v) => save({ money: v })}
+            className="mt-1"
+          />
         </div>
       </header>
+
+      <section className="rounded-lg border border-border bg-card p-5 shadow-paint">
+        <div className="mb-3">
+          <h2 className="text-xl font-bold uppercase">Anatomia</h2>
+          <p className="text-sm text-muted-foreground">
+            {monsterBodyLabel(bodyType)} · {bodyParts.length}{" "}
+            {bodyParts.length === 1 ? "parte" : "partes"}
+          </p>
+        </div>
+        {isMaster ? (
+          <MonsterBodyEditor
+            bodyType={bodyType}
+            bodyParts={bodyParts}
+            isSaving={update.isPending}
+            onSave={(body_type, body_parts) => save({ body_type, body_parts })}
+          />
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {bodyParts.map((part) => (
+              <span
+                key={part}
+                className="rounded-full border border-border px-3 py-1 text-sm text-muted-foreground"
+              >
+                {part}
+              </span>
+            ))}
+          </div>
+        )}
+      </section>
 
       <section className="rounded-lg border border-border bg-card p-5 shadow-paint">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -147,7 +204,10 @@ function MonsterPage() {
         </div>
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           {STATS.map((s) => (
-            <div key={s.key} className="flex flex-col items-center gap-1 rounded-md border border-border p-3">
+            <div
+              key={s.key}
+              className="flex flex-col items-center gap-1 rounded-md border border-border p-3"
+            >
               <span className="label-caps text-muted-foreground">{s.label}</span>
               <Stepper
                 size="lg"
@@ -160,16 +220,49 @@ function MonsterPage() {
             </div>
           ))}
         </div>
+        <div className="mt-4 border-t border-border pt-3">
+          <h3 className="label-caps mb-2 text-muted-foreground">Redução de dano por região</h3>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {(
+              [
+                ["armor_head", "Cabeça"],
+                ["armor_torso", "Peito / tronco"],
+                ["armor_arms", "Braços"],
+                ["armor_legs", "Pernas"],
+              ] as const
+            ).map(([key, label]) => (
+              <div key={key} className="space-y-1 rounded-md border border-border p-2">
+                <span className="label-caps text-muted-foreground">{label} · RD</span>
+                <Stepper
+                  label={`RD ${label}`}
+                  value={m[key]}
+                  min={0}
+                  max={20}
+                  onChange={(value) => save({ [key]: value })}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
       </section>
 
       <section>
         <h2 className="mb-1 text-2xl font-bold uppercase">O que restou da pessoa</h2>
-        <p className="mb-3 text-sm text-muted-foreground">Atributos como os dos jogadores. Rolagem = 2d6 + atributo.</p>
+        <p className="mb-3 text-sm text-muted-foreground">
+          Atributos como os dos jogadores. Rolagem = 2d6 + atributo.
+        </p>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           {ATTRIBUTES.map((a) => {
             const t = ATTRIBUTE_THEME[a.key];
             return (
-              <div key={a.key} className={cn("flex flex-col items-center gap-2 rounded-lg border p-3", t.border, t.panel)}>
+              <div
+                key={a.key}
+                className={cn(
+                  "flex flex-col items-center gap-2 rounded-lg border p-3",
+                  t.border,
+                  t.panel,
+                )}
+              >
                 <span className={cn("label-caps", t.text)}>{a.name}</span>
                 <Stepper
                   label={a.name}
@@ -210,10 +303,7 @@ function MonsterPage() {
 
       {/* Ataques: mestre configura com UI estruturada; jogadores vêem resumo */}
       {isMaster ? (
-        <MonsterAttacksSection
-          monster={m}
-          onSave={(serialized) => save({ attacks: serialized })}
-        />
+        <MonsterAttacksSection monster={m} onSave={(serialized) => save({ attacks: serialized })} />
       ) : (
         <section className="rounded-lg border border-border bg-card p-5">
           <p className="label-caps mb-1 text-destructive">Ataques do Monstro</p>
@@ -221,19 +311,31 @@ function MonsterPage() {
           {(() => {
             const atks = parseMonsterAttacks(m.id, m.attacks);
             if (atks.length === 0) {
-              return <p className="text-sm italic text-muted-foreground">Nenhum ataque configurado pelo mestre.</p>;
+              return (
+                <p className="text-sm italic text-muted-foreground">
+                  Nenhum ataque configurado pelo mestre.
+                </p>
+              );
             }
             return (
               <ul className="space-y-2">
                 {atks.map((atk) => (
-                  <li key={atk.id} className="flex items-start gap-3 rounded-lg border border-border bg-background/50 p-3">
+                  <li
+                    key={atk.id}
+                    className="flex items-start gap-3 rounded-lg border border-border bg-background/50 p-3"
+                  >
                     <Swords className="mt-0.5 size-4 shrink-0 text-destructive" />
                     <div>
                       <p className="font-display font-bold uppercase">{atk.name}</p>
                       <p className="text-xs text-muted-foreground">
-                        {getSkillLabel(atk.skillKey)} · {atk.diceCount}d6 · {atk.turnsCost} {atk.turnsCost === 1 ? "turno" : "turnos"}
+                        {getSkillLabel(atk.skillKey)} · {atk.diceCount}d6 · {atk.turnsCost}{" "}
+                        {atk.turnsCost === 1 ? "turno" : "turnos"}
                       </p>
-                      {atk.description && <p className="mt-0.5 text-xs italic text-foreground/70">{atk.description}</p>}
+                      {atk.description && (
+                        <p className="mt-0.5 text-xs italic text-foreground/70">
+                          {atk.description}
+                        </p>
+                      )}
                     </div>
                   </li>
                 ))}

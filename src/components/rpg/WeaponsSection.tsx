@@ -12,9 +12,23 @@ import { ALL_SKILLS } from "@/lib/skills";
 
 type Mutations = ReturnType<typeof useSheetMutations>;
 
-const EMPTY = { name: "", weapon_type: "", damage: "", ammo: "", notes: "" };
+const EMPTY = {
+  name: "",
+  weapon_type: "",
+  damage: "",
+  ammo: "",
+  notes: "",
+  image_url: "",
+  hand_slot: "right",
+};
 
-export function WeaponsSection({ sheet, mutations }: { sheet: CharacterSheet; mutations: Mutations }) {
+export function WeaponsSection({
+  sheet,
+  mutations,
+}: {
+  sheet: CharacterSheet;
+  mutations: Mutations;
+}) {
   const [form, setForm] = useState(EMPTY);
 
   const submit = (e: FormEvent) => {
@@ -38,6 +52,8 @@ export function WeaponsSection({ sheet, mutations }: { sheet: CharacterSheet; mu
       range: w.range,
       uses_max: w.uses_max,
       uses_current: w.uses_current,
+      hand_slot: w.hand_slot,
+      image_url: w.image_url,
       ...patch,
     });
   const weapons = sheet.weapons.filter((w) => !isCustomAttack(w));
@@ -81,6 +97,15 @@ export function WeaponsSection({ sheet, mutations }: { sheet: CharacterSheet; mu
             onChange={(e) => setForm({ ...form, ammo: e.target.value })}
           />
         </label>
+        <label className="space-y-1.5">
+          <span className="label-caps text-muted-foreground">Ícone da arma (URL)</span>
+          <Input
+            type="url"
+            placeholder="https://..."
+            value={form.image_url}
+            onChange={(e) => setForm({ ...form, image_url: e.target.value })}
+          />
+        </label>
         <Button type="submit" variant="paint" disabled={mutations.addWeapon.isPending}>
           <Plus /> Guardar
         </Button>
@@ -105,7 +130,8 @@ export function WeaponsSection({ sheet, mutations }: { sheet: CharacterSheet; mu
                   size="icon"
                   aria-label={`Remover ${w.name}`}
                   onClick={() => {
-                    if (confirm(`Remover ${w.name} do arsenal?`)) mutations.deleteWeapon.mutate(w.id);
+                    if (confirm(`Remover ${w.name} do arsenal?`))
+                      mutations.deleteWeapon.mutate(w.id);
                   }}
                 >
                   <Trash2 />
@@ -130,6 +156,40 @@ export function WeaponsSection({ sheet, mutations }: { sheet: CharacterSheet; mu
                     />
                   </div>
                 ))}
+              </div>
+              <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto]">
+                <label className="space-y-1">
+                  <span className="label-caps text-muted-foreground">Ícone / imagem da arma</span>
+                  <Input
+                    key={`${w.id}-${w.image_url}`}
+                    type="url"
+                    aria-label={`Imagem de ${w.name}`}
+                    defaultValue={w.image_url}
+                    onBlur={(event) => {
+                      const image_url = event.target.value.trim();
+                      if (image_url !== w.image_url) save(w, { image_url });
+                    }}
+                    className="h-8"
+                  />
+                </label>
+                <label className="space-y-1">
+                  <span className="label-caps text-muted-foreground">Mão</span>
+                  <select
+                    className="h-8 rounded border border-border bg-card px-2 text-sm"
+                    value={w.hand_slot}
+                    disabled={w.hand_slot === "ground"}
+                    onChange={(event) => save(w, { hand_slot: event.target.value })}
+                    aria-label={`Mão de ${w.name}`}
+                  >
+                    <option value="right">Principal direita</option>
+                    <option value="left">Principal esquerda</option>
+                    <option value="offhand">Secundária</option>
+                    <option value="two_hands">Duas mãos</option>
+                    <option value="ground" disabled>
+                      No chão
+                    </option>
+                  </select>
+                </label>
               </div>
               <div className="mt-3 grid gap-2 rounded-md border border-border/60 bg-muted/30 p-2 text-xs sm:grid-cols-2">
                 <label className="space-y-1 sm:col-span-2">

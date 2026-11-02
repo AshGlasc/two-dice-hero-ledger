@@ -21,15 +21,24 @@ import {
   parseMonsterAttacks,
   serializeMonsterAttacks,
   type CustomAttack,
+  type HandSlot,
 } from "@/lib/custom-attacks";
 import type { Monster } from "@/lib/rpg-queries";
 
-const EMPTY_FORM = {
+const EMPTY_FORM: {
+  name: string;
+  skillKey: string;
+  turnsCost: number;
+  diceCount: number;
+  description: string;
+  handSlot: HandSlot;
+} = {
   name: "",
   skillKey: "attack_bonus",
   turnsCost: 1,
   diceCount: 2,
   description: "",
+  handSlot: "none",
 };
 
 export function MonsterAttacksSection({
@@ -65,6 +74,7 @@ export function MonsterAttacksSection({
       damageType: "Físico",
       durationRounds: 1,
       damageFormula: `${form.diceCount}d6`,
+      handSlot: form.handSlot,
     };
 
     const updated = [...attacks, newAttack];
@@ -110,7 +120,7 @@ export function MonsterAttacksSection({
             <h3 className="font-display text-xl font-bold uppercase">Definir Ataque</h3>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-3">
             <label className="space-y-1.5">
               <span className="label-caps text-muted-foreground">Nome do Ataque</span>
               <Input
@@ -143,6 +153,24 @@ export function MonsterAttacksSection({
                       </SelectItem>
                     ))}
                   </SelectGroup>
+                </SelectContent>
+              </Select>
+            </label>
+            <label className="space-y-1.5">
+              <span className="label-caps text-muted-foreground">Slot corporal</span>
+              <Select
+                value={form.handSlot}
+                onValueChange={(handSlot) => setForm({ ...form, handSlot: handSlot as HandSlot })}
+              >
+                <SelectTrigger aria-label="Mão do ataque do monstro">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Natural / sem mão</SelectItem>
+                  <SelectItem value="right">Mão principal direita</SelectItem>
+                  <SelectItem value="left">Mão principal esquerda</SelectItem>
+                  <SelectItem value="offhand">Mão secundária</SelectItem>
+                  <SelectItem value="two_hands">Duas mãos</SelectItem>
                 </SelectContent>
               </Select>
             </label>
@@ -233,6 +261,17 @@ export function MonsterAttacksSection({
                 </div>
                 <p className="text-xs font-semibold text-destructive">
                   {getSkillLabel(atk.skillKey)}
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  {atk.handSlot === "right"
+                    ? "Mão principal direita"
+                    : atk.handSlot === "left"
+                      ? "Mão principal esquerda"
+                      : atk.handSlot === "offhand"
+                        ? "Mão secundária"
+                        : atk.handSlot === "two_hands"
+                          ? "Duas mãos"
+                          : "Ataque natural"}
                 </p>
                 {atk.description && (
                   <p className="mt-1 text-xs italic text-foreground/70">{atk.description}</p>

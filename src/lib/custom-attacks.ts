@@ -2,6 +2,7 @@ import type { Weapon } from "@/lib/rpg-queries";
 import { ALL_SKILLS, roll2d6, type RollOutcome, type RollResult } from "@/lib/skills";
 
 export type AttackApprovalStatus = "pending" | "approved" | "rejected";
+export type HandSlot = "right" | "left" | "offhand" | "two_hands" | "none";
 
 export type EffectCondition =
   | "bleeding"
@@ -55,6 +56,7 @@ export type CustomAttack = {
   damageType: "Físico" | "Mágico" | "Mental" | "Social/Moral";
   durationRounds: number;
   damageFormula: string;
+  handSlot?: HandSlot;
   effectCondition?: EffectCondition;
   defenseDebuff?: number;
 };
@@ -268,6 +270,7 @@ export function parseMonsterAttacks(
           damageType: a.damageType ?? "Físico",
           durationRounds: a.durationRounds ?? 1,
           damageFormula: a.damageFormula ?? `${a.diceCount ?? 2}d6`,
+          handSlot: a.handSlot ?? "none",
           ...(a.effectCondition !== undefined ? { effectCondition: a.effectCondition } : {}),
           ...(a.defenseDebuff !== undefined ? { defenseDebuff: a.defenseDebuff } : {}),
         }));
@@ -304,6 +307,7 @@ export function parseMonsterAttacks(
         damageType: "Físico",
         durationRounds: 1,
         damageFormula: matchDice?.[0] ?? `${dice}d6`,
+        handSlot: "none",
       };
     });
 }

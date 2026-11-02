@@ -32,7 +32,7 @@ import { useSheetMutations } from "@/hooks/use-sheet-mutations";
 import { supabase } from "@/integrations/supabase/client";
 import { clearPlayerCharacterId, getPlayerCharacterId } from "@/lib/player-character";
 import { sheetQuery } from "@/lib/rpg-queries";
-import { isSanityCritical } from "@/lib/sanity";
+import { isSanityCritical, SANITY_LEVEL_LABELS, sanityLevel } from "@/lib/sanity";
 import { skillTotal } from "@/lib/skills";
 import { cn } from "@/lib/utils";
 
@@ -423,6 +423,7 @@ function SanityBar({
   onMaxChange: (value: number) => void;
 }) {
   const critical = isSanityCritical(current, max);
+  const level = sanityLevel(current, max);
   const percent = Math.max(0, Math.min(100, (current / Math.max(1, max)) * 100));
   return (
     <section
@@ -437,7 +438,7 @@ function SanityBar({
           <div>
             <h2 className="font-display text-lg font-bold uppercase text-purple-300">Sanidade</h2>
             <p className="tabular-nums text-sm text-muted-foreground">
-              {current} / {max}
+              {current} / {max} · {SANITY_LEVEL_LABELS[level]}
             </p>
           </div>
         </div>
@@ -492,7 +493,23 @@ function SanityBar({
           style={{ width: `${percent}%` }}
         />
       </div>
-      {critical && (
+      {level === "disturbed" && (
+        <Badge
+          variant="outline"
+          className="mt-3 border-amber-500/70 bg-amber-950/30 text-amber-200"
+        >
+          Perturbado — −2 em perícias de precisão
+        </Badge>
+      )}
+      {level === "insane" && (
+        <Badge
+          variant="outline"
+          className="mt-3 border-destructive/70 bg-destructive/10 text-destructive"
+        >
+          Enlouquecido — mestre pode impor alucinações e ações involuntárias
+        </Badge>
+      )}
+      {critical && level !== "disturbed" && level !== "insane" && (
         <Badge
           variant="outline"
           className="mt-3 border-purple-500/70 bg-purple-950/60 text-purple-200"

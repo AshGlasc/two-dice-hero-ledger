@@ -122,23 +122,35 @@ export function BattleMap({
   const { terrain, tile_images: images, fog } = cur;
   const viewerIsMaster = isMaster && !viewAsPlayers;
   const viewerCharacterId = viewAsPlayers ? previewCharacterId : myCharacterId;
-  const inside = tokens.filter(
-    (t) => t.x !== null && t.y !== null && t.x < map.cols && t.y! < map.rows,
+  const inside = useMemo(
+    () => tokens.filter((t) => t.x !== null && t.y !== null && t.x < map.cols && t.y! < map.rows),
+    [tokens, map.cols, map.rows],
   );
-  const placed = inside.filter((t) =>
-    tokenVisible(
-      fog,
-      t.x!,
-      t.y!,
-      viewerIsMaster,
-      t.characterId === viewerCharacterId && !!viewerCharacterId,
-    ),
+  const placed = useMemo(
+    () =>
+      inside.filter((t) =>
+        tokenVisible(
+          fog,
+          t.x!,
+          t.y!,
+          viewerIsMaster,
+          t.characterId === viewerCharacterId && !!viewerCharacterId,
+        ),
+      ),
+    [inside, fog, viewerIsMaster, viewerCharacterId],
   );
-  const tray = tokens.filter((t) => !inside.includes(t));
-  const occupied = new Set(inside.filter((token) => !token.out).map((t) => cellKey(t.x!, t.y!)));
-  for (const item of items) occupied.add(cellKey(item.x, item.y));
+  const tray = useMemo(() => tokens.filter((t) => !inside.includes(t)), [tokens, inside]);
+  const occupied = useMemo(() => {
+    const cells = new Set(inside.filter((token) => !token.out).map((t) => cellKey(t.x!, t.y!)));
+    for (const item of items) cells.add(cellKey(item.x, item.y));
+    return cells;
+  }, [inside, items]);
   const sel = tokens.find((t) => t.id === selected) ?? null;
   const selRange = sel?.moveRange ?? MOVEMENT_RANGE;
+  const itemDistances = useMemo(() => {
+    if (sel?.x == null || sel.y == null) return new Map<string, number>();
+    return new Map(items.map((item) => [item.id, gridDistance(sel.x!, sel.y!, item.x, item.y)]));
+  }, [items, sel?.x, sel?.y]);
 
   const cellAt = (e: React.PointerEvent) => {
     const r = grid.current!.getBoundingClientRect();
@@ -582,8 +594,7 @@ export function BattleMap({
                 (viewerIsMaster || !fog[cellKey(item.x, item.y)]),
             )
             .map((item) => {
-              const distance =
-                sel?.x != null && sel.y != null ? gridDistance(sel.x, sel.y, item.x, item.y) : null;
+              const distance = itemDistances.get(item.id) ?? null;
               const adjacent = distance !== null && distance <= 1;
               return (
                 <div
@@ -612,7 +623,17 @@ export function BattleMap({
                       if (adjacent && item.collectible && sel) onPickItem?.(item.id, sel.id);
                     }}
                   >
-                    {item.icon || "📦"}
+                    {item.image_url ? (
+                      <img
+                        src={item.image_url}
+                        alt=""
+                        className="size-full rounded-full object-cover"
+                      />
+                    ) : item.icon && item.icon !== "📦" && item.icon !== "🎁" ? (
+                      item.icon
+                    ) : (
+                      item.name.slice(0, 1).toLocaleUpperCase("pt-BR")
+                    )}
                   </button>
                   {adjacent && item.movable && sel && (
                     <button

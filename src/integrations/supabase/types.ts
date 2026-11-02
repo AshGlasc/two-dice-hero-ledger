@@ -32,12 +32,15 @@ export type Database = {
       catalog_items: {
         Row: {
           ammo: string | null;
+          armor_part: string;
+          armor_reduction: number;
           category: string;
           created_at: string;
           damage: string | null;
           description: string;
           heal_hp: number | null;
           heal_sanity: number | null;
+          hand_slot: string;
           id: string;
           image_url: string;
           interaction_difficulty: number | null;
@@ -54,12 +57,15 @@ export type Database = {
         };
         Insert: {
           ammo?: string | null;
+          armor_part?: string;
+          armor_reduction?: number;
           category?: string;
           created_at?: string;
           damage?: string | null;
           description?: string;
           heal_hp?: number | null;
           heal_sanity?: number | null;
+          hand_slot?: string;
           id?: string;
           image_url?: string;
           interaction_difficulty?: number | null;
@@ -76,12 +82,15 @@ export type Database = {
         };
         Update: {
           ammo?: string | null;
+          armor_part?: string;
+          armor_reduction?: number;
           category?: string;
           created_at?: string;
           damage?: string | null;
           description?: string;
           heal_hp?: number | null;
           heal_sanity?: number | null;
+          hand_slot?: string;
           id?: string;
           image_url?: string;
           interaction_difficulty?: number | null;
@@ -100,13 +109,18 @@ export type Database = {
       };
       backpack_items: {
         Row: {
+          armor_part: string;
+          armor_reduction: number;
           character_id: string;
           catalog_item_id: string | null;
           category: string;
           created_at: string;
+          equipped: boolean;
           heal_hp: number;
           heal_sanity: number;
           id: string;
+          hand_slot: string;
+          image_url: string;
           name: string;
           notes: string;
           quantity: number;
@@ -115,13 +129,18 @@ export type Database = {
           temp_shield: number;
         };
         Insert: {
+          armor_part?: string;
+          armor_reduction?: number;
           character_id: string;
           catalog_item_id?: string | null;
           category?: string;
           created_at?: string;
+          equipped?: boolean;
           heal_hp?: number;
           heal_sanity?: number;
           id?: string;
+          hand_slot?: string;
+          image_url?: string;
           name: string;
           notes?: string;
           quantity?: number;
@@ -130,13 +149,18 @@ export type Database = {
           temp_shield?: number;
         };
         Update: {
+          armor_part?: string;
+          armor_reduction?: number;
           character_id?: string;
           catalog_item_id?: string | null;
           category?: string;
           created_at?: string;
+          equipped?: boolean;
           heal_hp?: number;
           heal_sanity?: number;
           id?: string;
+          hand_slot?: string;
+          image_url?: string;
           name?: string;
           notes?: string;
           quantity?: number;
@@ -194,10 +218,13 @@ export type Database = {
           collection_difficulty: number | null;
           collection_skill_key: string | null;
           created_at: string;
+          hand_slot: string;
           icon: string;
+          image_url: string;
           id: string;
           movable: boolean;
           name: string;
+          weapon_id: string | null;
           x: number;
           y: number;
         };
@@ -207,10 +234,13 @@ export type Database = {
           collection_difficulty?: number | null;
           collection_skill_key?: string | null;
           created_at?: string;
+          hand_slot?: string;
           icon?: string;
+          image_url?: string;
           id?: string;
           movable?: boolean;
           name: string;
+          weapon_id?: string | null;
           x: number;
           y: number;
         };
@@ -220,10 +250,13 @@ export type Database = {
           collection_difficulty?: number | null;
           collection_skill_key?: string | null;
           created_at?: string;
+          hand_slot?: string;
           icon?: string;
+          image_url?: string;
           id?: string;
           movable?: boolean;
           name?: string;
+          weapon_id?: string | null;
           x?: number;
           y?: number;
         };
@@ -633,9 +666,15 @@ export type Database = {
       monsters: {
         Row: {
           abilities: string;
+          armor_arms: number;
+          armor_head: number;
+          armor_legs: number;
+          armor_torso: number;
           attack_bonus: number;
           attacks: string;
           avatar_url: string;
+          body_parts: string[];
+          body_type: string;
           created_at: string;
           defense: number;
           description: string;
@@ -652,9 +691,15 @@ export type Database = {
         };
         Insert: {
           abilities?: string;
+          armor_arms?: number;
+          armor_head?: number;
+          armor_legs?: number;
+          armor_torso?: number;
           attack_bonus?: number;
           attacks?: string;
           avatar_url?: string;
+          body_parts?: string[];
+          body_type?: string;
           created_at?: string;
           defense?: number;
           description?: string;
@@ -671,9 +716,15 @@ export type Database = {
         };
         Update: {
           abilities?: string;
+          armor_arms?: number;
+          armor_head?: number;
+          armor_legs?: number;
+          armor_torso?: number;
           attack_bonus?: number;
           attacks?: string;
           avatar_url?: string;
+          body_parts?: string[];
+          body_type?: string;
           created_at?: string;
           defense?: number;
           description?: string;
@@ -863,6 +914,8 @@ export type Database = {
           character_id: string;
           created_at: string;
           damage: string;
+          hand_slot: string;
+          image_url: string;
           id: string;
           name: string;
           notes: string;
@@ -877,6 +930,8 @@ export type Database = {
           character_id: string;
           created_at?: string;
           damage?: string;
+          hand_slot?: string;
+          image_url?: string;
           id?: string;
           name: string;
           notes?: string;
@@ -891,6 +946,8 @@ export type Database = {
           character_id?: string;
           created_at?: string;
           damage?: string;
+          hand_slot?: string;
+          image_url?: string;
           id?: string;
           name?: string;
           notes?: string;

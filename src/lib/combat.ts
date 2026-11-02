@@ -42,6 +42,44 @@ export const conditionEmoji = (c: string) => CONDITION_EMOJI[c] ?? "❔";
 
 export const MOVEMENT_RANGE = 6;
 
+export const BODY_TARGETS = [
+  { key: "general", label: "Geral", defenseModifier: 0 },
+  { key: "left_arm", label: "Braço esquerdo", defenseModifier: -2 },
+  { key: "right_arm", label: "Braço direito", defenseModifier: -2 },
+  { key: "left_leg", label: "Perna esquerda", defenseModifier: -2 },
+  { key: "right_leg", label: "Perna direita", defenseModifier: -2 },
+  { key: "torso", label: "Peito / tronco", defenseModifier: 0 },
+  { key: "head", label: "Cabeça", defenseModifier: 2 },
+] as const;
+export type BodyTarget = (typeof BODY_TARGETS)[number]["key"];
+
+export function bodyTargetDefenseModifier(target: BodyTarget) {
+  return BODY_TARGETS.find((part) => part.key === target)?.defenseModifier ?? 0;
+}
+
+export function armorPartForTarget(target: BodyTarget) {
+  if (target.endsWith("_arm")) return "arms";
+  if (target.endsWith("_leg")) return "legs";
+  if (target === "head") return "head";
+  if (target === "torso") return "torso";
+  return "";
+}
+
+export function armorReductionForTarget(
+  items: { equipped?: boolean; armor_part?: string | null; armor_reduction?: number | null }[],
+  target: BodyTarget,
+) {
+  const armorPart = armorPartForTarget(target);
+  if (!armorPart) return 0;
+  return items.reduce(
+    (total, item) =>
+      item.equipped && item.armor_part === armorPart
+        ? total + Math.max(0, item.armor_reduction ?? 0)
+        : total,
+    0,
+  );
+}
+
 /** Distância em quadrados, contando diagonais como um quadrado. */
 export function gridDistance(fromX: number, fromY: number, toX: number, toY: number) {
   return Math.max(Math.abs(toX - fromX), Math.abs(toY - fromY));
@@ -257,6 +295,7 @@ export type AttackOption = {
   id: string;
   name: string;
   kind: "basic" | "weapon" | "custom";
+  attributeKey?: string;
   /** Bônus para acertar (skill + modificador). */
   hitBonus: number;
   /** Quantos d6 rola para acertar (2 = normal). */
@@ -264,6 +303,7 @@ export type AttackOption = {
   range: number;
   damage: { count: number; sides: number; bonus: number };
   weaponId?: string;
+  imageUrl?: string;
   usesCurrent?: number;
   usesMax?: number;
   note?: string;
@@ -273,6 +313,7 @@ export type AttackOption = {
   resistanceType?: "Defesa" | "Vontade" | "Esquiva";
   durationRounds?: number;
   reach?: "corpo-a-corpo" | "distancia" | "adjacente" | "area";
+  damageType?: "Físico" | "Mágico" | "Mental" | "Social/Moral";
 };
 
 /** Soco e Chute: todo jogador já começa com eles, baseados no Físico. */
@@ -347,6 +388,7 @@ export function attackOptionsForCharacter(group: GroupData, characterId: string)
         resistanceType: attack.resistanceType,
         durationRounds: attack.durationRounds,
         reach: attack.reach,
+        damageType: attack.damageType,
         note: `${attack.reach} · ${attack.damageType} · resist. ${attack.resistanceType}`,
         ...(attack.effectCondition !== undefined
           ? { effectCondition: attack.effectCondition }
@@ -355,6 +397,14 @@ export function attackOptionsForCharacter(group: GroupData, characterId: string)
       });
       continue;
     }
+    if (w.hand_slot === "ground") continue;
+    const handLabel: Record<string, string> = {
+      right: "mão principal direita",
+      left: "mão principal esquerda",
+      offhand: "mão secundária",
+      two_hands: "duas mãos",
+    };
+    const weaponNote = [w.weapon_type, handLabel[w.hand_slot] ?? ""].filter(Boolean).join(" · ");
     options.push({
       id: w.id,
       name: w.name,
@@ -364,9 +414,10 @@ export function attackOptionsForCharacter(group: GroupData, characterId: string)
       range: Math.max(1, w.range),
       damage: parseDamage(w.damage),
       weaponId: w.id,
+      imageUrl: w.image_url,
+      ...(weaponNote ? { note: weaponNote } : {}),
       usesCurrent: w.uses_current,
       usesMax: w.uses_max,
-      ...(w.weapon_type ? { note: w.weapon_type } : {}),
     });
   }
   return options;
@@ -398,17 +449,33 @@ export function attackOptionsForMonster(
       },
     ];
   }
-  return attacks.map((a) => ({
-    id: a.id,
-    name: a.name,
-    kind: "custom" as const,
-    hitBonus: attackBonus,
-    hitDice: 2,
-    range: 1,
-    damage: parseDamage(a.description.match(DAMAGE_IN_TEXT)?.[0]),
-    ...(a.effectCondition !== undefined ? { effectCondition: a.effectCondition } : {}),
-    ...(a.defenseDebuff !== undefined ? { defenseDebuff: a.defenseDebuff } : {}),
-  }));
+  return attacks.map((a) => {
+    const handLabel = a.handSlot
+      ? {
+          right: "mão principal direita",
+          left: "mão principal esquerda",
+          offhand: "mão secundária",
+          two_hands: "duas mãos",
+          none: "",
+        }[a.handSlot]
+      : "";
+    return {
+      id: a.id,
+      name: a.name,
+      kind: "custom" as const,
+      hitBonus: attackBonus,
+      hitDice: 2,
+      range: Math.max(1, a.range),
+      damage: parseDamage(a.description.match(DAMAGE_IN_TEXT)?.[0] || a.damageFormula),
+      resistanceType: a.resistanceType,
+      durationRounds: a.durationRounds,
+      reach: a.reach,
+      damageType: a.damageType,
+      note: `${a.reach} · ${a.damageType}${handLabel ? ` · ${handLabel}` : ""}`,
+      ...(a.effectCondition !== undefined ? { effectCondition: a.effectCondition } : {}),
+      ...(a.defenseDebuff !== undefined ? { defenseDebuff: a.defenseDebuff } : {}),
+    };
+  });
 }
 
 /** PV e defesa iniciais de um jogador ao entrar no combate (editáveis depois). */

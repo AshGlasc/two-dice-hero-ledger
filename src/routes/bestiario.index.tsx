@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { Avatar } from "@/components/rpg/AvatarUpload";
 import { MasterUnlockModal } from "@/components/rpg/MasterUnlockModal";
+import { MonsterBodyPicker } from "@/components/rpg/MonsterBodyPicker";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -17,7 +18,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { useMasterAuth } from "@/context/MasterAuthContext";
 import { useMonsters } from "@/hooks/use-monsters";
+import { monsterBodyLabel } from "@/lib/monster-body";
 import { monstersQuery } from "@/lib/rpg-queries";
+import { defaultMonsterBodyParts, type MonsterBodyType } from "@/lib/monster-body";
 
 export const Route = createFileRoute("/bestiario/")({
   head: () => ({
@@ -25,10 +28,14 @@ export const Route = createFileRoute("/bestiario/")({
       { title: "Bestiário — Eco dos Caídos" },
       {
         name: "description",
-        content: "Bestiário do Eco dos Caídos: perfis dos monstros, quem eles eram antes, PV, defesa, ataques e habilidades.",
+        content:
+          "Bestiário do Eco dos Caídos: perfis dos monstros, quem eles eram antes, PV, defesa, ataques e habilidades.",
       },
       { property: "og:title", content: "Bestiário — Eco dos Caídos" },
-      { property: "og:description", content: "Os monstros da mesa — e quem eles eram antes da transformação." },
+      {
+        property: "og:description",
+        content: "Os monstros da mesa — e quem eles eram antes da transformação.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
@@ -40,19 +47,26 @@ export const Route = createFileRoute("/bestiario/")({
 function NewMonsterDialog() {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
+  const [bodyType, setBodyType] = useState<MonsterBodyType>("human");
+  const [bodyParts, setBodyParts] = useState(defaultMonsterBodyParts("human"));
   const { create } = useMonsters();
   const navigate = useNavigate();
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
-    create.mutate(name.trim(), {
-      onSuccess: (m) => {
-        setOpen(false);
-        setName("");
-        navigate({ to: "/bestiario/$id", params: { id: m.id } });
+    create.mutate(
+      { name: name.trim(), body_type: bodyType, body_parts: bodyParts },
+      {
+        onSuccess: (m) => {
+          setOpen(false);
+          setName("");
+          setBodyType("human");
+          setBodyParts(defaultMonsterBodyParts("human"));
+          navigate({ to: "/bestiario/$id", params: { id: m.id } });
+        },
       },
-    });
+    );
   };
 
   return (
@@ -67,7 +81,20 @@ function NewMonsterDialog() {
           <DialogHeader>
             <DialogTitle className="font-display text-3xl uppercase">Novo monstro</DialogTitle>
           </DialogHeader>
-          <Input autoFocus placeholder="Ex.: O Afogado do Cais" value={name} onChange={(e) => setName(e.target.value)} />
+          <Input
+            autoFocus
+            placeholder="Ex.: O Afogado do Cais"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+          <MonsterBodyPicker
+            bodyType={bodyType}
+            bodyParts={bodyParts}
+            onChange={(type, parts) => {
+              setBodyType(type);
+              setBodyParts(parts);
+            }}
+          />
           <DialogFooter>
             <Button type="submit" variant="paint" disabled={!name.trim() || create.isPending}>
               Criar e editar
@@ -90,11 +117,17 @@ function BestiaryPage() {
           <div className="flex items-center gap-2">
             <span className="label-caps text-destructive">Os que se perderam</span>
             {isMaster ? (
-              <span className="flex items-center gap-1 text-xs text-primary" title="Você tem permissão de mestre">
+              <span
+                className="flex items-center gap-1 text-xs text-primary"
+                title="Você tem permissão de mestre"
+              >
                 <Crown className="size-3" /> Mestre Ativo
               </span>
             ) : (
-              <span className="flex items-center gap-1 text-xs text-muted-foreground" title="Apenas o mestre pode criar e editar monstros">
+              <span
+                className="flex items-center gap-1 text-xs text-muted-foreground"
+                title="Apenas o mestre pode criar e editar monstros"
+              >
                 <Lock className="size-3" /> Visualização
               </span>
             )}
@@ -143,13 +176,24 @@ function BestiaryPage() {
                 className="group flex h-full flex-col justify-between gap-4 rounded-lg border border-border bg-card p-5 shadow-paint transition-colors hover:border-destructive"
               >
                 <div className="flex items-start gap-4">
-                  <Avatar src={m.avatar_url} name={m.name} tone="monster" className="size-14 text-lg" />
+                  <Avatar
+                    src={m.avatar_url}
+                    name={m.name}
+                    tone="monster"
+                    className="size-14 text-lg"
+                  />
                   <div className="min-w-0">
                     <h2 className="truncate text-3xl font-bold uppercase leading-none group-hover:text-destructive">
                       {m.name}
                     </h2>
                     <p className="mt-1 line-clamp-2 text-sm italic text-muted-foreground">
-                      {m.former_life ? `Antes: ${m.former_life}` : "Quem era antes? Ninguém lembra."}
+                      {m.former_life
+                        ? `Antes: ${m.former_life}`
+                        : "Quem era antes? Ninguém lembra."}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {monsterBodyLabel(m.body_type ?? "human")} · {m.body_parts?.length ?? 0}{" "}
+                      partes
                     </p>
                   </div>
                 </div>

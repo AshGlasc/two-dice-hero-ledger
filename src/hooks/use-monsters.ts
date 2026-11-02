@@ -11,8 +11,8 @@ export function useMonsters() {
   const qc = useQueryClient();
 
   const create = useMutation({
-    mutationFn: async (name: string) => {
-      const { data, error } = await supabase.from("monsters").insert({ name }).select().single();
+    mutationFn: async (monster: Pick<Monster, "name" | "body_type" | "body_parts">) => {
+      const { data, error } = await supabase.from("monsters").insert(monster).select().single();
       if (error) throw error;
       return data;
     },
@@ -27,18 +27,32 @@ export function useMonsters() {
 
   const update = useMutation({
     mutationFn: async ({ id, patch }: { id: string; patch: MonsterPatch }) => {
-      const { error } = await supabase.from("monsters").update(patch).eq("id", id);
+      const { data, error } = await supabase
+        .from("monsters")
+        .update(patch)
+        .eq("id", id)
+        .select()
+        .single();
       if (error) throw error;
+      return data;
     },
-    onMutate: ({ id, patch }) => {
+    onMutate: async ({ id, patch }) => {
+      await qc.cancelQueries({ queryKey: KEY });
+      const previous = qc.getQueryData<Monster[]>(KEY);
       qc.setQueryData<Monster[]>(KEY, (old) =>
         old?.map((m) => (m.id === id ? { ...m, ...patch } : m)),
       );
+      return { previous };
     },
-    onError: (e) => {
+    onSuccess: (monster) => {
+      qc.setQueryData<Monster[]>(KEY, (old) =>
+        old?.map((current) => (current.id === monster.id ? monster : current)),
+      );
+    },
+    onError: (e, _variables, context) => {
       console.error(e);
       toast.error("Não foi possível salvar o monstro.");
-      qc.invalidateQueries({ queryKey: KEY });
+      if (context?.previous) qc.setQueryData(KEY, context.previous);
     },
   });
 
@@ -47,14 +61,19 @@ export function useMonsters() {
       const { error } = await supabase.from("monsters").delete().eq("id", id);
       if (error) throw error;
     },
-    onMutate: (id) => {
+    onMutate: async (id) => {
+      await qc.cancelQueries({ queryKey: KEY });
+      const previous = qc.getQueryData<Monster[]>(KEY);
       qc.setQueryData<Monster[]>(KEY, (old) => old?.filter((m) => m.id !== id));
+      return { previous };
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["combat"] }),
-    onError: (e) => {
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["combat"] });
+    },
+    onError: (e, _id, context) => {
       console.error(e);
       toast.error("Não foi possível apagar o monstro.");
-      qc.invalidateQueries({ queryKey: KEY });
+      if (context?.previous) qc.setQueryData(KEY, context.previous);
     },
   });
 

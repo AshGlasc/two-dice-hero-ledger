@@ -13,7 +13,13 @@ import { ALL_SKILLS } from "@/lib/skills";
 
 type Mutations = ReturnType<typeof useSheetMutations>;
 
-export function BackpackSection({ sheet, mutations }: { sheet: CharacterSheet; mutations: Mutations }) {
+export function BackpackSection({
+  sheet,
+  mutations,
+}: {
+  sheet: CharacterSheet;
+  mutations: Mutations;
+}) {
   const [name, setName] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [notes, setNotes] = useState("");
@@ -52,7 +58,14 @@ export function BackpackSection({ sheet, mutations }: { sheet: CharacterSheet; m
         </label>
         <div className="space-y-1.5">
           <span className="label-caps text-muted-foreground">Qtd.</span>
-          <Stepper label="quantidade" value={quantity} min={1} max={999} onChange={setQuantity} className="h-9" />
+          <Stepper
+            label="quantidade"
+            value={quantity}
+            min={1}
+            max={999}
+            onChange={setQuantity}
+            className="h-9"
+          />
         </div>
         <label className="space-y-1.5">
           <span className="label-caps text-muted-foreground">Notas</span>
@@ -74,41 +87,61 @@ export function BackpackSection({ sheet, mutations }: { sheet: CharacterSheet; m
           <ul className="divide-y divide-border">
             {sheet.backpack.map((it) => (
               <li key={it.id} className="px-4 py-2">
-              <div className="grid grid-cols-[1fr_auto_auto] items-center gap-3 md:grid-cols-[2fr_2fr_auto_auto]">
-                <InlineField
-                  label="Nome do item"
-                  value={it.name}
-                  required
-                  onSave={(v) => mutations.updateItem.mutate({ id: it.id, name: v })}
-                  className="font-display text-lg font-semibold uppercase"
+                <div className="grid grid-cols-[1fr_auto_auto] items-center gap-3 md:grid-cols-[2fr_2fr_auto_auto]">
+                  <InlineField
+                    label="Nome do item"
+                    value={it.name}
+                    required
+                    onSave={(v) => mutations.updateItem.mutate({ id: it.id, name: v })}
+                    className="font-display text-lg font-semibold uppercase"
+                  />
+                  <InlineField
+                    label="Notas do item"
+                    value={it.notes}
+                    placeholder="Notas…"
+                    onSave={(v) => mutations.updateItem.mutate({ id: it.id, notes: v })}
+                    className="hidden text-sm text-muted-foreground md:block"
+                  />
+                  <Stepper
+                    label={`quantidade de ${it.name}`}
+                    value={it.quantity}
+                    min={1}
+                    max={999}
+                    onChange={(v) => mutations.updateItem.mutate({ id: it.id, quantity: v })}
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`Remover ${it.name}`}
+                    onClick={() => mutations.deleteItem.mutate(it.id)}
+                  >
+                    <Trash2 />
+                  </Button>
+                </div>
+                {it.armor_part && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                    <span className="text-muted-foreground">
+                      Proteção: {it.armor_part} · RD {it.armor_reduction}
+                    </span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={it.equipped ? "default" : "outline"}
+                      className="h-7"
+                      onClick={() =>
+                        mutations.updateItem.mutate({ id: it.id, equipped: !it.equipped })
+                      }
+                    >
+                      {it.equipped ? "Equipado" : "Equipar"}
+                    </Button>
+                  </div>
+                )}
+                <ItemBonuses
+                  item={it}
+                  onSave={(skill_bonuses) =>
+                    mutations.updateItem.mutate({ id: it.id, skill_bonuses })
+                  }
                 />
-                <InlineField
-                  label="Notas do item"
-                  value={it.notes}
-                  placeholder="Notas…"
-                  onSave={(v) => mutations.updateItem.mutate({ id: it.id, notes: v })}
-                  className="hidden text-sm text-muted-foreground md:block"
-                />
-                <Stepper
-                  label={`quantidade de ${it.name}`}
-                  value={it.quantity}
-                  min={1}
-                  max={999}
-                  onChange={(v) => mutations.updateItem.mutate({ id: it.id, quantity: v })}
-                />
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label={`Remover ${it.name}`}
-                  onClick={() => mutations.deleteItem.mutate(it.id)}
-                >
-                  <Trash2 />
-                </Button>
-              </div>
-              <ItemBonuses
-                item={it}
-                onSave={(skill_bonuses) => mutations.updateItem.mutate({ id: it.id, skill_bonuses })}
-              />
               </li>
             ))}
           </ul>
@@ -174,7 +207,14 @@ function ItemBonuses({
           </select>
           {skill && (
             <>
-              <Stepper label="valor do bônus" value={value} min={-5} max={10} onChange={setValue} className="h-7" />
+              <Stepper
+                label="valor do bônus"
+                value={value}
+                min={-5}
+                max={10}
+                onChange={setValue}
+                className="h-7"
+              />
               <Button
                 type="button"
                 size="sm"

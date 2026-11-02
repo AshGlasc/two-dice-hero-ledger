@@ -1,11 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  armorReductionForTarget,
   attackOptionsForCharacter,
   attackOptionsForMonster,
   canMoveThisTurn,
   canMoveTo,
   changeHp,
+  bodyTargetDefenseModifier,
   conditionPenalty,
   dodges,
   findFreeCell,
@@ -178,6 +180,24 @@ describe("rolagem de acerto", () => {
     expect(r.total).toBe(13);
   });
 
+  describe("partes do corpo e proteção", () => {
+    it("aplica alvos fáceis nos membros, alvo difícil na cabeça e RD somente na região atingida", () => {
+      expect(bodyTargetDefenseModifier("left_arm")).toBe(-2);
+      expect(bodyTargetDefenseModifier("right_leg")).toBe(-2);
+      expect(bodyTargetDefenseModifier("torso")).toBe(0);
+      expect(bodyTargetDefenseModifier("head")).toBe(2);
+      const armor = [
+        { equipped: true, armor_part: "head", armor_reduction: 2 },
+        { equipped: true, armor_part: "arms", armor_reduction: 1 },
+        { equipped: false, armor_part: "torso", armor_reduction: 4 },
+      ];
+      expect(armorReductionForTarget(armor, "head")).toBe(2);
+      expect(armorReductionForTarget(armor, "left_arm")).toBe(1);
+      expect(armorReductionForTarget(armor, "torso")).toBe(0);
+      expect(armorReductionForTarget(armor, "general")).toBe(0);
+    });
+  });
+
   it("3 dados somam tudo e mantêm dado1 + dado2 + modificador = total", () => {
     vi.spyOn(Math, "random").mockReturnValue(0.5); // d6 = 4
     const r = rollHit(3, 2, 14);
@@ -237,6 +257,20 @@ describe("menu de ataques", () => {
         uses_current: 0,
         uses_max: 0,
       },
+      {
+        id: "w4",
+        character_id: "ch",
+        name: "Arma caída",
+        weapon_type: "Fogo",
+        damage: "1d6",
+        notes: "",
+        skill_key: "coordenacao_motora",
+        range: 6,
+        uses_current: 4,
+        uses_max: 6,
+        hand_slot: "ground",
+        image_url: "weapon.png",
+      },
     ],
   } as unknown as GroupData;
 
@@ -244,6 +278,10 @@ describe("menu de ataques", () => {
     // Ferramenta Física: Físico 6 + extra 1 + itens 2
     expect(skillValueFor(group, "ch", "ferramenta_fisica")).toBe(9);
     expect(skillValueFor(group, "ch", "coordenacao_motora")).toBe(4);
+  });
+
+  it("não oferece arma derrubada como opção de ataque", () => {
+    expect(attackOptionsForCharacter(group, "ch").some((option) => option.id === "w4")).toBe(false);
   });
 
   it("aplica −2 nas skills mentais quando a sanidade está crítica", () => {
@@ -293,5 +331,12 @@ describe("menu de ataques", () => {
     expect(options[0]!.damage).toEqual({ count: 2, sides: 6, bonus: 3 });
     expect(options[1]!.damage).toEqual({ count: 1, sides: 6, bonus: 0 });
     expect(options.every((o) => o.hitBonus === 5)).toBe(true);
+  });
+
+  it("monstro exibe o slot escolhido no ataque", () => {
+    const attacks = JSON.stringify([
+      { name: "Machado", damageFormula: "1d8", handSlot: "two_hands" },
+    ]);
+    expect(attackOptionsForMonster("m1", attacks, 5)[0]?.note).toContain("duas mãos");
   });
 });
