@@ -42,11 +42,19 @@ CREATE TABLE IF NOT EXISTS public.battle_map_items (
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.battle_map_items TO anon, authenticated;
 GRANT ALL ON public.battle_map_items TO service_role;
 ALTER TABLE public.battle_map_items ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Mesa aberta: ler itens no mapa" ON public.battle_map_items;
 CREATE POLICY "Mesa aberta: ler itens no mapa" ON public.battle_map_items FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Mesa aberta: criar itens no mapa" ON public.battle_map_items;
 CREATE POLICY "Mesa aberta: criar itens no mapa" ON public.battle_map_items FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Mesa aberta: editar itens no mapa" ON public.battle_map_items;
 CREATE POLICY "Mesa aberta: editar itens no mapa" ON public.battle_map_items FOR UPDATE USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Mesa aberta: remover itens no mapa" ON public.battle_map_items;
 CREATE POLICY "Mesa aberta: remover itens no mapa" ON public.battle_map_items FOR DELETE USING (true);
-ALTER PUBLICATION supabase_realtime ADD TABLE public.battle_map_items;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'battle_map_items') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.battle_map_items;
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS public.combat_events (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -59,7 +67,14 @@ CREATE TABLE IF NOT EXISTS public.combat_events (
 GRANT SELECT, INSERT, DELETE ON public.combat_events TO anon, authenticated;
 GRANT ALL ON public.combat_events TO service_role;
 ALTER TABLE public.combat_events ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Mesa aberta: ler eventos de combate" ON public.combat_events;
 CREATE POLICY "Mesa aberta: ler eventos de combate" ON public.combat_events FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Mesa aberta: criar eventos de combate" ON public.combat_events;
 CREATE POLICY "Mesa aberta: criar eventos de combate" ON public.combat_events FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Mesa aberta: apagar eventos de combate" ON public.combat_events;
 CREATE POLICY "Mesa aberta: apagar eventos de combate" ON public.combat_events FOR DELETE USING (true);
-ALTER PUBLICATION supabase_realtime ADD TABLE public.combat_events;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'combat_events') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.combat_events;
+  END IF;
+END $$;
