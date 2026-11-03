@@ -44,6 +44,7 @@ import {
 } from "@/lib/custom-attacks";
 import type { CharacterSheet } from "@/lib/rpg-queries";
 import { ALL_SKILLS, ATTRIBUTES, skillTotal } from "@/lib/skills";
+import { attackBudget, attackCost, attackCostBreakdown } from "@/lib/progression";
 
 type Mutations = ReturnType<typeof useSheetMutations>;
 
@@ -62,6 +63,7 @@ const EMPTY_FORM: {
   damageType: CustomAttack["damageType"];
   durationRounds: number;
   damageFormula: string;
+  accuracy: number;
 } = {
   name: "",
   skillKey: "ferramenta_fisica",
@@ -77,6 +79,7 @@ const EMPTY_FORM: {
   damageType: "Físico",
   durationRounds: 1,
   damageFormula: "2d6",
+  accuracy: 0,
 };
 
 export function AttacksSection({
@@ -103,9 +106,18 @@ export function AttacksSection({
     return skillTotal(base, extra) + itemBonusFor(sheet.backpack, sheet.character.id, key);
   };
 
+  const budget = attackBudget(sheet.character.level ?? 1);
+  const cost = attackCost(form);
+  const breakdown = attackCostBreakdown(form);
+  const overBudget = cost > budget;
+
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (collapsed || !form.name.trim()) return;
+    if (overBudget && !isMaster) {
+      toast.error(`Ataque passa do orçamento (${cost}/${budget}). Ajuste dano, alcance ou efeitos.`);
+      return;
+    }
 
     const payload = attackToWeaponPayload({
       ...form,
@@ -144,6 +156,7 @@ export function AttacksSection({
       damageType: attack.damageType,
       durationRounds: attack.durationRounds,
       damageFormula: attack.damageFormula,
+      accuracy: attack.accuracy ?? 0,
     });
 
     mutations.updateWeapon.mutate({
@@ -472,6 +485,40 @@ export function AttacksSection({
               </p>
             )}
 
+            <div className="grid gap-3 rounded-lg border border-border bg-background/40 p-3 sm:grid-cols-[auto_1fr]">
+              <div className="flex flex-col items-center gap-1">
+                <span className="label-caps text-muted-foreground">Precisão (+acerto)</span>
+                <Stepper
+                  label="precisão"
+                  value={form.accuracy}
+                  min={0}
+                  max={6}
+                  onChange={(v) => setForm({ ...form, accuracy: v })}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="label-caps text-muted-foreground">Orçamento do ataque</span>
+                  <span className={overBudget ? "font-bold text-destructive" : "font-bold text-success"}>
+                    {cost} / {budget}
+                  </span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className={overBudget ? "h-full bg-destructive" : "h-full bg-success"}
+                    style={{ width: `${Math.min(100, (cost / budget) * 100)}%` }}
+                  />
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Dano {breakdown.damage} · Alcance {breakdown.range} · Efeito {breakdown.effect} ·
+                  Redução de defesa {breakdown.debuff} · Precisão {breakdown.accuracy}
+                  {breakdown.area ? ` · Área ${breakdown.area}` : ""}
+                  {breakdown.discount ? ` · Custo de energia ${breakdown.discount}` : ""}. Ganha +1
+                  ponto a cada 2 níveis.
+                </p>
+              </div>
+            </div>
+
             <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="outline" onClick={() => setShowForm(false)}>
                 Cancelar
@@ -479,7 +526,7 @@ export function AttacksSection({
               <Button
                 type="submit"
                 variant="paint"
-                disabled={!form.name.trim() || mutations.addWeapon.isPending}
+                disabled={!form.name.trim() || mutations.addWeapon.isPending || (overBudget && !isMaster)}
               >
                 {isMaster ? "Criar e Aprovar Ataque" : "Enviar para Aprovação do Mestre"}
               </Button>
