@@ -26,7 +26,6 @@ import { logRolls } from "@/lib/roll-log";
 import type { CharacterSheet } from "@/lib/rpg-queries";
 import {
   ATTRIBUTES,
-  ATTRIBUTE_MAX,
   ATTRIBUTE_MIN,
   BONUS_MAX,
   BONUS_MIN,
@@ -40,6 +39,7 @@ import {
 import { itemBonusFor } from "@/lib/combat";
 import { cn } from "@/lib/utils";
 import { sanityMentalPenalty } from "@/lib/sanity";
+import { ATTRIBUTE_POOL, attributeMaxFor, attributePoolUsed } from "@/lib/progression";
 
 type Mutations = ReturnType<typeof useSheetMutations>;
 type LoggedRoll = RollResult & { id: number; label: string; masterBonus?: number };
@@ -148,6 +148,10 @@ export function SkillsSection({
           })}
         </nav>
 
+        <p className="text-sm text-muted-foreground">
+          Pontos de atributo: {attributePoolUsed(character)}/{ATTRIBUTE_POOL} · máximo 7 em cada
+        </p>
+
         {ATTRIBUTES.map((attr) => {
           const attrValue = character[attr.key];
           const theme = ATTRIBUTE_THEME[attr.key];
@@ -178,7 +182,7 @@ export function SkillsSection({
                     label={attr.name}
                     value={attrValue}
                     min={ATTRIBUTE_MIN}
-                    max={ATTRIBUTE_MAX}
+                    max={Math.max(attrValue, attributeMaxFor(character, attr.key))}
                     onChange={(v) => mutations.updateCharacter.mutate({ [attr.key]: v })}
                   />
                 </div>
