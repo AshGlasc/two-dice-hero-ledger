@@ -16,6 +16,7 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { AttackDialog, type AttackTarget } from "@/components/rpg/AttackDialog";
+import { rotateQueue } from "@/lib/progression";
 import { Avatar } from "@/components/rpg/AvatarUpload";
 import { BattleMap, type MapToken } from "@/components/rpg/BattleMap";
 import { IntimidateDialog } from "@/components/rpg/IntimidateDialog";
@@ -164,6 +165,9 @@ function CombatPage() {
     id: string;
     label: string;
   } | null>(null);
+  const [reaction, setReaction] = useState<{ defenderId: string; attackerId: string } | null>(
+    null,
+  );
   const [turnEffect, setTurnEffect] = useState<{
     combatantId: string;
     name: string;
@@ -759,6 +763,8 @@ function CombatPage() {
     }
     if (dodged) {
       toast(`${target.name} esquivou do ataque!`);
+      if (target.kind === "character" && consumeAction && !areaSubattack)
+        setReaction({ defenderId: target.id, attackerId: attacker.id });
       if (consumeAction && state.active && state.current_combatant_id === attacker.id)
         advanceTurn();
       return;
@@ -1619,7 +1625,7 @@ function CombatPage() {
               Adicione jogadores e monstros para começar.
             </p>
           )}
-          {order.map((x) => (
+          {(state.active ? rotateQueue(order, state.current_combatant_id) : order).map((x, i) => (
             <div
               key={x.id}
               className={cn(
@@ -1638,6 +1644,11 @@ function CombatPage() {
                   className="size-10"
                 />
                 <div className="min-w-0 flex-1">
+                  {state.active && (
+                    <p className="label-caps text-[10px] text-muted-foreground">
+                      {i === 0 ? "Agindo agora" : i === 1 ? "Próximo" : `${i + 1}º na fila`}
+                    </p>
+                  )}
                   <p className="truncate font-bold">
                     {x.name}{" "}
                     {x.conditions.map((cd) => (
