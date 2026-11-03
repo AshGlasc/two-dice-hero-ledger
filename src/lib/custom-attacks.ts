@@ -59,6 +59,8 @@ export type CustomAttack = {
   handSlot?: HandSlot;
   effectCondition?: EffectCondition;
   defenseDebuff?: number;
+  /** Bônus de precisão comprado no orçamento (+1 para acertar por ponto). */
+  accuracy?: number;
 };
 
 /** Skills recomendadas ou padrão para combate, embora qualquer skill seja permitida. */
@@ -139,6 +141,7 @@ export function parseWeaponToAttack(w: Weapon): CustomAttack {
   let resistanceType: CustomAttack["resistanceType"] = "Defesa";
   let damageType: CustomAttack["damageType"] = "Físico";
   let durationRounds = 1;
+  let accuracy = 0;
 
   try {
     const meta = JSON.parse(w.notes);
@@ -155,6 +158,7 @@ export function parseWeaponToAttack(w: Weapon): CustomAttack {
       if (meta.duration_rounds != null)
         durationRounds = Math.max(0, Number(meta.duration_rounds) || 0);
       if (meta.description != null) description = meta.description;
+      if (meta.accuracy != null) accuracy = Math.max(0, Number(meta.accuracy) || 0);
       if (meta.effect_condition != null) effectCondition = meta.effect_condition;
       else if (meta.effectCondition != null) effectCondition = meta.effectCondition;
       if (meta.defense_debuff != null) defenseDebuff = Number(meta.defense_debuff) || 0;
@@ -182,6 +186,7 @@ export function parseWeaponToAttack(w: Weapon): CustomAttack {
     damageType,
     durationRounds,
     damageFormula: w.damage ?? `${diceCount}d6`,
+    accuracy,
     ...(effectCondition !== undefined ? { effectCondition } : {}),
     ...(defenseDebuff !== undefined ? { defenseDebuff } : {}),
   };
@@ -204,6 +209,7 @@ export function attackToWeaponPayload(attack: {
   damageType?: CustomAttack["damageType"];
   durationRounds?: number;
   damageFormula?: string;
+  accuracy?: number;
 }) {
   const status = attack.status ?? "pending";
   const turnsCost = Math.max(1, attack.turnsCost || 1);
@@ -228,6 +234,7 @@ export function attackToWeaponPayload(attack: {
     resistance_type: attack.resistanceType ?? "Defesa",
     damage_type: attack.damageType ?? "Físico",
     duration_rounds: Math.max(0, attack.durationRounds ?? 1),
+    accuracy: Math.max(0, attack.accuracy ?? 0),
   });
 
   return {

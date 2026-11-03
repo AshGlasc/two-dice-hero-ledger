@@ -380,7 +380,7 @@ export function attackOptionsForCharacter(group: GroupData, characterId: string)
         id: w.id,
         name: `✨ ${attack.name}`,
         kind: "custom",
-        hitBonus: skillValueFor(group, characterId, attack.skillKey),
+        hitBonus: skillValueFor(group, characterId, attack.skillKey) + (attack.accuracy ?? 0),
         hitDice: attack.diceCount,
         range: attack.range,
         damage: parseDamage(damageFormula),

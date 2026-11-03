@@ -16,6 +16,7 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { AttackDialog, type AttackTarget } from "@/components/rpg/AttackDialog";
+import { rotateQueue } from "@/lib/progression";
 import { Avatar } from "@/components/rpg/AvatarUpload";
 import { BattleMap, type MapToken } from "@/components/rpg/BattleMap";
 import { IntimidateDialog } from "@/components/rpg/IntimidateDialog";
@@ -164,6 +165,9 @@ function CombatPage() {
     id: string;
     label: string;
   } | null>(null);
+  const [reaction, setReaction] = useState<{ defenderId: string; attackerId: string } | null>(
+    null,
+  );
   const [turnEffect, setTurnEffect] = useState<{
     combatantId: string;
     name: string;
@@ -759,6 +763,8 @@ function CombatPage() {
     }
     if (dodged) {
       toast(`${target.name} esquivou do ataque!`);
+      if (target.kind === "character" && consumeAction && !areaSubattack)
+        setReaction({ defenderId: target.id, attackerId: attacker.id });
       if (consumeAction && state.active && state.current_combatant_id === attacker.id)
         advanceTurn();
       return;
@@ -1619,7 +1625,7 @@ function CombatPage() {
               Adicione jogadores e monstros para começar.
             </p>
           )}
-          {order.map((x) => (
+          {(state.active ? rotateQueue(order, state.current_combatant_id) : order).map((x, i) => (
             <div
               key={x.id}
               className={cn(
@@ -1638,6 +1644,11 @@ function CombatPage() {
                   className="size-10"
                 />
                 <div className="min-w-0 flex-1">
+                  {state.active && (
+                    <p className="label-caps text-[10px] text-muted-foreground">
+                      {i === 0 ? "Agindo agora" : i === 1 ? "Próximo" : `${i + 1}º na fila`}
+                    </p>
+                  )}
                   <p className="truncate font-bold">
                     {x.name}{" "}
                     {x.conditions.map((cd) => (
@@ -1913,6 +1924,85 @@ function CombatPage() {
           ))}
         </aside>
       </div>
+      {reaction &&
+        (() => {
+          const defender = combat.combatants.find((x) => x.id === reaction.defenderId);
+          const foe = combat.combatants.find((x) => x.id === reaction.attackerId);
+          if (!defender || !foe || !mine(defender)) return null;
+          const dist = distanceBetween(defender, foe);
+          const options = attackOptionsOf(defender).filter(
+            (o) => o.reach !== "area" && (dist === null || dist <= o.range),
+          );
+          const retreat =
+            defender.pos_x != null && defender.pos_y != null && foe.pos_x != null && foe.pos_y != null
+              ? (() => {
+                  const occ = occupied();
+                  for (const mapItem of mapItems) occ.add(cellKey(mapItem.x, mapItem.y));
+                  return intimidationRetreatCell(
+                    { x: foe.pos_x, y: foe.pos_y },
+                    { x: defender.pos_x, y: defender.pos_y },
+                    map.cols,
+                    map.rows,
+                    terrain,
+                    occ,
+                  );
+                })()
+              : null;
+          return (
+            <div className="fixed inset-0 z-[70] grid place-items-center bg-black/70 p-4" role="presentation">
+              <section
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="reaction-title"
+                className="w-full max-w-sm space-y-3 rounded-xl border border-primary/50 bg-card p-5 shadow-paint"
+              >
+                <p className="label-caps text-primary">Reação</p>
+                <h2 id="reaction-title" className="font-display text-2xl font-bold uppercase">
+                  {defender.name} esquivou!
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  Escolha uma reação contra {foe.name}: contra-atacar ou recuar 1 casa.
+                </p>
+                <div className="space-y-2">
+                  {options.map((o) => (
+                    <Button
+                      key={o.id}
+                      variant="outline"
+                      className="w-full justify-start"
+                      onClick={() => {
+                        setReaction(null);
+                        void resolveAttack(defender, o, foe.id, "general", false, false, false);
+                      }}
+                    >
+                      Contra-atacar: {o.name}
+                    </Button>
+                  ))}
+                  {options.length === 0 && (
+                    <p className="text-xs text-muted-foreground">Nenhum ataque alcança {foe.name}.</p>
+                  )}
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start"
+                    disabled={!retreat}
+                    onClick={() => {
+                      if (!retreat) return;
+                      setReaction(null);
+                      c.update.mutate([
+                        { id: defender.id, patch: { pos_x: retreat.x, pos_y: retreat.y } },
+                      ]);
+                      toast(`${defender.name} recuou 1 casa.`);
+                    }}
+                  >
+                    Recuar 1 casa{retreat ? "" : " (sem espaço)"}
+                  </Button>
+                  <Button variant="ghost" className="w-full" onClick={() => setReaction(null)}>
+                    Não reagir
+                  </Button>
+                </div>
+              </section>
+            </div>
+          );
+        })()}
       {turnEffect && (
         <div
           className="fixed inset-0 z-[70] grid place-items-center bg-black/70 p-4"

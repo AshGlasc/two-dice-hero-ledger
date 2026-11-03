@@ -250,6 +250,14 @@ function PendingAttacks({ group }: { group: GroupData }) {
           ? { effectCondition: parsed.effectCondition }
           : {}),
         ...(parsed.defenseDebuff !== undefined ? { defenseDebuff: parsed.defenseDebuff } : {}),
+        energyCost: parsed.energyCost,
+        range: parsed.range,
+        reach: parsed.reach,
+        resistanceType: parsed.resistanceType,
+        damageType: parsed.damageType,
+        durationRounds: parsed.durationRounds,
+        damageFormula: parsed.damageFormula,
+        accuracy: parsed.accuracy ?? 0,
       });
       const { error } = await supabase.from("weapons").update(payload).eq("id", id);
       if (error) throw error;

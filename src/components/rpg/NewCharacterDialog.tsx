@@ -21,7 +21,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { ATTRIBUTE_THEME } from "@/lib/attribute-theme";
 import { checkCanCreateCharacter, setPlayerCharacterId } from "@/lib/player-character";
 import { charactersQuery } from "@/lib/rpg-queries";
-import { ATTRIBUTES, ATTRIBUTE_MAX, ATTRIBUTE_MIN, type AttributeKey } from "@/lib/skills";
+import { ATTRIBUTES, ATTRIBUTE_MIN, type AttributeKey } from "@/lib/skills";
+import { ATTRIBUTE_POOL, attributeMaxFor, attributePoolUsed } from "@/lib/progression";
 import { cn } from "@/lib/utils";
 
 const START: Record<AttributeKey, number> = { intelecto: 2, psique: 2, fisico: 2, motor: 2 };
@@ -205,6 +206,10 @@ export function NewCharacterDialog() {
             </label>
           </div>
           <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">
+              Restam {ATTRIBUTE_POOL - attributePoolUsed(attrs)} de {ATTRIBUTE_POOL} pontos · máximo 7
+              por atributo
+            </p>
             {ATTRIBUTES.map((a) => {
               const theme = ATTRIBUTE_THEME[a.key];
               return (
@@ -223,7 +228,7 @@ export function NewCharacterDialog() {
                     label={a.name}
                     value={attrs[a.key]}
                     min={ATTRIBUTE_MIN}
-                    max={ATTRIBUTE_MAX}
+                    max={attributeMaxFor(attrs, a.key)}
                     onChange={(v) => setAttrs((s) => ({ ...s, [a.key]: v }))}
                   />
                 </div>
