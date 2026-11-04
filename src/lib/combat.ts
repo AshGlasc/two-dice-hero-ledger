@@ -7,6 +7,7 @@ import {
 import type { GroupData } from "@/lib/rpg-queries";
 import { ALL_SKILLS, rollD6, roll2d6, skillTotal, type RollResult } from "@/lib/skills";
 import { sanityMentalPenalty } from "@/lib/sanity";
+import { levelDamageBonus } from "@/lib/passives";
 
 export const CONDITIONS = [
   "Atordoado",
@@ -419,8 +420,14 @@ export function attackOptionsForCharacter(group: GroupData, characterId: string)
       usesCurrent: w.uses_current,
       usesMax: w.uses_max,
     });
-  }
-  return options;
+      }
+  const levelBonus = levelDamageBonus(character.level);
+  if (levelBonus <= 0) return options;
+  return options.map((o) => ({
+    ...o,
+    damage: { ...o.damage, bonus: o.damage.bonus + levelBonus },
+    note: [o.note, `+${levelBonus} dano (nível ${character.level})`].filter(Boolean).join(" · "),
+  }));
 }
 
 /** Dano escrito no texto do ataque do monstro ("Mordida (2d6+3)"). */
