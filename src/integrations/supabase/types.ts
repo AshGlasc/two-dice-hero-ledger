@@ -149,6 +149,7 @@ export type Database = {
       battle_map_items: {
         Row: {
           catalog_item_id: string | null
+          chest_items: Json
           collectible: boolean
           collection_difficulty: number | null
           collection_skill_key: string | null
@@ -157,6 +158,7 @@ export type Database = {
           icon: string
           id: string
           image_url: string
+          is_chest: boolean
           movable: boolean
           name: string
           weapon_id: string | null
@@ -165,6 +167,7 @@ export type Database = {
         }
         Insert: {
           catalog_item_id?: string | null
+          chest_items?: Json
           collectible?: boolean
           collection_difficulty?: number | null
           collection_skill_key?: string | null
@@ -173,6 +176,7 @@ export type Database = {
           icon?: string
           id?: string
           image_url?: string
+          is_chest?: boolean
           movable?: boolean
           name: string
           weapon_id?: string | null
@@ -181,6 +185,7 @@ export type Database = {
         }
         Update: {
           catalog_item_id?: string | null
+          chest_items?: Json
           collectible?: boolean
           collection_difficulty?: number | null
           collection_skill_key?: string | null
@@ -189,6 +194,7 @@ export type Database = {
           icon?: string
           id?: string
           image_url?: string
+          is_chest?: boolean
           movable?: boolean
           name?: string
           weapon_id?: string | null
