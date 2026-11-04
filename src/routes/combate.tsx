@@ -17,6 +17,14 @@ import { toast } from "sonner";
 
 import { AttackDialog, type AttackTarget } from "@/components/rpg/AttackDialog";
 import { rotateQueue } from "@/lib/progression";
+import {
+  mentalReduction,
+  painReduction,
+  parseChestItems,
+  removeChestEntry,
+  type ChestEntry,
+} from "@/lib/passives";
+import { ChestDialog } from "@/components/rpg/ChestDialog";
 import { Avatar } from "@/components/rpg/AvatarUpload";
 import { BattleMap, type MapToken } from "@/components/rpg/BattleMap";
 import { IntimidateDialog } from "@/components/rpg/IntimidateDialog";
@@ -647,7 +655,25 @@ function CombatPage() {
     const rolledDamage = hit
       ? rollDamage(option.damage) + (crit ? 3 + (bodyTarget === "head" ? 3 : 0) : 0)
       : 0;
-    const damage = hit ? Math.max(0, rolledDamage - armorReduction) : 0;
+    const mentalHit = option.damageType === "Mental" || option.damageType === "Social/Moral";
+    const passiveReduction =
+      hit && target.character_id
+        ? mentalHit
+          ? mentalReduction(
+              skillValueFor(group, target.character_id, "vontade"),
+              skillValueFor(group, target.character_id, "compostura"),
+            )
+          : option.damageType === "Mágico"
+            ? 0
+            : painReduction(skillValueFor(group, target.character_id, "limiar_dor"))
+        : 0;
+    const passiveText =
+      passiveReduction > 0
+        ? ` (−${passiveReduction} absorvido por ${mentalHit ? "defesa mental" : "Limiar da Dor"})`
+        : "";
+    const damage = hit
+      ? Math.max(0, rolledDamage - armorReduction - passiveReduction)
+      : 0;
     const sanityDamage = target.character_id && option.damageType === "Mental" ? damage : 0;
 
     // Esquiva: só em acerto comum (duplo 6 nunca é esquivado) e só quem tem a skill (personagens).
@@ -736,7 +762,7 @@ function CombatPage() {
             ? " — errou"
             : dodged
               ? " — esquivado"
-              : ` — ${damage} ${sanityDamage ? "de dano à Sanidade" : "de dano"}${effectsText}`
+              : ` — ${damage} ${sanityDamage ? "de dano à Sanidade" : "de dano"}${passiveText}${effectsText}`
         }`,
         result: r,
         ...(masterBonus !== 0 ? { masterBonus } : {}),
