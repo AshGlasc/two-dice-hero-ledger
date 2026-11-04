@@ -19,3 +19,6 @@
 - [ ] Mapa: névoa (ocultar ladrilhos para os jogadores)
 - [ ] Dinheiro para jogadores e monstros/NPCs
 - [ ] Aba Celular: saldo, Pix entre jogadores, mensagens, apps futuros
+- [x] Baús no mapa com foto e itens
+- [x] Armas e ataques +1 de dano a cada 2 níveis
+- [x] Subskills passivas: painel do mestre e redução de dano no combate
