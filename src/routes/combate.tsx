@@ -8,6 +8,7 @@ import {
   Dices,
   Lock,
   Minus,
+  PackageOpen,
   Plus,
   Trash2,
   X,
@@ -25,6 +26,7 @@ import {
   type ChestEntry,
 } from "@/lib/passives";
 import { ChestDialog } from "@/components/rpg/ChestDialog";
+import { giveCatalogItem } from "@/lib/give-item";
 import { Avatar } from "@/components/rpg/AvatarUpload";
 import { BattleMap, type MapToken } from "@/components/rpg/BattleMap";
 import { IntimidateDialog } from "@/components/rpg/IntimidateDialog";
@@ -2224,6 +2226,57 @@ function CombatPage() {
           </section>
         </div>
       )}
+      {(() => {
+        const chest = chestView ? (mapItemsWithIcons.find((x) => x.id === chestView.itemId) ?? null) : null;
+        const tokenCharacterId =
+          combat.combatants.find((x) => x.id === chestView?.tokenId)?.character_id ?? null;
+        const takers = isMaster
+          ? [...group.characters]
+              .sort((a, b) => Number(b.id === tokenCharacterId) - Number(a.id === tokenCharacterId))
+              .map((ch) => ({ id: ch.id, name: ch.name }))
+          : group.characters
+              .filter((ch) => ch.id === tokenCharacterId)
+              .map((ch) => ({ id: ch.id, name: ch.name }));
+        return (
+          <ChestDialog
+            key={chestView?.itemId ?? "none"}
+            chest={chest}
+            entries={chest ? parseChestItems(chest.chest_items) : []}
+            open={!!chest}
+            onOpenChange={(open) => !open && setChestView(null)}
+            isMaster={isMaster}
+            catalogItems={catalogItems}
+            takers={takers}
+            onTake={(entry, characterId) =>
+              chest && void takeFromChest(chest.id, entry, characterId)
+            }
+            onAdd={(catalogItemId) => chest && void addToChest(chest.id, catalogItemId)}
+            onRemove={(uid) =>
+              chest &&
+              void saveChestItems(
+                chest.id,
+                removeChestEntry(parseChestItems(chest.chest_items), uid),
+              ).catch((error: Error) => toast.error(error.message))
+            }
+            onUpdate={async (patch) => {
+              if (!chest) return;
+              const { error } = await supabase
+                .from("battle_map_items")
+                .update(patch)
+                .eq("id", chest.id);
+              if (error) toast.error(`Não foi possível salvar o baú: ${error.message}`);
+              void qc.invalidateQueries({ queryKey: ["battle_map_items"] });
+            }}
+            onDelete={async () => {
+              if (!chest) return;
+              const { error } = await supabase.from("battle_map_items").delete().eq("id", chest.id);
+              if (error) toast.error(`Não foi possível remover o baú: ${error.message}`);
+              setChestView(null);
+              void qc.invalidateQueries({ queryKey: ["battle_map_items"] });
+            }}
+          />
+        );
+      })()}
     </div>
   );
 }
