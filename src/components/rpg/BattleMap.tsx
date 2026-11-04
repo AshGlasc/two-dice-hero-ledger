@@ -83,8 +83,10 @@ export function BattleMap({
   items = [],
   onPickItem,
   onPushItem,
+  onOpenChest,
   placement = null,
 }: {
+  onOpenChest?: (itemId: string, tokenId: string | null) => void;
   map: MapRow;
   tokens: MapToken[];
   onMove: (id: string, x: number | null, y: number | null) => void;
@@ -630,18 +632,33 @@ export function BattleMap({
                 >
                   <button
                     type="button"
-                    aria-label={`${adjacent && item.collectible ? "Pegar" : "Item"}: ${item.name}`}
+                    aria-label={
+                      item.is_chest
+                        ? `Baú: ${item.name}`
+                        : `${adjacent && item.collectible ? "Pegar" : "Item"}: ${item.name}`
+                    }
                     title={
-                      adjacent && item.collectible
-                        ? `Pegar ${item.name}`
-                        : `${item.name}${item.movable ? " · objeto movível" : ""}`
+                      item.is_chest
+                        ? adjacent || viewerIsMaster
+                          ? `Abrir ${item.name}`
+                          : `${item.name} · chegue ao lado para abrir`
+                        : adjacent && item.collectible
+                          ? `Pegar ${item.name}`
+                          : `${item.name}${item.movable ? " · objeto movível" : ""}`
                     }
                     className={cn(
-                      "grid size-9 place-items-center rounded-full border-2 border-amber-300 bg-amber-950/90 text-xl shadow-[0_0_14px_rgba(251,191,36,0.65)]",
+                      "grid size-9 place-items-center border-2 border-amber-300 bg-amber-950/90 text-xl shadow-[0_0_14px_rgba(251,191,36,0.65)]",
+                      item.is_chest ? "size-10 rounded-md" : "rounded-full",
                       adjacent && item.collectible && "animate-pulse",
                     )}
                     onPointerDown={(event) => event.stopPropagation()}
                     onClick={() => {
+                      if (item.is_chest) {
+                        if (viewerIsMaster) onOpenChest?.(item.id, sel?.id ?? null);
+                        else if (adjacent && sel) onOpenChest?.(item.id, sel.id);
+                        else toast("Selecione seu personagem ao lado do baú para abrir.");
+                        return;
+                      }
                       if (adjacent && item.collectible && sel) onPickItem?.(item.id, sel.id);
                     }}
                   >
@@ -649,8 +666,13 @@ export function BattleMap({
                       <img
                         src={item.image_url}
                         alt=""
-                        className="size-full rounded-full object-cover"
+                        className={cn(
+                          "size-full object-cover",
+                          item.is_chest ? "rounded-[4px]" : "rounded-full",
+                        )}
                       />
+                    ) : item.is_chest ? (
+                      "🧰"
                     ) : item.icon && item.icon !== "📦" && item.icon !== "🎁" ? (
                       item.icon
                     ) : (

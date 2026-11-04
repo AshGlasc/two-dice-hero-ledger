@@ -6,6 +6,7 @@ import {
   Crown,
   Dices,
   Eraser,
+  Eye,
   LogOut,
   ShieldAlert,
   Swords,
@@ -60,6 +61,7 @@ import {
   saveDifficultyModifiers,
 } from "@/lib/difficulty";
 import { cn } from "@/lib/utils";
+import { passiveScore, ROLEPLAY_PASSIVES } from "@/lib/passives";
 
 export const Route = createFileRoute("/mestre")({
   head: () => ({
@@ -151,6 +153,7 @@ function GmPageContent({ onLock }: { onLock: () => void }) {
 
       <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
         <div className="space-y-6">
+          <PassivePerceptions group={group} />
           <GroupTest group={group} />
           <PartyOverview group={group} />
         </div>
@@ -347,6 +350,87 @@ function PendingAttacks({ group }: { group: GroupData }) {
           );
         })}
       </div>
+    </section>
+  );
+}
+
+/**
+ * Percepções passivas: sem rolar dado, mostra quem percebe algo na cena.
+ * Valor passivo = 6 + skill; passa quem alcança a dificuldade escolhida.
+ */
+function PassivePerceptions({ group }: { group: GroupData }) {
+  const [difficulty, setDifficulty] = useState(10);
+
+  return (
+    <section className="rounded-lg border border-border bg-card p-5 shadow-paint">
+      <div className="mb-1 flex flex-wrap items-center gap-2">
+        <Eye className="size-5 text-primary" />
+        <h2 className="text-2xl font-bold uppercase">Percepções passivas</h2>
+      </div>
+      <p className="mb-4 text-sm text-muted-foreground">
+        Sem pedir rolagem: quem tem valor passivo (6 + skill) igual ou maior que a dificuldade da
+        cena percebe sozinho. Conte a informação só para essa pessoa.
+      </p>
+      <div className="mb-4 flex flex-wrap gap-1.5">
+        {DIFFICULTIES.slice(0, 6).map((d) => (
+          <button
+            key={d.value}
+            type="button"
+            onClick={() => setDifficulty(d.value)}
+            className={cn(
+              "rounded-full border px-3 py-1 text-sm",
+              difficulty === d.value
+                ? "border-primary bg-primary/10 text-primary"
+                : "border-border text-muted-foreground",
+            )}
+          >
+            {d.name} {d.value}
+          </button>
+        ))}
+      </div>
+      {group.characters.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Nenhum personagem na mesa.</p>
+      ) : (
+        <ul className="space-y-3">
+          {ROLEPLAY_PASSIVES.map((p) => {
+            const skillName = ALL_SKILLS.find((s) => s.key === p.key)?.name ?? p.key;
+            const scores = group.characters
+              .map((ch) => ({
+                id: ch.id,
+                name: ch.name,
+                score: passiveScore(skillValueFor(group, ch.id, p.key)),
+              }))
+              .sort((a, b) => b.score - a.score);
+            const passing = scores.filter((s) => s.score >= difficulty);
+            return (
+              <li key={p.key} className="rounded-md border border-border bg-background p-3">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <span className="font-semibold">{skillName}</span>
+                  <span className="text-xs text-muted-foreground">{p.hint}</span>
+                </div>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {scores.map((s) => (
+                    <span
+                      key={s.id}
+                      className={cn(
+                        "rounded-full border px-2.5 py-0.5 text-xs",
+                        s.score >= difficulty
+                          ? "border-success bg-success/10 font-semibold text-success"
+                          : "border-border text-muted-foreground",
+                      )}
+                    >
+                      {s.name} · {s.score}
+                    </span>
+                  ))}
+                </div>
+                {passing.length === 0 && (
+                  <p className="mt-1.5 text-xs text-muted-foreground">Ninguém percebe sozinho.</p>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </section>
   );
 }

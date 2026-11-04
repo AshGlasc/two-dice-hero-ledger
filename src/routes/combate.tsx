@@ -8,6 +8,7 @@ import {
   Dices,
   Lock,
   Minus,
+  PackageOpen,
   Plus,
   Trash2,
   X,
@@ -17,6 +18,15 @@ import { toast } from "sonner";
 
 import { AttackDialog, type AttackTarget } from "@/components/rpg/AttackDialog";
 import { rotateQueue } from "@/lib/progression";
+import {
+  mentalReduction,
+  painReduction,
+  parseChestItems,
+  removeChestEntry,
+  type ChestEntry,
+} from "@/lib/passives";
+import { ChestDialog } from "@/components/rpg/ChestDialog";
+import { giveCatalogItem } from "@/lib/give-item";
 import { Avatar } from "@/components/rpg/AvatarUpload";
 import { BattleMap, type MapToken } from "@/components/rpg/BattleMap";
 import { IntimidateDialog } from "@/components/rpg/IntimidateDialog";
@@ -160,8 +170,11 @@ function CombatPage() {
   const [hpDelta, setHpDelta] = useState(1);
   const [quickRollOpen, setQuickRollOpen] = useState(false);
   const [selectedCatalogItemId, setSelectedCatalogItemId] = useState("");
+  const [chestView, setChestView] = useState<{ itemId: string; tokenId: string | null } | null>(
+    null,
+  );
   const [placing, setPlacing] = useState<{
-    kind: "character" | "monster" | "item";
+    kind: "character" | "monster" | "item" | "chest";
     id: string;
     label: string;
   } | null>(null);
@@ -647,7 +660,25 @@ function CombatPage() {
     const rolledDamage = hit
       ? rollDamage(option.damage) + (crit ? 3 + (bodyTarget === "head" ? 3 : 0) : 0)
       : 0;
-    const damage = hit ? Math.max(0, rolledDamage - armorReduction) : 0;
+    const mentalHit = option.damageType === "Mental" || option.damageType === "Social/Moral";
+    const passiveReduction =
+      hit && target.character_id
+        ? mentalHit
+          ? mentalReduction(
+              skillValueFor(group, target.character_id, "vontade"),
+              skillValueFor(group, target.character_id, "compostura"),
+            )
+          : option.damageType === "Mágico"
+            ? 0
+            : painReduction(skillValueFor(group, target.character_id, "limiar_dor"))
+        : 0;
+    const passiveText =
+      passiveReduction > 0
+        ? ` (−${passiveReduction} absorvido por ${mentalHit ? "defesa mental" : "Limiar da Dor"})`
+        : "";
+    const damage = hit
+      ? Math.max(0, rolledDamage - armorReduction - passiveReduction)
+      : 0;
     const sanityDamage = target.character_id && option.damageType === "Mental" ? damage : 0;
 
     // Esquiva: só em acerto comum (duplo 6 nunca é esquivado) e só quem tem a skill (personagens).
@@ -736,7 +767,7 @@ function CombatPage() {
             ? " — errou"
             : dodged
               ? " — esquivado"
-              : ` — ${damage} ${sanityDamage ? "de dano à Sanidade" : "de dano"}${effectsText}`
+              : ` — ${damage} ${sanityDamage ? "de dano à Sanidade" : "de dano"}${passiveText}${effectsText}`
         }`,
         result: r,
         ...(masterBonus !== 0 ? { masterBonus } : {}),
@@ -1211,6 +1242,10 @@ function CombatPage() {
       toast.error("Você não pode pegar itens com esse personagem.");
       return;
     }
+    if (item.is_chest) {
+      setChestView({ itemId: item.id, tokenId: combatant.id });
+      return;
+    }
     if (state.active && !isMaster && state.current_combatant_id !== combatant.id) {
       toast.error("Aguarde seu turno para pegar itens.");
       return;
@@ -1326,6 +1361,131 @@ function CombatPage() {
     void qc.invalidateQueries({ queryKey: ["battle_map_items"] });
     toast.success(`${item.name} guardado na mochila.`);
     void logCombatEvent(combatant, `${combatant.name} pegou ${item.name}.`);
+  };
+
+  // ---------- Baús ----------
+  const placeChest = async (cell: { x: number; y: number }) => {
+    const { data, error } = await supabase
+      .from("battle_map_items")
+      .insert({
+        name: "Baú",
+        icon: "🧰",
+        x: cell.x,
+        y: cell.y,
+        is_chest: true,
+        collectible: true,
+        movable: false,
+        chest_items: [],
+      })
+      .select("id")
+      .single();
+    if (error) {
+      toast.error(`Não foi possível colocar o baú: ${error.message}`);
+      return;
+    }
+    void qc.invalidateQueries({ queryKey: ["battle_map_items"] });
+    setChestView({ itemId: data.id, tokenId: null });
+  };
+
+  const openChest = (itemId: string, tokenId: string | null) => {
+    const item = mapItems.find((entry) => entry.id === itemId);
+    if (!item) return;
+    if (isMaster) {
+      setChestView({ itemId, tokenId });
+      return;
+    }
+    const combatant = combat.combatants.find((entry) => entry.id === tokenId);
+    if (!combatant || combatant.kind !== "character" || !mine(combatant)) {
+      toast.error("Selecione o seu personagem no mapa para abrir o baú.");
+      return;
+    }
+    if (
+      combatant.pos_x == null ||
+      combatant.pos_y == null ||
+      gridDistance(combatant.pos_x, combatant.pos_y, item.x, item.y) > 1
+    ) {
+      toast.error("Chegue ao lado do baú para abri-lo.");
+      return;
+    }
+    setChestView({ itemId, tokenId });
+  };
+
+  const saveChestItems = async (chestId: string, next: ChestEntry[]) => {
+    const { error } = await supabase
+      .from("battle_map_items")
+      .update({ chest_items: next })
+      .eq("id", chestId);
+    if (error) throw error;
+    void qc.invalidateQueries({ queryKey: ["battle_map_items"] });
+  };
+
+  const addToChest = async (chestId: string, catalogItemId: string) => {
+    const chest = mapItems.find((entry) => entry.id === chestId);
+    const catalogItem = catalogItems.find((entry) => entry.id === catalogItemId);
+    if (!chest || !catalogItem) return;
+    const entry: ChestEntry = {
+      uid: crypto.randomUUID(),
+      catalog_item_id: catalogItem.id,
+      name: catalogItem.name,
+    };
+    try {
+      await saveChestItems(chestId, [...parseChestItems(chest.chest_items), entry]);
+    } catch (error) {
+      toast.error(`Não foi possível guardar o item: ${(error as Error).message}`);
+    }
+  };
+
+  const takeFromChest = async (chestId: string, entry: ChestEntry, characterId: string) => {
+    const tokenId = chestView?.tokenId ?? null;
+    const combatant = combat.combatants.find((x) => x.id === tokenId);
+    if (
+      !isMaster &&
+      state.active &&
+      (!combatant || state.current_combatant_id !== combatant.id)
+    ) {
+      toast.error("Aguarde seu turno para pegar itens do baú.");
+      return;
+    }
+    // Lê o baú direto do banco para não entregar o mesmo item duas vezes.
+    const { data: fresh, error: readError } = await supabase
+      .from("battle_map_items")
+      .select("chest_items")
+      .eq("id", chestId)
+      .maybeSingle();
+    if (readError || !fresh) {
+      toast.error("Esse baú não existe mais.");
+      return;
+    }
+    const current = parseChestItems(fresh.chest_items);
+    if (!current.some((x) => x.uid === entry.uid)) {
+      toast("Alguém já pegou esse item.");
+      void qc.invalidateQueries({ queryKey: ["battle_map_items"] });
+      return;
+    }
+    let catalogItem = catalogItems.find((x) => x.id === entry.catalog_item_id);
+    if (!catalogItem) {
+      const { data } = await supabase
+        .from("catalog_items")
+        .select("*")
+        .eq("id", entry.catalog_item_id)
+        .maybeSingle();
+      catalogItem = data ?? undefined;
+    }
+    if (!catalogItem) {
+      toast.error("Esse item foi apagado do catálogo.");
+      return;
+    }
+    try {
+      await saveChestItems(chestId, removeChestEntry(current, entry.uid));
+      const where = await giveCatalogItem(catalogItem, characterId);
+      const who = group.characters.find((x) => x.id === characterId)?.name ?? "Personagem";
+      void qc.invalidateQueries({ queryKey: ["group"] });
+      void qc.invalidateQueries({ queryKey: ["sheet", characterId] });
+      toast.success(`${entry.name} foi para ${where === "weapon" ? "as armas" : "a mochila"} de ${who}.`);
+      if (combatant) void logCombatEvent(combatant, `${who} pegou ${entry.name} do baú.`);
+    } catch (error) {
+      toast.error(`Não foi possível pegar o item: ${(error as Error).message}`);
+    }
   };
 
   const pushMapItem = async (itemId: string, tokenId: string) => {
@@ -1521,6 +1681,7 @@ function CombatPage() {
             items={mapItemsWithIcons}
             onPickItem={(itemId, tokenId) => void pickupMapItem(itemId, tokenId)}
             onPushItem={(itemId, tokenId) => void pushMapItem(itemId, tokenId)}
+            onOpenChest={openChest}
             placement={
               isMaster && placing
                 ? {
@@ -1530,6 +1691,7 @@ function CombatPage() {
                       const cell = { x, y };
                       if (placing.kind === "character") addCharacter(placing.id, cell);
                       else if (placing.kind === "monster") addMonster(placing.id, cell);
+                      else if (placing.kind === "chest") void placeChest(cell);
                       else void placeCatalogItem(placing.id, cell);
                       setPlacing(null);
                     },
@@ -1565,6 +1727,13 @@ function CombatPage() {
                 }}
               >
                 Adicionar item
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setPlacing({ kind: "chest", id: "", label: "o baú" })}
+              >
+                <PackageOpen /> Baú
               </Button>
             </div>
           )}
@@ -2057,6 +2226,57 @@ function CombatPage() {
           </section>
         </div>
       )}
+      {(() => {
+        const chest = chestView ? (mapItemsWithIcons.find((x) => x.id === chestView.itemId) ?? null) : null;
+        const tokenCharacterId =
+          combat.combatants.find((x) => x.id === chestView?.tokenId)?.character_id ?? null;
+        const takers = isMaster
+          ? [...group.characters]
+              .sort((a, b) => Number(b.id === tokenCharacterId) - Number(a.id === tokenCharacterId))
+              .map((ch) => ({ id: ch.id, name: ch.name }))
+          : group.characters
+              .filter((ch) => ch.id === tokenCharacterId)
+              .map((ch) => ({ id: ch.id, name: ch.name }));
+        return (
+          <ChestDialog
+            key={chestView?.itemId ?? "none"}
+            chest={chest}
+            entries={chest ? parseChestItems(chest.chest_items) : []}
+            open={!!chest}
+            onOpenChange={(open) => !open && setChestView(null)}
+            isMaster={isMaster}
+            catalogItems={catalogItems}
+            takers={takers}
+            onTake={(entry, characterId) =>
+              chest && void takeFromChest(chest.id, entry, characterId)
+            }
+            onAdd={(catalogItemId) => chest && void addToChest(chest.id, catalogItemId)}
+            onRemove={(uid) =>
+              chest &&
+              void saveChestItems(
+                chest.id,
+                removeChestEntry(parseChestItems(chest.chest_items), uid),
+              ).catch((error: Error) => toast.error(error.message))
+            }
+            onUpdate={async (patch) => {
+              if (!chest) return;
+              const { error } = await supabase
+                .from("battle_map_items")
+                .update(patch)
+                .eq("id", chest.id);
+              if (error) toast.error(`Não foi possível salvar o baú: ${error.message}`);
+              void qc.invalidateQueries({ queryKey: ["battle_map_items"] });
+            }}
+            onDelete={async () => {
+              if (!chest) return;
+              const { error } = await supabase.from("battle_map_items").delete().eq("id", chest.id);
+              if (error) toast.error(`Não foi possível remover o baú: ${error.message}`);
+              setChestView(null);
+              void qc.invalidateQueries({ queryKey: ["battle_map_items"] });
+            }}
+          />
+        );
+      })()}
     </div>
   );
 }

@@ -1,0 +1,2 @@
+ALTER TABLE public.battle_map_items ADD COLUMN IF NOT EXISTS is_chest boolean NOT NULL DEFAULT false;
+ALTER TABLE public.battle_map_items ADD COLUMN IF NOT EXISTS chest_items jsonb NOT NULL DEFAULT '[]'::jsonb;
