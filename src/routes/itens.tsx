@@ -194,43 +194,7 @@ function ItemsPageContent() {
 
   const deliverItem = useMutation({
     mutationFn: async ({ item, characterId }: { item: CatalogItem; characterId: string }) => {
-      if (item.category === "weapon") {
-        const { error: weaponError } = await supabase.from("weapons").insert({
-          character_id: characterId,
-          name: item.name,
-          weapon_type: "Arma",
-          damage: item.damage ?? "",
-          ammo: item.ammo ?? "",
-          notes: item.description,
-          skill_key: item.skill_key ?? "ferramenta_fisica",
-          range: item.range ?? 1,
-          uses_max: item.uses_max ?? 0,
-          uses_current: item.uses_max ?? 0,
-          hand_slot: item.hand_slot,
-          image_url: item.image_url,
-        });
-        if (weaponError) throw weaponError;
-        return;
-      }
-      const { error: insertError } = await supabase.from("backpack_items").insert({
-        character_id: characterId,
-        catalog_item_id: item.id,
-        name: item.name,
-        notes: item.description,
-        category: item.category,
-        quantity: 1,
-        skill_bonuses: item.skill_bonuses,
-        heal_hp: item.heal_hp ?? 0,
-        heal_sanity: item.heal_sanity ?? 0,
-        restore_energy: item.restore_energy,
-        temp_shield: item.temp_shield ?? 0,
-        image_url: item.image_url,
-        armor_part: item.armor_part,
-        armor_reduction: item.armor_reduction,
-        hand_slot: item.hand_slot,
-        equipped: false,
-      });
-      if (insertError) throw insertError;
+      await giveCatalogItem(item, characterId);
     },
     onSuccess: (_, { item, characterId }) => {
       void qc.invalidateQueries({ queryKey: ["group"] });
