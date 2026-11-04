@@ -273,6 +273,25 @@ export const phoneGalleryQuery = queryOptions({
 });
 
 export type MapLayout = Tables["map_layouts"]["Row"];
+export type WhisperPreset = Tables["whisper_presets"]["Row"];
+export type SanityWhisper = Tables["sanity_whispers"]["Row"];
+
+export const whisperPresetsQuery = (skillKey?: string) =>
+  queryOptions({
+    queryKey: skillKey ? ["whisper_presets", skillKey] : ["whisper_presets"],
+    queryFn: async () => {
+      let query = supabase
+        .from("whisper_presets")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (skillKey) {
+        query = query.eq("skill_key", skillKey);
+      }
+      const { data, error } = await query;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
 
 export const mapLayoutsQuery = queryOptions({
   queryKey: ["map_layouts"],

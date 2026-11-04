@@ -147,6 +147,8 @@ export function useRealtimeSync() {
       phone_clues: () => queue(["phone_clues"]),
       phone_gallery: () => queue(["phone_gallery"]),
       catalog_items: () => queue(["catalog_items"]),
+      whisper_presets: () => queue(["whisper_presets"]),
+      sanity_whispers: () => queue(["sanity_whispers"]),
     };
 
     const suffix = Math.random().toString(36).slice(2);

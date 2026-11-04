@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, notFound, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, Backpack, Brain, Crosshair, Swords, Trash2, X } from "lucide-react";
+import { ArrowLeft, Backpack, Brain, Crosshair, Swords, Trash2, Users, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -211,9 +211,9 @@ function CharacterPage() {
         </div>
       )}
       <div className="mb-6 flex items-center justify-between">
-        <Button asChild variant="ghost" size="sm">
+        <Button asChild variant="outline" size="sm" className="gap-2 border-border/80 text-xs font-semibold text-muted-foreground hover:text-foreground">
           <Link to="/">
-            <ArrowLeft /> Arquivo
+            <Users className="size-3.5" /> Abrir fichas / Trocar de personagem
           </Link>
         </Button>
         <AlertDialog>
@@ -360,25 +360,25 @@ function CharacterPage() {
             value="ficha"
             className="font-display uppercase tracking-wider data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
           >
-            <Brain /> Ficha
+            <Brain className="mr-1.5 size-4" /> Atributos & Skills
           </TabsTrigger>
           <TabsTrigger
             value="armas"
             className="font-display uppercase tracking-wider data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
           >
-            <Crosshair /> Armas ({sheet.weapons.length})
+            <Crosshair className="mr-1.5 size-4" /> Armas ({sheet.weapons.length})
           </TabsTrigger>
           <TabsTrigger
             value="ataques"
             className="font-display uppercase tracking-wider data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
           >
-            <Swords className="mr-1.5 size-4" /> Ataques
+            <Swords className="mr-1.5 size-4" /> Ataques e Ações
           </TabsTrigger>
           <TabsTrigger
             value="mochila"
             className="font-display uppercase tracking-wider data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
           >
-            <Backpack /> Mochila ({sheet.backpack.length})
+            <Backpack className="mr-1.5 size-4" /> Mochila ({sheet.backpack.length})
           </TabsTrigger>
         </TabsList>
 

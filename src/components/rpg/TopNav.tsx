@@ -28,8 +28,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { messagesQuery } from "@/lib/rpg-queries";
-import { getPlayerCharacterId } from "@/lib/player-character";
+import { getPlayerCharacterId, usePlayerCharacterId } from "@/lib/player-character";
 import { unreadPhoneMessages } from "@/lib/phone";
+import { AudioControlPill } from "@/components/rpg/AudioSyncGlobal";
 
 const LINKS = [
   { to: "/", label: "Personagens", short: "Fichas", icon: Users, exact: true, restricted: false },
@@ -114,6 +115,24 @@ export function TopNav() {
 
   const unreadCount = unreadPhoneMessages(messages ?? [], characterId, lastReadAt);
 
+  const characterLink = characterId ? `/personagem/${characterId}` : "/";
+
+  // Se for mestre, exibe todas as abas. Se for jogador comum, exibe estritamente: Personagem, Combate e Celular.
+  const navLinks = isMaster
+    ? [
+        { to: "/", label: "Fichas", short: "Fichas", icon: Users, exact: true, restricted: false },
+        { to: "/bestiario", label: "Bestiário", short: "Monstros", icon: Skull, exact: false, restricted: true },
+        { to: "/combate", label: "Combate", short: "Combate", icon: MapIcon, exact: false, restricted: false },
+        { to: "/celular", label: "Celular", short: "Celular", icon: Smartphone, exact: false, restricted: false },
+        { to: "/itens", label: "Itens", short: "Itens", icon: Package, exact: false, restricted: true },
+        { to: "/mestre", label: "Mestre", short: "Mestre", icon: Theater, exact: false, restricted: true },
+      ]
+    : [
+        { to: characterLink, label: "Personagem", short: "Personagem", icon: Users, exact: false, restricted: false },
+        { to: "/combate", label: "Combate", short: "Combate", icon: MapIcon, exact: false, restricted: false },
+        { to: "/celular", label: "Celular", short: "Celular", icon: Smartphone, exact: false, restricted: false },
+      ];
+
   return (
     <>
       <header className="sticky top-0 z-40 border-b border-border bg-background">
@@ -123,7 +142,7 @@ export function TopNav() {
           </Link>
 
           <nav className="hidden items-center gap-5 md:flex">
-            {LINKS.map((l) => (
+            {navLinks.map((l) => (
               <Link key={l.to} to={l.to} className={linkClass} activeOptions={{ exact: l.exact }}>
                 <span>{l.label}</span>
                 {l.to === "/celular" && unreadCount > 0 && (
@@ -131,21 +150,19 @@ export function TopNav() {
                     {unreadCount}
                   </span>
                 )}
-                {l.restricted &&
-                  (isMaster ? (
-                    <span title="Mestre autenticado">
-                      <Crown className="size-3 text-primary" />
-                    </span>
-                  ) : (
-                    <span title="Acesso restrito ao mestre">
-                      <Lock className="size-3 text-muted-foreground/70" />
-                    </span>
-                  ))}
+                {l.restricted && (
+                  <span title="Acesso do mestre">
+                    <Crown className="size-3 text-primary" />
+                  </span>
+                )}
               </Link>
             ))}
           </nav>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2">
+            {/* Controle de Volume Pessoal */}
+            <AudioControlPill />
+
             {/* Status do Mestre */}
             {isMaster ? (
               <DropdownMenu>
@@ -219,9 +236,11 @@ export function TopNav() {
       {/* Barra de baixo no celular */}
       <nav
         aria-label="Navegação"
-        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-6 border-t border-border bg-background pb-[env(safe-area-inset-bottom)] md:hidden"
+        className={`fixed inset-x-0 bottom-0 z-40 grid ${
+          isMaster ? "grid-cols-6" : "grid-cols-3"
+        } border-t border-border bg-background pb-[env(safe-area-inset-bottom)] md:hidden`}
       >
-        {LINKS.map((l) => (
+        {navLinks.map((l) => (
           <Link
             key={l.to}
             to={l.to}
@@ -237,11 +256,7 @@ export function TopNav() {
               )}
               {l.restricted && (
                 <span className="absolute -right-1.5 -top-1">
-                  {isMaster ? (
-                    <Crown className="size-3 text-primary" />
-                  ) : (
-                    <Lock className="size-2.5 text-muted-foreground" />
-                  )}
+                  <Crown className="size-3 text-primary" />
                 </span>
               )}
             </div>

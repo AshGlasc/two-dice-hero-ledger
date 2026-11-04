@@ -14,6 +14,8 @@ import appCss from "../styles.css?url";
 import { MasterAuthProvider } from "@/context/MasterAuthContext";
 import { SilentRollToggle } from "@/components/rpg/SilentRollToggle";
 import { RollBurst } from "@/components/rpg/RollBurst";
+import { SkillWhisperOverlay } from "@/components/rpg/SkillWhisperOverlay";
+import { AudioSyncGlobal } from "@/components/rpg/AudioSyncGlobal";
 import { TopNav } from "@/components/rpg/TopNav";
 import { Toaster } from "@/components/ui/sonner";
 import { useRealtimeSync } from "@/hooks/use-realtime-sync";
@@ -143,6 +145,8 @@ function RootComponent() {
           <Outlet />
         </div>
         <RollBurst />
+        <SkillWhisperOverlay />
+        <AudioSyncGlobal />
         <SilentRollToggle />
         <Toaster position="top-center" theme="dark" />
       </MasterAuthProvider>

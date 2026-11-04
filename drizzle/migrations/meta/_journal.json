@@ -127,6 +127,20 @@
       "when": 1793751778800,
       "tag": "0017_map_chests",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1793755000000,
+      "tag": "0018_skill_whispers_and_presets",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1793760000000,
+      "tag": "0019_audio_and_survival",
+      "breakpoints": true
     }
   ]
 }

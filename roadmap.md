@@ -14,11 +14,12 @@
 - [x] Acesso do mestre com senha (feito pelo usuário)
 - [ ] Corrigir erros que impedem o app de abrir
 - [ ] Emoji para cada efeito em jogadores e monstros (lista e mapa)
-- [ ] Rolagem silenciosa no cantinho: só quem rolou (e o mestre) vê
-- [ ] Mapa: imagem em ladrilhos específicos
-- [ ] Mapa: névoa (ocultar ladrilhos para os jogadores)
-- [ ] Dinheiro para jogadores e monstros/NPCs
-- [ ] Aba Celular: saldo, Pix entre jogadores, mensagens, apps futuros
+- [x] Rolagens silenciosas
+- [x] Névoa de guerra e customização de ladrilhos
+- [x] Dinheiro para jogadores
+- [x] FungoPhone com Pix e chat
 - [x] Baús no mapa com foto e itens
 - [x] Armas e ataques +1 de dano a cada 2 níveis
 - [x] Subskills passivas: painel do mestre e redução de dano no combate
+- [x] Sussurros automáticos das habilidades em pop-up
+- [x] Modelos de sussurros e feed investigativo no celular

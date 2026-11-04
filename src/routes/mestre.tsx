@@ -12,13 +12,17 @@ import {
   Swords,
   Users,
   X,
+  Sparkles,
+  Coffee,
 } from "lucide-react";
+import { MasterAudioSection } from "@/components/rpg/MasterAudioSection";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { BodyMap } from "@/components/rpg/BodyMap";
 import { ChangePinDialog } from "@/components/rpg/ChangePinDialog";
+import { SendWhisperDialog } from "@/components/rpg/SendWhisperDialog";
 import { InlineField } from "@/components/rpg/InlineField";
 import { MasterLockScreen } from "@/components/rpg/MasterLockScreen";
 import { Button } from "@/components/ui/button";
@@ -133,6 +137,7 @@ function GmPageContent({ onLock }: { onLock: () => void }) {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <PartyRestButton group={group} />
           <ChangePinDialog />
           <Button
             variant="outline"
@@ -144,6 +149,9 @@ function GmPageContent({ onLock }: { onLock: () => void }) {
           </Button>
         </div>
       </header>
+
+      {/* Controle de Áudio, Clima e Trilhas da Mesa */}
+      <MasterAudioSection />
 
       <DiscordWebhookSettings />
       <DifficultyControl group={group} />
@@ -163,6 +171,55 @@ function GmPageContent({ onLock }: { onLock: () => void }) {
         </div>
       </div>
     </main>
+  );
+}
+
+function PartyRestButton({ group }: { group: GroupData }) {
+  const qc = useQueryClient();
+  const restMutation = useMutation({
+    mutationFn: async () => {
+      // 1. Restaura energia e dá +2 PV de fôlego para cada personagem
+      for (const ch of group.characters) {
+        const hpCurrent = ch.hp_current ?? ch.hp_max;
+        const hpMax = ch.hp_max;
+        const nextHp = Math.min(hpMax, hpCurrent + 2);
+        const energyMax = ch.energia_maxima ?? 10;
+        await supabase
+          .from("characters")
+          .update({
+            energia_atual: energyMax,
+            hp_current: nextHp,
+          })
+          .eq("id", ch.id);
+      }
+      // 2. Limpa condições temporárias dos combatentes
+      await supabase
+        .from("combatants")
+        .update({ conditions: [] })
+        .neq("id", "00000000-0000-0000-0000-000000000000");
+    },
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["characters"] });
+      await qc.invalidateQueries({ queryKey: ["group"] });
+      await qc.invalidateQueries({ queryKey: ["combat"] });
+      toast.success(
+        "Descanso da Cena aplicado! Energia recuperada, fôlego +2 PV e condições limpas.",
+      );
+    },
+    onError: (err: Error) => toast.error(`Erro ao aplicar descanso: ${err.message}`),
+  });
+
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={() => restMutation.mutate()}
+      disabled={restMutation.isPending}
+      className="gap-1.5 border-emerald-500/40 bg-emerald-500/10 text-xs font-semibold text-emerald-400 hover:bg-emerald-500/20"
+      title="Restaura energia de todos, recupera fôlego (+2 PV) e limpa condições temporárias"
+    >
+      <Coffee className="size-3.5" /> Descanso da Cena
+    </Button>
   );
 }
 
@@ -360,6 +417,17 @@ function PendingAttacks({ group }: { group: GroupData }) {
  */
 function PassivePerceptions({ group }: { group: GroupData }) {
   const [difficulty, setDifficulty] = useState(10);
+  const [whisperModal, setWhisperModal] = useState<{
+    open: boolean;
+    skillKey: string;
+    skillName: string;
+    passingIds: string[];
+  }>({
+    open: false,
+    skillKey: "",
+    skillName: "",
+    passingIds: [],
+  });
 
   return (
     <section className="rounded-lg border border-border bg-card p-5 shadow-paint">
@@ -404,9 +472,28 @@ function PassivePerceptions({ group }: { group: GroupData }) {
             const passing = scores.filter((s) => s.score >= difficulty);
             return (
               <li key={p.key} className="rounded-md border border-border bg-background p-3">
-                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <span className="font-semibold">{skillName}</span>
-                  <span className="text-xs text-muted-foreground">{p.hint}</span>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-baseline gap-2">
+                    <span className="font-semibold">{skillName}</span>
+                    <span className="text-xs text-muted-foreground">{p.hint}</span>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-7 gap-1.5 text-xs text-primary hover:bg-primary/10"
+                    onClick={() =>
+                      setWhisperModal({
+                        open: true,
+                        skillKey: p.key,
+                        skillName,
+                        passingIds: passing.map((s) => s.id),
+                      })
+                    }
+                  >
+                    <Sparkles className="size-3.5" />
+                    Sussurrar
+                  </Button>
                 </div>
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {scores.map((s) => (
@@ -431,6 +518,15 @@ function PassivePerceptions({ group }: { group: GroupData }) {
           })}
         </ul>
       )}
+
+      <SendWhisperDialog
+        open={whisperModal.open}
+        onOpenChange={(open) => setWhisperModal((prev) => ({ ...prev, open }))}
+        skillKey={whisperModal.skillKey}
+        skillName={whisperModal.skillName}
+        group={group}
+        defaultPassingIds={whisperModal.passingIds}
+      />
     </section>
   );
 }

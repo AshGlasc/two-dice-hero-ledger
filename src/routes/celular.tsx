@@ -1,6 +1,18 @@
 import { useMutation, useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft, Camera, Newspaper, Send, Trash2, UserPlus } from "lucide-react";
+import {
+  ArrowLeft,
+  Camera,
+  Newspaper,
+  Send,
+  Trash2,
+  UserPlus,
+  Filter,
+  Plus,
+  X,
+  FileText,
+  AlertTriangle,
+} from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -561,6 +573,15 @@ function Bank({
   );
 }
 
+const NEWS_CATEGORIES = [
+  { label: "🚨 Urgente", badge: "border-red-500/40 bg-red-500/15 text-red-300" },
+  { label: "🕵️ Pista", badge: "border-cyan-500/40 bg-cyan-500/15 text-cyan-300" },
+  { label: "📰 Manchete", badge: "border-amber-500/40 bg-amber-500/15 text-amber-300" },
+  { label: "👁️ Rumor", badge: "border-purple-500/40 bg-purple-500/15 text-purple-300" },
+  { label: "⚠️ Alerta", badge: "border-yellow-500/40 bg-yellow-500/15 text-yellow-300" },
+  { label: "💀 Necrológio", badge: "border-zinc-500/40 bg-zinc-500/15 text-zinc-300" },
+] as const;
+
 function News({
   clues,
   isMaster,
@@ -578,13 +599,18 @@ function News({
   const [headline, setHeadline] = useState("");
   const [body, setBody] = useState("");
   const [imageUrl, setImageUrl] = useState("");
+  const [category, setCategory] = useState<string>("📰 Manchete");
+  const [selectedFilter, setSelectedFilter] = useState<string>("todas");
+  const [isFormOpen, setIsFormOpen] = useState(false);
+
   const save = useMutation({
     mutationFn: async () => {
-      if (!headline.trim()) throw new Error("Escreva uma manchete.");
+      if (!headline.trim()) throw new Error("Escreva uma manchete para a notícia.");
       const { error } = await supabase.from("phone_clues").insert({
         headline: headline.trim(),
         body: body.trim(),
         image_url: imageUrl,
+        category: category,
       });
       if (error) throw error;
     },
@@ -592,131 +618,342 @@ function News({
       setHeadline("");
       setBody("");
       setImageUrl("");
+      setIsFormOpen(false);
       await qc.invalidateQueries({ queryKey: ["phone_clues"] });
-      toast.success("Pista publicada para a mesa.");
+      toast.success("Notícia publicada na Gazeta!");
     },
-    onError: (error) => toast.error(error.message || "Não foi possível publicar a pista."),
+    onError: (error) => toast.error(error.message || "Não foi possível publicar a notícia."),
   });
+
   const remove = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from("phone_clues").delete().eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["phone_clues"] }),
-    onError: () => toast.error("Não foi possível apagar a pista."),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["phone_clues"] });
+      toast.success("Notícia removida.");
+    },
+    onError: () => toast.error("Não foi possível apagar a notícia."),
   });
 
+  const filteredClues = useMemo(() => {
+    if (selectedFilter === "todas") return clues;
+    return clues.filter((c) => (c.category || "📰 Manchete") === selectedFilter);
+  }, [clues, selectedFilter]);
+
+  const getCategoryBadgeClass = (cat?: string | null) => {
+    const found = NEWS_CATEGORIES.find((item) => item.label === cat);
+    return found ? found.badge : "border-border bg-zinc-800 text-zinc-300";
+  };
+
   return (
-    <div>
-      <AppHeader title="Notícias e pistas" back={back} />
+    <div className="pb-8">
+      <AppHeader title="Notícias e Pistas" back={back} />
+
       <div className="space-y-4 p-4">
-        {isMaster && (
+        {/* CABEÇALHO ESTILO TABLÓIDE INVESTIGATIVO */}
+        <header className="overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950 p-4 shadow-lg">
+          <div className="border-b-2 border-zinc-700/80 pb-2 text-center">
+            <p className="font-mono text-[9px] uppercase tracking-widest text-zinc-400">
+              Arquivo Confidencial • Redação da Cidade
+            </p>
+            <h1 className="mt-0.5 font-display text-2xl font-black uppercase tracking-tight text-zinc-100 sm:text-3xl">
+              Gazeta dos Caídos
+            </h1>
+            <div className="mt-1.5 flex items-center justify-between border-t border-zinc-800 pt-1 font-mono text-[10px] uppercase text-zinc-400">
+              <span>Edição Especial</span>
+              <span className="italic">"A verdade nunca dorme"</span>
+              <span>5 Rupias</span>
+            </div>
+          </div>
+
+          {/* BOTÃO DO MESTRE PARA CRIAR NOTÍCIA */}
+          {isMaster && (
+            <div className="mt-3 flex justify-end">
+              <Button
+                size="sm"
+                variant={isFormOpen ? "secondary" : "outline"}
+                onClick={() => setIsFormOpen(!isFormOpen)}
+                className="h-8 gap-1.5 text-xs"
+              >
+                {isFormOpen ? (
+                  <>
+                    <X className="size-3.5" /> Fechar formulário
+                  </>
+                ) : (
+                  <>
+                    <Plus className="size-3.5" /> Nova notícia / pista
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
+        </header>
+
+        {/* FORMULÁRIO DO MESTRE */}
+        {isMaster && isFormOpen && (
           <form
-            className="space-y-2 rounded-xl border border-primary/30 bg-primary/5 p-3"
+            className="space-y-3 rounded-xl border border-primary/40 bg-zinc-950/90 p-4 shadow-lg animate-in fade-in"
             onSubmit={(event) => {
               event.preventDefault();
               save.mutate();
             }}
           >
-            <p className="label-caps text-primary">Mestre — publicar nos jornais locais</p>
-            <Input
-              value={headline}
-              onChange={(event) => setHeadline(event.target.value)}
-              placeholder="Manchete de Jakarta, Bandung ou Surabaya"
-              aria-label="Manchete"
-              required
-            />
-            <textarea
-              className="min-h-20 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-              value={body}
-              onChange={(event) => setBody(event.target.value)}
-              placeholder="Nota de investigação, rumor ou pista..."
-              aria-label="Texto da pista"
-            />
-            <label className="block space-y-1 text-xs text-muted-foreground">
-              Foto da notícia
-              <input
-                className="block w-full text-sm"
-                type="file"
-                accept="image/*"
-                onChange={async (event) => {
-                  const file = event.target.files?.[0];
-                  event.target.value = "";
-                  if (!file) return;
-                  if (file.size > 8 * 1024 * 1024) {
-                    toast.error("Escolha uma imagem de até 8 MB.");
-                    return;
-                  }
-                  try {
-                    setImageUrl(await fileToSmallImage(file, 960, 0.72));
-                  } catch {
-                    toast.error("Não consegui abrir essa imagem.");
-                  }
-                }}
+            <div className="flex items-center justify-between border-b border-border/50 pb-2">
+              <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-primary">
+                <FileText className="size-3.5" /> Redigir notícia ou pista
+              </p>
+              <span className="text-[10px] text-muted-foreground">Exclusivo do Mestre</span>
+            </div>
+
+            {/* SELEÇÃO DE CATEGORIA */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground">
+                Categoria / Tag da matéria
+              </label>
+              <div className="flex flex-wrap gap-1.5">
+                {NEWS_CATEGORIES.map((cat) => (
+                  <button
+                    key={cat.label}
+                    type="button"
+                    onClick={() => setCategory(cat.label)}
+                    className={cn(
+                      "rounded-full border px-2.5 py-1 text-xs font-medium transition",
+                      category === cat.label
+                        ? `${cat.badge} ring-1 ring-primary`
+                        : "border-border bg-background text-muted-foreground hover:bg-muted/40",
+                    )}
+                  >
+                    {cat.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* MANCHETE */}
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-muted-foreground">Manchete</label>
+              <Input
+                value={headline}
+                onChange={(event) => setHeadline(event.target.value)}
+                placeholder="Ex: Assassinato no Píer 4 choca as autoridades"
+                aria-label="Manchete da notícia"
+                required
               />
-            </label>
-            {imageUrl && (
-              <img
-                src={imageUrl}
-                alt="Prévia da notícia"
-                className="max-h-36 rounded-lg object-cover"
+            </div>
+
+            {/* CONTEÚDO */}
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-muted-foreground">
+                Conteúdo / Relato investigativo
+              </label>
+              <textarea
+                className="min-h-24 w-full rounded-md border border-border bg-background px-3 py-2 font-serif text-sm italic"
+                value={body}
+                onChange={(event) => setBody(event.target.value)}
+                placeholder="Detalhes, pistas encontradas, testemunhos ou boletim oficial..."
+                aria-label="Texto da notícia"
               />
-            )}
-            <Button type="submit" size="sm" disabled={save.isPending || !headline.trim()}>
-              <Newspaper /> Publicar pista
+            </div>
+
+            {/* FOTO */}
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold text-muted-foreground">
+                Fotografia jornalística (opcional)
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  className="block w-full text-xs text-muted-foreground file:mr-2 file:rounded-md file:border-0 file:bg-primary file:px-2.5 file:py-1 file:text-xs file:font-semibold file:text-primary-foreground hover:file:bg-primary/90"
+                  type="file"
+                  accept="image/*"
+                  onChange={async (event) => {
+                    const file = event.target.files?.[0];
+                    event.target.value = "";
+                    if (!file) return;
+                    if (file.size > 8 * 1024 * 1024) {
+                      toast.error("Escolha uma imagem de até 8 MB.");
+                      return;
+                    }
+                    try {
+                      setImageUrl(await fileToSmallImage(file, 960, 0.72));
+                    } catch {
+                      toast.error("Não consegui abrir essa imagem.");
+                    }
+                  }}
+                />
+                {imageUrl && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs text-destructive"
+                    onClick={() => setImageUrl("")}
+                  >
+                    Remover
+                  </Button>
+                )}
+              </div>
+              {imageUrl && (
+                <div className="mt-2 overflow-hidden rounded-lg border border-border">
+                  <img
+                    src={imageUrl}
+                    alt="Prévia da notícia"
+                    className="max-h-40 w-full object-cover"
+                  />
+                </div>
+              )}
+            </div>
+
+            <Button
+              type="submit"
+              size="sm"
+              disabled={save.isPending || !headline.trim()}
+              className="gap-2"
+            >
+              <Newspaper className="size-4" />
+              Publicar na Gazeta
             </Button>
           </form>
         )}
+
+        {/* FILTROS POR CATEGORIA */}
+        {clues.length > 0 && (
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+            <span className="shrink-0 text-muted-foreground">
+              <Filter className="inline size-3 mr-1" />
+              Filtro:
+            </span>
+            <button
+              type="button"
+              onClick={() => setSelectedFilter("todas")}
+              className={cn(
+                "rounded-full border px-2.5 py-0.5 text-xs transition",
+                selectedFilter === "todas"
+                  ? "border-primary bg-primary/10 font-bold text-primary"
+                  : "border-border text-muted-foreground hover:bg-muted/30",
+              )}
+            >
+              Todas ({clues.length})
+            </button>
+            {NEWS_CATEGORIES.map((cat) => {
+              const count = clues.filter((c) => (c.category || "📰 Manchete") === cat.label).length;
+              if (count === 0) return null;
+              return (
+                <button
+                  key={cat.label}
+                  type="button"
+                  onClick={() => setSelectedFilter(cat.label)}
+                  className={cn(
+                    "rounded-full border px-2.5 py-0.5 text-xs transition",
+                    selectedFilter === cat.label
+                      ? `${cat.badge} font-bold`
+                      : "border-border text-muted-foreground hover:bg-muted/30",
+                  )}
+                >
+                  {cat.label} ({count})
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* LISTAGEM DE NOTÍCIAS */}
         {error ? (
           <p role="alert" className="py-8 text-center text-sm text-destructive">
             Não foi possível carregar as notícias: {error}
           </p>
         ) : isLoading ? (
-          <p className="py-8 text-center text-sm text-muted-foreground">Carregando notícias…</p>
-        ) : clues.length === 0 ? (
-          <p className="py-8 text-center text-sm italic text-muted-foreground">
-            Nenhuma notícia ou pista publicada.
+          <p className="py-8 text-center text-sm text-muted-foreground">
+            Imprimindo as edições recentes…
           </p>
+        ) : filteredClues.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-border py-12 text-center">
+            <Newspaper className="mx-auto size-8 text-muted-foreground/50" />
+            <p className="mt-2 text-sm italic text-muted-foreground">
+              Nenhuma notícia ou pista encontrada para este filtro.
+            </p>
+          </div>
         ) : (
-          clues.map((clue) => (
-            <article
-              key={clue.id}
-              className="overflow-hidden rounded-xl border border-border bg-background"
-            >
-              {clue.image_url && (
-                <img
-                  src={clue.image_url}
-                  alt=""
-                  loading="lazy"
-                  decoding="async"
-                  className="max-h-56 w-full object-cover"
-                />
-              )}
-              <div className="p-3">
-                <div className="flex items-start justify-between gap-2">
-                  <h2 className="font-display text-xl font-bold uppercase">{clue.headline}</h2>
+          filteredClues.map((clue) => {
+            const clueCategory = clue.category || "📰 Manchete";
+            const dateStr = new Date(clue.created_at).toLocaleDateString("pt-BR", {
+              day: "2-digit",
+              month: "short",
+              year: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            });
+
+            return (
+              <article
+                key={clue.id}
+                className="overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950/90 shadow-md transition hover:border-zinc-700"
+              >
+                {/* CABEÇALHO DO ARTIGO COM TAG E DATA */}
+                <div className="flex items-center justify-between border-b border-zinc-800/80 bg-zinc-900/50 px-3.5 py-2">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={cn(
+                        "rounded-full border px-2 py-0.5 font-mono text-[10px] font-semibold",
+                        getCategoryBadgeClass(clueCategory),
+                      )}
+                    >
+                      {clueCategory}
+                    </span>
+                    <time className="font-mono text-[10px] text-zinc-400">{dateStr}</time>
+                  </div>
+
                   {isMaster && (
                     <Button
                       size="icon"
                       variant="ghost"
+                      className="size-6 text-zinc-400 hover:bg-destructive/10 hover:text-destructive"
                       onClick={() => remove.mutate(clue.id)}
-                      aria-label="Apagar pista"
+                      disabled={remove.isPending}
+                      aria-label="Apagar notícia"
                     >
-                      <Trash2 />
+                      <Trash2 className="size-3.5" />
                     </Button>
                   )}
                 </div>
-                {clue.body && (
-                  <p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">
-                    {clue.body}
-                  </p>
+
+                {/* IMAGEM JORNALÍSTICA */}
+                {clue.image_url && (
+                  <div className="relative border-b border-zinc-800/80 bg-black">
+                    <img
+                      src={clue.image_url}
+                      alt={clue.headline}
+                      loading="lazy"
+                      decoding="async"
+                      className="max-h-60 w-full object-cover"
+                    />
+                    <div className="absolute bottom-1 right-2 rounded bg-black/70 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-zinc-300">
+                      Evidência Fotográfica
+                    </div>
+                  </div>
                 )}
-                <time className="mt-2 block text-[10px] text-muted-foreground">
-                  {new Date(clue.created_at).toLocaleString("pt-BR")}
-                </time>
-              </div>
-            </article>
-          ))
+
+                {/* CORPO DA NOTÍCIA */}
+                <div className="p-4">
+                  <h2 className="font-display text-lg font-black uppercase tracking-tight text-zinc-100 sm:text-xl">
+                    {clue.headline}
+                  </h2>
+
+                  {clue.body && (
+                    <p className="mt-2.5 whitespace-pre-wrap font-serif text-sm leading-relaxed text-zinc-300">
+                      {clue.body}
+                    </p>
+                  )}
+
+                  <div className="mt-4 flex items-center justify-between border-t border-dashed border-zinc-800/80 pt-2 font-mono text-[10px] text-zinc-500">
+                    <span>Investigação registrada</span>
+                    <span>Doc #{clue.id.slice(0, 8)}</span>
+                  </div>
+                </div>
+              </article>
+            );
+          })
         )}
       </div>
     </div>
