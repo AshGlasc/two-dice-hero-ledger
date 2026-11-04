@@ -37,7 +37,7 @@ export function parseChestItems(raw: unknown): ChestEntry[] {
   if (!Array.isArray(raw)) return [];
   return raw.flatMap((entry) => {
     if (!entry || typeof entry !== "object") return [];
-    const e = entry as Record<string, unknown>;
+    const e = entry as { uid?: unknown; catalog_item_id?: unknown; name?: unknown };
     if (typeof e.catalog_item_id !== "string" || typeof e.uid !== "string") return [];
     return [{ uid: e.uid, catalog_item_id: e.catalog_item_id, name: String(e.name ?? "Item") }];
   });
