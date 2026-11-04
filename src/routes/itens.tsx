@@ -27,6 +27,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useMasterAuth } from "@/context/MasterAuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
+import { giveCatalogItem } from "@/lib/give-item";
 import { groupQuery } from "@/lib/rpg-queries";
 import { ALL_SKILLS } from "@/lib/skills";
 
