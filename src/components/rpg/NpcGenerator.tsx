@@ -57,7 +57,10 @@ export function NpcGenerator() {
       attacks: `Golpe (${npc.stats.damage})`,
     });
     setBusy(false);
-    if (error) return toast.error("Não foi possível salvar no bestiário.");
+    if (error) {
+      toast.error("Não foi possível salvar no bestiário.");
+      return;
+    }
     qc.invalidateQueries();
     toast.success(`${npc.name} salvo no bestiário — já pode colocar no mapa pelo Combate.`);
   }
@@ -66,7 +69,10 @@ export function NpcGenerator() {
     setBusy(true);
     const { error } = await supabase.from("phone_contacts").insert({ name: npc.name });
     setBusy(false);
-    if (error) return toast.error("Não foi possível criar o contato.");
+    if (error) {
+      toast.error("Não foi possível criar o contato.");
+      return;
+    }
     qc.invalidateQueries();
     toast.success(`${npc.name} adicionado aos contatos do celular.`);
   }

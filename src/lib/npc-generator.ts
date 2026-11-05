@@ -23,7 +23,7 @@ const SECRET = ["Deve dinheiro a um agiota perigoso", "Viu o assassinato e ficou
 const WEAPON = ["1d4", "1d6", "1d6", "1d8", "2d4"];
 
 function pick<T>(arr: T[], rnd: () => number = Math.random): T {
-  return arr[Math.floor(rnd() * arr.length)];
+  return arr[Math.floor(rnd() * arr.length)] as T;
 }
 
 export function avatarUrlFor(seed: string) {
