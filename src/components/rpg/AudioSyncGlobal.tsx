@@ -19,13 +19,16 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 
+const SERVER_PREFS = { muted: false, volume: 0.7 };
+const getServerAudioPrefs = () => SERVER_PREFS;
+
 export function AudioSyncGlobal() {
   const { data: settings } = useQuery(appSettingsQuery);
 
   const audioPrefs = useSyncExternalStore(
     subscribeAudioPrefs,
     getAudioPrefs,
-    () => ({ muted: false, volume: 0.7 }),
+    getServerAudioPrefs,
   );
 
   // Sincroniza ambiente e música ditados pelo mestre
@@ -54,7 +57,7 @@ export function AudioControlPill() {
   const audioPrefs = useSyncExternalStore(
     subscribeAudioPrefs,
     getAudioPrefs,
-    () => ({ muted: false, volume: 0.7 }),
+    getServerAudioPrefs,
   );
 
   return (

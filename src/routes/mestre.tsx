@@ -16,6 +16,7 @@ import {
   Coffee,
 } from "lucide-react";
 import { MasterAudioSection } from "@/components/rpg/MasterAudioSection";
+import { BackupSection } from "@/components/rpg/BackupSection";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 
@@ -168,6 +169,7 @@ function GmPageContent({ onLock }: { onLock: () => void }) {
         <div className="space-y-6">
           <RollFeed />
           <GmNotes />
+          <BackupSection />
         </div>
       </div>
     </main>
