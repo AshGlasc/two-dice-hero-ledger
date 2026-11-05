@@ -62,7 +62,7 @@ export function BackupSection() {
         const { error } = await supabase.from(t).upsert(payload as never, { onConflict: "id" });
         if (error) failed.push(`${t}: ${error.message}`);
       }
-      const cs = backup.tables.combat_state;
+      const cs = backup.tables["combat_state"];
       if (cs?.length) await supabase.from("combat_state").upsert(cs as never, { onConflict: "id" });
       await qc.invalidateQueries();
       if (failed.length) toast.error(`Restaurado com falhas: ${failed.join("; ")}`);
