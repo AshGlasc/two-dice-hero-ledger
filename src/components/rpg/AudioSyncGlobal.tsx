@@ -97,7 +97,7 @@ export function AudioControlPill() {
               step={5}
               onValueChange={([val]) => {
                 if (audioPrefs.muted) setMuted(false);
-                setVolume(val / 100);
+                setVolume((val ?? 70) / 100);
               }}
               className="flex-1 cursor-pointer"
             />
