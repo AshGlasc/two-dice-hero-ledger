@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { appSettingsQuery } from "@/lib/rpg-queries";
+import { appSettingsQuery } from "@/lib/difficulty";
 import type { AmbienceType } from "@/lib/audio";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -233,7 +233,7 @@ export function MasterAudioSection() {
               max={100}
               step={5}
               onValueChange={([val]) =>
-                updateAudioMutation.mutate({ ambience_volume: val / 100 })
+                updateAudioMutation.mutate({ ambience_volume: (val ?? 50) / 100 })
               }
               className="max-w-xs cursor-pointer"
             />
@@ -290,7 +290,7 @@ export function MasterAudioSection() {
                 max={100}
                 step={5}
                 onValueChange={([val]) =>
-                  updateAudioMutation.mutate({ track_volume: val / 100 })
+                  updateAudioMutation.mutate({ track_volume: (val ?? 50) / 100 })
                 }
                 className="w-24 sm:w-32 cursor-pointer"
               />
