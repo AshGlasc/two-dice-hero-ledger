@@ -275,6 +275,8 @@ export const phoneGalleryQuery = queryOptions({
 export type MapLayout = Tables["map_layouts"]["Row"];
 export type WhisperPreset = Tables["whisper_presets"]["Row"];
 export type SanityWhisper = Tables["sanity_whispers"]["Row"];
+export type RegionalMap = Tables["regional_maps"]["Row"];
+export type RegionalMapPin = Tables["regional_map_pins"]["Row"];
 
 export const whisperPresetsQuery = (skillKey?: string) =>
   queryOptions({
@@ -304,3 +306,48 @@ export const mapLayoutsQuery = queryOptions({
     return data;
   },
 });
+
+export const regionalMapsQuery = queryOptions({
+  queryKey: ["regional_maps"],
+  queryFn: async () => {
+    const { data, error } = await supabase
+      .from("regional_maps")
+      .select("*")
+      .order("created_at", { ascending: true });
+    if (error) throw error;
+    return data ?? [];
+  },
+});
+
+export const activeRegionalMapQuery = queryOptions({
+  queryKey: ["regional_maps", "active"],
+  queryFn: async () => {
+    const { data, error } = await supabase
+      .from("regional_maps")
+      .select("*")
+      .eq("is_active", true)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    return data;
+  },
+});
+
+export const regionalMapPinsQuery = (mapId?: string | null, isMaster: boolean = false) =>
+  queryOptions({
+    queryKey: ["regional_map_pins", mapId ?? "all", isMaster ? "master" : "player"],
+    queryFn: async () => {
+      let query = supabase.from("regional_map_pins").select("*");
+      if (mapId) {
+        query = query.eq("map_id", mapId);
+      }
+      if (!isMaster) {
+        // STRICT CONSTRAINTS: NEVER expose pins where is_revealed = false to players!
+        query = query.eq("is_revealed", true);
+      }
+      const { data, error } = await query.order("created_at", { ascending: true });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });

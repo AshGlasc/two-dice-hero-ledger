@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Dices, Plus } from "lucide-react";
+import { Dices, MessageSquare, Plus } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -38,8 +38,9 @@ import {
 } from "@/lib/skills";
 import { itemBonusFor } from "@/lib/combat";
 import { cn } from "@/lib/utils";
-import { sanityMentalPenalty } from "@/lib/sanity";
+import { survivalSkillPenalty } from "@/lib/survival";
 import { ATTRIBUTE_POOL, attributeMaxFor, attributePoolUsed } from "@/lib/progression";
+import { supabase } from "@/integrations/supabase/client";
 
 type Mutations = ReturnType<typeof useSheetMutations>;
 type LoggedRoll = RollResult & { id: number; label: string; masterBonus?: number };
@@ -69,6 +70,26 @@ export function SkillsSection({
     toast.success(`Ponto atribuído a ${skillName}!`);
   };
 
+  const requestVoice = (skillKey: string, skillName: string) => {
+    const channel = supabase.channel("game-voices");
+    channel.subscribe((status) => {
+      if (status === "SUBSCRIBED") {
+        void channel.send({
+          type: "broadcast",
+          event: "VOICE_REQUEST",
+          payload: {
+            characterId: character.id,
+            characterName: character.name,
+            skillKey,
+            skillLabel: skillName,
+          },
+        });
+        toast.success(`Você chamou a voz interior de ${skillName}. Aguarde o mestre...`);
+        setTimeout(() => void supabase.removeChannel(channel), 1500);
+      }
+    });
+  };
+
   const doRoll = (label: string, modifier: number, attributeKey?: string) => {
     const dc = difficulty === "none" ? null : Number(difficulty);
     const mods = appSettings?.difficulty_modifiers
@@ -77,8 +98,10 @@ export function SkillsSection({
     const masterBonus =
       dc !== null ? calculateDifficultyBonus(mods, character.id, attributeKey) : 0;
     const finalDc = dc !== null ? dc + masterBonus : null;
-    const finalModifier =
-      modifier + (attributeKey ? sanityMentalPenalty(character, attributeKey) : 0);
+    const survivalPenalty = attributeKey
+      ? survivalSkillPenalty(character.hunger_state, character.thirst_state, attributeKey)
+      : 0;
+    const finalModifier = modifier + survivalPenalty;
     const result = roll2d6(finalModifier, finalDc);
     setRolls((prev) =>
       [
@@ -200,9 +223,19 @@ export function SkillsSection({
                     >
                       <SkillIcon skillKey={skill.key} attribute={attr.key} name={skill.name} />
                       <div>
-                        <h3 className="text-xl font-semibold uppercase text-foreground">
-                          {skill.name}
-                        </h3>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-xl font-semibold uppercase text-foreground">
+                            {skill.name}
+                          </h3>
+                          <button
+                            type="button"
+                            onClick={() => requestVoice(skill.key, skill.name)}
+                            title={`Chamar voz interior de ${skill.name}`}
+                            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-primary transition-colors"
+                          >
+                            <MessageSquare className="size-4" />
+                          </button>
+                        </div>
                         <p className="mt-1 line-clamp-2 text-sm leading-relaxed text-muted-foreground md:line-clamp-none">
                           {skill.description}
                         </p>

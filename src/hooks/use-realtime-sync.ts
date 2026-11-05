@@ -149,6 +149,8 @@ export function useRealtimeSync() {
       catalog_items: () => queue(["catalog_items"]),
       whisper_presets: () => queue(["whisper_presets"]),
       sanity_whispers: () => queue(["sanity_whispers"]),
+      regional_maps: () => queue(["regional_maps"]),
+      regional_map_pins: () => queue(["regional_map_pins"]),
     };
 
     const suffix = Math.random().toString(36).slice(2);

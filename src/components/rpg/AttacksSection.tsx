@@ -36,6 +36,7 @@ import {
   COMBAT_SKILLS,
   EFFECT_CONDITIONS,
   EFFECT_TO_CONDITION_NAME,
+  equippedWeaponToAttack,
   getSkillLabel,
   isCustomAttack,
   parseWeaponToAttack,
@@ -95,8 +96,12 @@ export function AttacksSection({
   const [form, setForm] = useState(EMPTY_FORM);
   const [showForm, setShowForm] = useState(false);
 
-  // Filtra apenas as armas que são ataques customizados
-  const attacks: CustomAttack[] = sheet.weapons.filter(isCustomAttack).map(parseWeaponToAttack);
+  // Combina ataques de armas equipadas automaticamente com os ataques customizados
+  const customAttacks: CustomAttack[] = sheet.weapons.filter(isCustomAttack).map(parseWeaponToAttack);
+  const equippedAttacks: CustomAttack[] = sheet.weapons
+    .filter((w) => !isCustomAttack(w) && Boolean(w.hand_slot && w.hand_slot !== "ground" && w.hand_slot !== "none"))
+    .map(equippedWeaponToAttack);
+  const attacks: CustomAttack[] = [...equippedAttacks, ...customAttacks];
 
   const getCharacterSkillBonus = (key: string): number => {
     const s = ALL_SKILLS.find((sk) => sk.key === key);
@@ -643,7 +648,11 @@ export function AttacksSection({
 
                   {/* Ações do Mestre / Exclusão */}
                   <div className="mt-4 flex items-center justify-between border-t border-border/50 pt-2">
-                    {isMaster ? (
+                    {atk.id.startsWith("equipped-") ? (
+                      <span className="text-[11px] font-semibold text-primary">
+                        Arma equipada vinculada automaticamente
+                      </span>
+                    ) : isMaster ? (
                       <div className="flex items-center gap-1.5">
                         {atk.status !== "approved" && (
                           <Button
@@ -676,15 +685,17 @@ export function AttacksSection({
                       </span>
                     )}
 
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="size-7 text-muted-foreground hover:text-destructive"
-                      onClick={() => removeAttack(atk)}
-                      title="Remover ataque"
-                    >
-                      <Trash2 className="size-3.5" />
-                    </Button>
+                    {!atk.id.startsWith("equipped-") && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-7 text-muted-foreground hover:text-destructive"
+                        onClick={() => removeAttack(atk)}
+                        title="Remover ataque"
+                      >
+                        <Trash2 className="size-3.5" />
+                      </Button>
+                    )}
                   </div>
                 </div>
               );

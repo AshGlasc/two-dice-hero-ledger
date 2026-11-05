@@ -9,16 +9,28 @@ import {
   LogOut,
   Move,
   Paintbrush,
+  Pencil,
   Ruler,
+  StickyNote,
   X,
 } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 import { Avatar } from "@/components/rpg/AvatarUpload";
 import { MasterUnlockModal } from "@/components/rpg/MasterUnlockModal";
 import { Stepper } from "@/components/rpg/Stepper";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { useMasterAuth } from "@/context/MasterAuthContext";
 import { useBattleMap } from "@/hooks/use-battle-map";
 import {
@@ -110,6 +122,12 @@ export function BattleMap({
   const [brush, setBrush] = useState<BrushKey>("wall");
   const [stamp, setStamp] = useState<string>("");
   const [draft, setDraft] = useState<Draft | null>(null);
+  // Giz e Post-its
+  const [chalkTool, setChalkTool] = useState<"none" | "white" | "red" | "eraser">("none");
+  const chalkCanvasRef = useRef<HTMLCanvasElement>(null);
+  const isDrawingChalk = useRef(false);
+  const lastPoint = useRef<{ x: number; y: number } | null>(null);
+  const [postItModal, setPostItModal] = useState<{ key: string; text: string } | null>(null);
   const stampFile = useRef<HTMLInputElement>(null);
   const painting = useRef(false);
   const grid = useRef<HTMLDivElement>(null);
@@ -269,6 +287,128 @@ export function BattleMap({
     if (!measuring) setSelected(null);
   };
 
+  const gmTileNotes = useMemo(() => {
+    return (map.gm_tile_notes ?? {}) as Record<string, string>;
+  }, [map.gm_tile_notes]);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("battle-map-chalk")
+      .on("broadcast", { event: "CHALK_DRAW" }, (payload) => {
+        const { dataUrl } = payload.payload as { dataUrl: string };
+        const canvas = chalkCanvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+        const img = new Image();
+        img.onload = () => {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, 0, 0);
+        };
+        img.src = dataUrl;
+      })
+      .on("broadcast", { event: "CHALK_CLEAR" }, () => {
+        const canvas = chalkCanvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext("2d");
+        ctx?.clearRect(0, 0, canvas.width, canvas.height);
+      })
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const handleChalkDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (chalkTool === "none") return;
+    const canvas = chalkCanvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    isDrawingChalk.current = true;
+    lastPoint.current = { x, y };
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.beginPath();
+    ctx.arc(x, y, chalkTool === "eraser" ? 10 : 2, 0, Math.PI * 2);
+    ctx.fillStyle = chalkTool === "red" ? "#ef4444" : chalkTool === "white" ? "#ffffff" : "rgba(0,0,0,1)";
+    if (chalkTool === "eraser") {
+      ctx.globalCompositeOperation = "destination-out";
+      ctx.fill();
+    } else {
+      ctx.globalCompositeOperation = "source-over";
+      ctx.fill();
+    }
+  };
+
+  const handleChalkMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!isDrawingChalk.current || chalkTool === "none") return;
+    const canvas = chalkCanvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const ctx = canvas.getContext("2d");
+    if (!ctx || !lastPoint.current) return;
+
+    ctx.beginPath();
+    ctx.moveTo(lastPoint.current.x, lastPoint.current.y);
+    ctx.lineTo(x, y);
+    if (chalkTool === "eraser") {
+      ctx.globalCompositeOperation = "destination-out";
+      ctx.lineWidth = 20;
+    } else {
+      ctx.globalCompositeOperation = "source-over";
+      ctx.strokeStyle = chalkTool === "red" ? "#ef4444" : "#ffffff";
+      ctx.lineWidth = 3;
+      ctx.lineCap = "round";
+    }
+    ctx.stroke();
+    lastPoint.current = { x, y };
+  };
+
+  const handleChalkUp = () => {
+    if (!isDrawingChalk.current) return;
+    isDrawingChalk.current = false;
+    lastPoint.current = null;
+    const canvas = chalkCanvasRef.current;
+    if (!canvas) return;
+    const channel = supabase.channel("battle-map-chalk");
+    void channel.send({
+      type: "broadcast",
+      event: "CHALK_DRAW",
+      payload: { dataUrl: canvas.toDataURL() },
+    });
+  };
+
+  const clearChalk = () => {
+    const canvas = chalkCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    ctx?.clearRect(0, 0, canvas.width, canvas.height);
+    const channel = supabase.channel("battle-map-chalk");
+    void channel.send({
+      type: "broadcast",
+      event: "CHALK_CLEAR",
+      payload: {},
+    });
+    toast.success("Desenhos de giz limpos!");
+  };
+
+  const savePostItNote = (key: string, text: string) => {
+    const next = { ...gmTileNotes };
+    if (text.trim()) {
+      next[key] = text.trim();
+    } else {
+      delete next[key];
+    }
+    saveMap.mutate({ gm_tile_notes: next });
+    toast.success("Post-it atualizado!");
+    setPostItModal(null);
+  };
+
   // Casas do mapa só re-renderizam quando terreno/névoa/imagens mudam (não a cada toque/hover).
   const cells = useMemo(
     () =>
@@ -277,6 +417,7 @@ export function BattleMap({
         const t = terrain[k];
         const img = images[k];
         const fogged = Boolean(fog[k]);
+        const note = gmTileNotes[k];
         if (fogged && !viewerIsMaster) {
           return (
             <div
@@ -287,7 +428,17 @@ export function BattleMap({
           );
         }
         return (
-          <div key={k} className={cn("relative border border-border/40", t && TERRAIN_CLASS[t])}>
+          <div
+            key={k}
+            onContextMenu={(e) => {
+              if (viewerIsMaster) {
+                e.preventDefault();
+                e.stopPropagation();
+                setPostItModal({ key: k, text: note || "" });
+              }
+            }}
+            className={cn("relative border border-border/40", t && TERRAIN_CLASS[t])}
+          >
             {img && (
               <img
                 src={img}
@@ -295,6 +446,19 @@ export function BattleMap({
                 draggable={false}
                 className="absolute inset-0 size-full object-cover"
               />
+            )}
+            {viewerIsMaster && note && (
+              <button
+                type="button"
+                title={`Post-it Secreto: ${note}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPostItModal({ key: k, text: note });
+                }}
+                className="absolute right-0.5 top-0.5 z-20 flex size-4 items-center justify-center rounded-sm bg-amber-400 text-[10px] font-bold text-zinc-950 shadow hover:scale-125 transition-transform"
+              >
+                📌
+              </button>
             )}
             {fogged && (
               <div
@@ -305,7 +469,7 @@ export function BattleMap({
           </div>
         );
       }),
-    [map.cols, map.rows, terrain, images, fog, viewerIsMaster],
+    [map.cols, map.rows, terrain, images, fog, viewerIsMaster, gmTileNotes],
   );
 
   return (
@@ -358,6 +522,50 @@ export function BattleMap({
           >
             <Ruler /> {measuring ? "Fechar régua" : "Medir movimento"}
           </Button>
+
+          {/* Barra de Giz / Desenho Livre */}
+          <div className="flex items-center gap-1 rounded-md border border-border bg-card p-0.5">
+            <Button
+              type="button"
+              variant={chalkTool === "white" ? "secondary" : "ghost"}
+              size="sm"
+              className={cn("h-7 px-2 text-xs gap-1", chalkTool === "white" && "ring-1 ring-white")}
+              onClick={() => setChalkTool((t) => (t === "white" ? "none" : "white"))}
+              title="Giz Branco (desenho livre)"
+            >
+              <Pencil className="size-3 text-white" /> Branco
+            </Button>
+            <Button
+              type="button"
+              variant={chalkTool === "red" ? "secondary" : "ghost"}
+              size="sm"
+              className={cn("h-7 px-2 text-xs gap-1", chalkTool === "red" && "ring-1 ring-red-500")}
+              onClick={() => setChalkTool((t) => (t === "red" ? "none" : "red"))}
+              title="Giz Vermelho (desenho livre)"
+            >
+              <Pencil className="size-3 text-red-500" /> Vermelho
+            </Button>
+            <Button
+              type="button"
+              variant={chalkTool === "eraser" ? "secondary" : "ghost"}
+              size="sm"
+              className="h-7 px-2 text-xs gap-1"
+              onClick={() => setChalkTool((t) => (t === "eraser" ? "none" : "eraser"))}
+              title="Apagar Giz"
+            >
+              <Eraser className="size-3" /> Borracha
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 px-1.5 text-xs text-muted-foreground hover:text-destructive"
+              onClick={clearChalk}
+              title="Limpar todos os desenhos de giz"
+            >
+              Limpar
+            </Button>
+          </div>
           {isMaster && (
             <Button
               variant={viewAsPlayers ? "secondary" : "outline"}
@@ -608,6 +816,20 @@ export function BattleMap({
             {cells}
           </div>
 
+          {/* Camada Interativa de Giz / Desenho Livre */}
+          <canvas
+            ref={chalkCanvasRef}
+            width={map.cols * CELL}
+            height={map.rows * CELL}
+            onPointerDown={handleChalkDown}
+            onPointerMove={handleChalkMove}
+            onPointerUp={handleChalkUp}
+            className={cn(
+              "absolute inset-0 z-30 touch-none",
+              chalkTool === "none" ? "pointer-events-none" : "cursor-crosshair pointer-events-auto",
+            )}
+          />
+
           {items
             .filter(
               (item) =>
@@ -840,6 +1062,53 @@ export function BattleMap({
           )}
         </div>
       )}
+
+      {/* Modal Post-it Secreto nos Ladrilhos */}
+      <Dialog open={!!postItModal} onOpenChange={(open) => !open && setPostItModal(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 font-display uppercase tracking-wider text-amber-400">
+              📌 Post-it Secreto do Mestre
+            </DialogTitle>
+            <DialogDescription>
+              Casa: ({postItModal?.key.split(",")[0]}, {postItModal?.key.split(",")[1]}). Esta nota é invisível para os jogadores.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-2">
+            <Textarea
+              rows={4}
+              value={postItModal?.text ?? ""}
+              onChange={(e) => postItModal && setPostItModal({ ...postItModal, text: e.target.value })}
+              placeholder="Ex.: Armadilha oculta, armário revistável, pista sobre a vítima..."
+              className="border-amber-500/40 bg-amber-950/20 text-sm"
+            />
+          </div>
+
+          <DialogFooter className="gap-2 sm:justify-between">
+            <Button
+              type="button"
+              variant="ghost"
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+              onClick={() => postItModal && savePostItNote(postItModal.key, "")}
+            >
+              Excluir Nota
+            </Button>
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" onClick={() => setPostItModal(null)}>
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                variant="paint"
+                onClick={() => postItModal && savePostItNote(postItModal.key, postItModal.text)}
+              >
+                Salvar Post-it
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }

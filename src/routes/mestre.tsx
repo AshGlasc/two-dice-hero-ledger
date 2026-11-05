@@ -152,6 +152,9 @@ function GmPageContent({ onLock }: { onLock: () => void }) {
         </div>
       </header>
 
+      {/* Ouvinte de Pedidos de Vozes na Cabeça (Monólogo sob demanda) */}
+      <VoiceRequestListener />
+
       {/* Controle de Áudio, Clima e Trilhas da Mesa */}
       <MasterAudioSection />
 
@@ -683,22 +686,108 @@ function GroupTest({ group }: { group: GroupData }) {
   );
 }
 
-function PartyOverview({ group }: { group: GroupData }) {
-  const collapsedIds = group.characters
-    .filter((character) => character.sanity_current === 0)
-    .map((character) => character.id)
-    .sort();
-  const collapsedKey = collapsedIds.join(",");
-  const previousCollapsedKey = useRef<string | null>(null);
+function VoiceRequestListener() {
+  const [activeRequest, setActiveRequest] = useState<{
+    characterId: string;
+    characterName: string;
+    skillKey: string;
+    skillLabel: string;
+  } | null>(null);
+  const [replyText, setReplyText] = useState("");
+  const [isSending, setIsSending] = useState(false);
 
   useEffect(() => {
-    const previousIds = new Set(previousCollapsedKey.current?.split(",").filter(Boolean) ?? []);
-    const newlyCollapsed = (collapsedKey ? collapsedKey.split(",") : []).some(
-      (id) => !previousIds.has(id),
-    );
-    if (previousCollapsedKey.current !== null && newlyCollapsed) playSanityCollapseAlert();
-    previousCollapsedKey.current = collapsedKey;
-  }, [collapsedKey]);
+    const channel = supabase
+      .channel("game-voices-gm")
+      .on("broadcast", { event: "VOICE_REQUEST" }, (payload) => {
+        const data = payload.payload as {
+          characterId: string;
+          characterName: string;
+          skillKey: string;
+          skillLabel: string;
+        };
+        setActiveRequest(data);
+        toast.info(`🧠 ${data.characterName} chamou a voz de ${data.skillLabel}!`, {
+          duration: 9000,
+        });
+      })
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, []);
+
+  if (!activeRequest) return null;
+
+  const handleSend = async () => {
+    if (!replyText.trim()) return;
+    setIsSending(true);
+    try {
+      await supabase.from("sanity_whispers").insert({
+        character_id: activeRequest.characterId,
+        skill_key: activeRequest.skillKey,
+        skill_name: activeRequest.skillLabel,
+        message: replyText.trim(),
+      });
+      toast.success(`Monólogo de ${activeRequest.skillLabel} sussurrado para ${activeRequest.characterName}!`);
+      setActiveRequest(null);
+      setReplyText("");
+    } catch {
+      toast.error("Erro ao enviar resposta da voz.");
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  return (
+    <div className="rounded-lg border-2 border-primary/80 bg-primary/10 p-4 shadow-lg animate-in fade-in">
+      <div className="mb-2 flex items-center justify-between">
+        <span className="flex items-center gap-1.5 font-display text-sm font-bold uppercase tracking-wider text-primary">
+          🧠 Monólogo sob demanda: {activeRequest.skillLabel}
+        </span>
+        <button
+          type="button"
+          onClick={() => setActiveRequest(null)}
+          className="text-muted-foreground hover:text-foreground"
+        >
+          <X className="size-4" />
+        </button>
+      </div>
+      <p className="mb-3 text-xs text-muted-foreground">
+        <strong>{activeRequest.characterName}</strong> quer ouvir o monólogo interior de{" "}
+        <strong>{activeRequest.skillLabel}</strong> (estilo Disco Elysium):
+      </p>
+      <div className="flex gap-2">
+        <Input
+          value={replyText}
+          onChange={(e) => setReplyText(e.target.value)}
+          placeholder={`"O ar frio corta os pulmões. Algo está errado..."`}
+          className="text-sm italic"
+        />
+        <Button onClick={handleSend} disabled={isSending || !replyText.trim()} size="sm" variant="paint">
+          Sussurrar
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function PartyOverview({ group }: { group: GroupData }) {
+  const qc = useQueryClient();
+
+  const concederAlivio = async (char: GroupData["characters"][number]) => {
+    const cur = char.energia_atual ?? 0;
+    const max = char.energia_maxima ?? 10;
+    const next = Math.min(cur + 2, max);
+    await supabase.from("characters").update({ energia_atual: next }).eq("id", char.id);
+    await supabase.from("combat_events").insert({
+      character_id: char.id,
+      character_name: char.name,
+      description: `${char.name} encontrou alívio em seu vício/conforto (+2 Energia: ${next}/${max}).`,
+    });
+    await qc.invalidateQueries({ queryKey: ["group"] });
+    toast.success(`Alívio concedido a ${char.name}! Energia: ${next}/${max}`);
+  };
 
   return (
     <section className="space-y-3">
@@ -712,11 +801,7 @@ function PartyOverview({ group }: { group: GroupData }) {
           {group.characters.map((c) => (
             <li
               key={c.id}
-              className={cn(
-                "rounded-lg border border-border bg-card p-4 shadow-paint",
-                c.sanity_current === 0 &&
-                  "border-2 border-destructive/80 bg-destructive/5 shadow-[0_0_26px_rgba(127,29,29,0.28)] animate-pulse",
-              )}
+              className="rounded-lg border border-border bg-card p-4 shadow-paint"
             >
               <div className="mb-3 flex items-start justify-between gap-2">
                 <div>
@@ -747,22 +832,33 @@ function PartyOverview({ group }: { group: GroupData }) {
                   ))}
                 </div>
               </div>
-              {c.sanity_current === 0 && (
-                <div className="mb-3 rounded border border-destructive/60 bg-destructive/10 p-2">
-                  <p className="font-display text-sm font-bold uppercase text-destructive">
-                    COLAPSO DE SANIDADE
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Sanidade {c.sanity_current}/{c.sanity_max}
-                  </p>
-                  <SanityWhisperForm characterId={c.id} characterName={c.name} />
+
+              {/* Vício & Conforto & Sobrevivência */}
+              <div className="mb-3 space-y-1.5 rounded border border-border/70 bg-muted/20 p-2.5 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-amber-400">🚬 Vício:</span>
+                  <span className="italic text-muted-foreground">{c.vicio || "Não especificado"}</span>
                 </div>
-              )}
-              {c.sanity_current > 0 && (
-                <p className="mb-2 text-xs text-purple-300">
-                  Sanidade {c.sanity_current}/{c.sanity_max}
-                </p>
-              )}
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-emerald-400">🛋️ Conforto:</span>
+                  <span className="italic text-muted-foreground">{c.conforto || "Não especificado"}</span>
+                </div>
+                <div className="flex items-center justify-between border-t border-border/40 pt-1 text-[11px]">
+                  <span>
+                    Fome: <strong>{c.hunger_state ?? "satisfeito"}</strong> · Sede: <strong>{c.thirst_state ?? "satisfeito"}</strong>
+                  </span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-7 gap-1 border-amber-500/50 text-xs text-amber-300 hover:bg-amber-500/10"
+                    onClick={() => concederAlivio(c)}
+                  >
+                    <Coffee className="size-3.5" /> Conceder Alívio (+2 En)
+                  </Button>
+                </div>
+              </div>
+
               <BodyMap characterId={c.id} body={group.body} compact />
               <CharacterProgression
                 characterId={c.id}
@@ -776,78 +872,6 @@ function PartyOverview({ group }: { group: GroupData }) {
     </section>
   );
 }
-
-function playSanityCollapseAlert() {
-  if (typeof window === "undefined" || !("AudioContext" in window)) return;
-  try {
-    const context = new window.AudioContext();
-    const oscillator = context.createOscillator();
-    const gain = context.createGain();
-    oscillator.type = "sawtooth";
-    oscillator.frequency.setValueAtTime(165, context.currentTime);
-    oscillator.frequency.exponentialRampToValueAtTime(90, context.currentTime + 0.45);
-    gain.gain.setValueAtTime(0.12, context.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 0.48);
-    oscillator.connect(gain);
-    gain.connect(context.destination);
-    oscillator.onended = () => void context.close();
-    oscillator.start();
-    oscillator.stop(context.currentTime + 0.5);
-  } catch (error) {
-    console.error("Não foi possível reproduzir o alerta de colapso de sanidade.", error);
-  }
-}
-
-function SanityWhisperForm({
-  characterId,
-  characterName,
-}: {
-  characterId: string;
-  characterName: string;
-}) {
-  const [message, setMessage] = useState("");
-  const sendWhisper = useMutation({
-    mutationFn: async (text: string) => {
-      const { error } = await supabase
-        .from("sanity_whispers")
-        .insert({ character_id: characterId, message: text });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      setMessage("");
-      toast.success(`Sussurro enviado para ${characterName}.`);
-    },
-    onError: (error) => toast.error(`Não foi possível enviar o sussurro: ${error.message}`),
-  });
-  const submit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const text = message.trim();
-    if (!text) {
-      toast.error("Escreva um sussurro antes de enviar.");
-      return;
-    }
-    sendWhisper.mutate(text);
-  };
-
-  return (
-    <form onSubmit={submit} className="mt-2 flex gap-2">
-      <Input
-        value={message}
-        onChange={(event) => setMessage(event.target.value)}
-        maxLength={500}
-        placeholder="Sussurre algo para este personagem..."
-        aria-label={`Sussurro para ${characterName}`}
-      />
-      <Button
-        type="submit"
-        size="sm"
-        variant="destructive"
-        disabled={sendWhisper.isPending || !message.trim()}
-      >
-        Enviar Sussurro
-      </Button>
-    </form>
-  );
 }
 
 function CharacterProgression({

@@ -192,6 +192,35 @@ export function parseWeaponToAttack(w: Weapon): CustomAttack {
   };
 }
 
+/** Converte uma arma equipada convencional num ataque utilizável automaticamente. */
+export function equippedWeaponToAttack(w: Weapon): CustomAttack {
+  const isRanged = (w.range ?? 1) > 1 || Boolean(w.ammo && w.ammo.trim() !== "");
+  const defaultSkill = isRanged ? "coordenacao_motora" : "ferramenta_fisica";
+  return {
+    id: `equipped-${w.id}`,
+    ownerId: w.character_id,
+    ownerType: "character",
+    name: `${w.name} (Arma)`,
+    skillKey: w.skill_key || defaultSkill,
+    turnsCost: 1,
+    diceCount: 2,
+    description: `Ataque base gerado da arma equipada "${w.name}".`,
+    status: "approved",
+    createdAt: w.created_at,
+    energyCost: 0,
+    range: Math.max(1, w.range ?? (isRanged ? 4 : 1)),
+    reach: isRanged ? "distancia" : "corpo-a-corpo",
+    resistanceType: "Defesa",
+    damageType: "Físico",
+    durationRounds: 1,
+    damageFormula: w.damage || "1d6",
+    handSlot: (w.hand_slot as HandSlot) || "right",
+    effectCondition: "none",
+    defenseDebuff: 0,
+    accuracy: 0,
+  };
+}
+
 /** Prepara os campos de weapon para salvar um ataque no banco. */
 export function attackToWeaponPayload(attack: {
   name: string;

@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, notFound, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, Backpack, Brain, Crosshair, Swords, Trash2, Users, X } from "lucide-react";
+import { Backpack, Brain, Crosshair, Printer, Swords, Trash2, Users, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -25,14 +25,12 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Stepper } from "@/components/rpg/Stepper";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useMasterAuth } from "@/context/MasterAuthContext";
 import { useSheetMutations } from "@/hooks/use-sheet-mutations";
 import { supabase } from "@/integrations/supabase/client";
 import { clearPlayerCharacterId, getPlayerCharacterId } from "@/lib/player-character";
 import { sheetQuery } from "@/lib/rpg-queries";
-import { isSanityCritical, SANITY_LEVEL_LABELS, sanityLevel } from "@/lib/sanity";
 import { skillTotal } from "@/lib/skills";
 import { cn } from "@/lib/utils";
 
@@ -84,21 +82,21 @@ function CharacterPage() {
   const [whisper, setWhisper] = useState<string | null>(null);
   const ownsCharacter = playerCharacterId === id;
   const canAccessSheet = isMaster || ownsCharacter;
-  const sanityCurrent = sheet?.character.sanity_current ?? 10;
-  const sanityMax = sheet?.character.sanity_max ?? 10;
   const characterVigor = sheet?.skills.find((skill) => skill.skill_key === "vigor")?.bonus ?? 0;
   const characterWill = sheet?.skills.find((skill) => skill.skill_key === "vontade")?.bonus ?? 0;
+  const hungerPenalty = sheet?.character.hunger_state === "amarelo" ? 1 : 0;
+  const thirstPenalty = sheet?.character.thirst_state === "amarelo" ? 1 : 0;
   const energyMax = sheet
     ? Math.max(
-        1,
-        10 +
-          2 * skillTotal(sheet.character.fisico, characterVigor) +
-          2 * skillTotal(sheet.character.psique, characterWill),
-      )
+      1,
+      10 +
+      2 * skillTotal(sheet.character.fisico, characterVigor) +
+      2 * skillTotal(sheet.character.psique, characterWill) -
+      hungerPenalty -
+      thirstPenalty,
+    )
     : 10;
   const energyCurrent = Math.min(sheet?.character.energia_atual ?? 10, energyMax);
-  const collapsed = sanityCurrent === 0;
-  const [collapseReaction, setCollapseReaction] = useState<string | null>(null);
 
   useEffect(() => {
     const ownerId = getPlayerCharacterId();
@@ -136,14 +134,6 @@ function CharacterPage() {
     };
   }, [canAccessSheet, id, masterAuthLoading]);
 
-  useEffect(() => {
-    setCollapseReaction(
-      sanityCurrent === 0
-        ? ["Paranoia", "Ataque de Pânico", "Catatonia"][Math.floor(Math.random() * 3)]!
-        : null,
-    );
-  }, [sanityCurrent]);
-
   const remove = useMutation({
     mutationFn: async () => {
       const { error } = await supabase.from("characters").delete().eq("id", id);
@@ -163,36 +153,23 @@ function CharacterPage() {
   if (!sheet) return null;
   if (!isMaster && (!ownsCharacter || masterAuthLoading)) return null;
   const { character } = sheet;
-  const sanityCritical = isSanityCritical(sanityCurrent, sanityMax);
 
   return (
-    <main
-      className={cn(
-        "mx-auto max-w-6xl px-4 py-6 md:px-6 md:py-8",
-        sanityCritical &&
-          "relative rounded-xl border-2 border-purple-900/70 shadow-[0_0_38px_rgba(88,28,135,0.28)]",
-      )}
-    >
-      {sanityCritical && (
-        <>
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 z-10 rounded-xl border-2 border-purple-500/30 animate-pulse"
-          />
-          <div
-            aria-hidden="true"
-            className="pointer-events-none fixed inset-0 z-30"
-            style={{
-              background:
-                "radial-gradient(ellipse at center, transparent 52%, rgba(76, 29, 89, 0.22) 100%)",
-            }}
-          />
-        </>
-      )}
+    <main className="mx-auto max-w-6xl px-4 py-6 md:px-6 md:py-8 print:p-2 print:max-w-none">
+      <style>{`
+        @media print {
+          body { background: #fff !important; color: #111 !important; }
+          nav, header.sticky, .print\\:hidden, button:not(.print\\:inline) { display: none !important; }
+          .shadow-paint, .shadow-sm { box-shadow: none !important; }
+          .border-border { border-color: #cbd5e1 !important; }
+          .bg-card { background: #fff !important; border: 1px solid #cbd5e1 !important; }
+        }
+      `}</style>
+
       {whisper && (
         <div
           role="alert"
-          className="fixed left-1/2 top-16 z-50 flex w-[min(92vw,36rem)] -translate-x-1/2 items-start gap-3 rounded-lg border border-purple-500/60 bg-purple-950/95 p-4 text-purple-100 shadow-[0_0_36px_rgba(88,28,135,0.55)] animate-in fade-in slide-in-from-top-3"
+          className="fixed left-1/2 top-16 z-50 flex w-[min(92vw,36rem)] -translate-x-1/2 items-start gap-3 rounded-lg border border-purple-500/60 bg-purple-950/95 p-4 text-purple-100 shadow-[0_0_36px_rgba(88,28,135,0.55)] animate-in fade-in slide-in-from-top-3 print:hidden"
         >
           <Brain className="mt-0.5 size-5 shrink-0 text-purple-300" />
           <div className="min-w-0 flex-1">
@@ -210,12 +187,24 @@ function CharacterPage() {
           </Button>
         </div>
       )}
-      <div className="mb-6 flex items-center justify-between">
-        <Button asChild variant="outline" size="sm" className="gap-2 border-border/80 text-xs font-semibold text-muted-foreground hover:text-foreground">
-          <Link to="/">
-            <Users className="size-3.5" /> Abrir fichas / Trocar de personagem
-          </Link>
-        </Button>
+
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-2 print:hidden">
+        <div className="flex items-center gap-2">
+          <Button asChild variant="outline" size="sm" className="gap-2 border-border/80 text-xs font-semibold text-muted-foreground hover:text-foreground">
+            <Link to="/">
+              <Users className="size-3.5" /> Abrir fichas / Trocar de personagem
+            </Link>
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => window.print()}
+            className="gap-2 border-border/80 text-xs font-semibold text-muted-foreground hover:text-foreground"
+          >
+            <Printer className="size-3.5" /> Imprimir / PDF
+          </Button>
+        </div>
         <AlertDialog>
           <AlertDialogTrigger asChild>
             <Button
@@ -246,7 +235,7 @@ function CharacterPage() {
         </AlertDialog>
       </div>
 
-      <header className="mb-8 border-b border-border pb-6">
+      <header className="mb-8 border-b border-border pb-6 print:border-b-2 print:pb-4">
         <div className="flex items-center gap-4 md:gap-6">
           <AvatarUpload
             src={character.avatar_url}
@@ -255,13 +244,13 @@ function CharacterPage() {
           />
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <p className="label-caps px-1 text-muted-foreground">
+              <p className="label-caps px-1 text-muted-foreground print:hidden">
                 Rosto aparece no mapa de combate
               </p>
               {(character.skill_points ?? 0) > 0 && (
                 <Badge
                   variant="outline"
-                  className="animate-pulse border-primary/60 bg-primary/20 text-xs font-semibold text-primary shadow-sm"
+                  className="animate-pulse border-primary/60 bg-primary/20 text-xs font-semibold text-primary shadow-sm print:hidden"
                 >
                   ✨ Nível {character.level ?? 1} — {character.skill_points}{" "}
                   {character.skill_points === 1
@@ -279,7 +268,7 @@ function CharacterPage() {
             />
           </div>
         </div>
-        <div className="mt-3 flex flex-wrap items-center gap-2">
+        <div className="mt-3 flex flex-wrap items-center gap-2 print:hidden">
           <MoneyField
             value={character.money}
             canEdit={isMaster}
@@ -317,35 +306,37 @@ function CharacterPage() {
             />
           </label>
         </div>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          <label className="block rounded-md border border-border/60 bg-card/60 p-2.5">
+            <span className="label-caps px-1 text-amber-500 font-semibold">🚬 Meu Vício</span>
+            <InlineField
+              label="Meu Vício"
+              value={character.vicio ?? ""}
+              placeholder="Ex.: Cigarros Astra, café amargo..."
+              onSave={(v) => mutations.updateCharacter.mutate({ vicio: v })}
+              className="px-1 italic text-sm"
+            />
+          </label>
+          <label className="block rounded-md border border-border/60 bg-card/60 p-2.5">
+            <span className="label-caps px-1 text-emerald-500 font-semibold">🛋️ Meu Conforto</span>
+            <InlineField
+              label="Meu Conforto"
+              value={character.conforto ?? ""}
+              placeholder="Ex.: Música lo-fi, foto amassada..."
+              onSave={(v) => mutations.updateCharacter.mutate({ conforto: v })}
+              className="px-1 italic text-sm"
+            />
+          </label>
+        </div>
       </header>
 
-      {collapsed && (
-        <section
-          role="alert"
-          className="mb-6 rounded-lg border-2 border-destructive/70 bg-destructive/10 p-4 shadow-[0_0_28px_rgba(127,29,29,0.3)]"
-        >
-          <p className="label-caps text-destructive">Colapso total</p>
-          <h2 className="font-display text-2xl font-bold uppercase text-destructive">
-            {character.name} sucumbiu à própria mente
-          </h2>
-          <p className="mt-1 text-sm text-foreground">
-            Reação: <strong>{collapseReaction}</strong>. Ataques bloqueados até a sanidade voltar.
-          </p>
-        </section>
-      )}
-
-      <SanityBar
-        current={sanityCurrent}
-        max={sanityMax}
-        isMaster={isMaster}
-        onChange={(sanity_current) => mutations.updateCharacter.mutate({ sanity_current })}
-        onMaxChange={(sanity_max) =>
-          mutations.updateCharacter.mutate({
-            sanity_max,
-            sanity_current: Math.min(sanityCurrent, sanity_max),
-          })
-        }
+      <SurvivalStatusBars
+        hunger={character.hunger_state ?? "satisfeito"}
+        thirst={character.thirst_state ?? "satisfeito"}
+        onHungerChange={(hunger_state) => mutations.updateCharacter.mutate({ hunger_state })}
+        onThirstChange={(thirst_state) => mutations.updateCharacter.mutate({ thirst_state })}
       />
+
       <EnergyBar
         current={energyCurrent}
         max={energyMax}
@@ -399,7 +390,7 @@ function CharacterPage() {
           <WeaponsSection sheet={sheet} mutations={mutations} />
         </TabsContent>
         <TabsContent value="ataques">
-          <AttacksSection sheet={sheet} mutations={mutations} collapsed={collapsed} />
+          <AttacksSection sheet={sheet} mutations={mutations} collapsed={false} />
         </TabsContent>
         <TabsContent value="mochila">
           <BackpackSection sheet={sheet} mutations={mutations} />
@@ -409,114 +400,142 @@ function CharacterPage() {
   );
 }
 
-function SanityBar({
-  current,
-  max,
-  isMaster,
-  onChange,
-  onMaxChange,
+function SurvivalStatusBars({
+  hunger,
+  thirst,
+  onHungerChange,
+  onThirstChange,
 }: {
-  current: number;
-  max: number;
-  isMaster: boolean;
-  onChange: (value: number) => void;
-  onMaxChange: (value: number) => void;
+  hunger: string;
+  thirst: string;
+  onHungerChange: (v: string) => void;
+  onThirstChange: (v: string) => void;
 }) {
-  const critical = isSanityCritical(current, max);
-  const level = sanityLevel(current, max);
-  const percent = Math.max(0, Math.min(100, (current / Math.max(1, max)) * 100));
   return (
-    <section
-      className={cn(
-        "mb-6 rounded-lg border bg-card p-4 shadow-paint",
-        critical ? "border-purple-700/80 bg-purple-950/20" : "border-border",
-      )}
-    >
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Brain className="size-5 text-purple-400" />
-          <div>
-            <h2 className="font-display text-lg font-bold uppercase text-purple-300">Sanidade</h2>
-            <p className="tabular-nums text-sm text-muted-foreground">
-              {current} / {max} · {SANITY_LEVEL_LABELS[level]}
-            </p>
-          </div>
+    <section className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className="rounded-lg border border-border/80 bg-card p-3 shadow-sm">
+        <div className="mb-2 flex items-center justify-between">
+          <span className="font-display text-sm font-bold uppercase tracking-wider text-foreground">
+            🍲 Fome
+          </span>
+          <span
+            className={cn(
+              "rounded border px-2 py-0.5 text-xs font-semibold",
+              hunger === "satisfeito"
+                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                : hunger === "amarelo"
+                  ? "border-amber-500/30 bg-amber-500/10 text-amber-400"
+                  : "border-red-500/30 bg-red-500/10 text-red-400",
+            )}
+          >
+            {hunger === "satisfeito"
+              ? "Alimentado"
+              : hunger === "amarelo"
+                ? "Faminto (-1 En, -1 Fís/Mot)"
+                : "Desnutrido (-2 Fís/Mot)"}
+          </span>
         </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="icon"
-            className="size-8 border-purple-700/60"
-            aria-label="Reduzir sanidade"
-            disabled={current <= 0}
-            onClick={() => onChange(Math.max(0, current - 1))}
+        <div className="grid grid-cols-3 gap-1.5">
+          <button
+            type="button"
+            onClick={() => onHungerChange("satisfeito")}
+            className={cn(
+              "rounded border px-2 py-1 text-xs font-semibold transition-colors",
+              hunger === "satisfeito"
+                ? "border-emerald-500 bg-emerald-500/20 text-emerald-300"
+                : "border-transparent bg-muted/40 text-muted-foreground hover:bg-muted",
+            )}
           >
-            −
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            className="size-8 border-purple-700/60"
-            aria-label="Aumentar sanidade"
-            disabled={current >= max}
-            onClick={() => onChange(Math.min(max, current + 1))}
+            Alimentado
+          </button>
+          <button
+            type="button"
+            onClick={() => onHungerChange("amarelo")}
+            className={cn(
+              "rounded border px-2 py-1 text-xs font-semibold transition-colors",
+              hunger === "amarelo"
+                ? "border-amber-500 bg-amber-500/20 text-amber-300"
+                : "border-transparent bg-muted/40 text-muted-foreground hover:bg-muted",
+            )}
           >
-            +
-          </Button>
-          {isMaster && (
-            <div className="ml-2">
-              <span className="label-caps text-muted-foreground">Máximo</span>
-              <Stepper
-                label="sanidade máxima"
-                value={max}
-                min={1}
-                max={99}
-                onChange={onMaxChange}
-              />
-            </div>
-          )}
+            Faminto
+          </button>
+          <button
+            type="button"
+            onClick={() => onHungerChange("vermelho")}
+            className={cn(
+              "rounded border px-2 py-1 text-xs font-semibold transition-colors",
+              hunger === "vermelho"
+                ? "border-red-500 bg-red-500/20 text-red-300"
+                : "border-transparent bg-muted/40 text-muted-foreground hover:bg-muted",
+            )}
+          >
+            Desnutrido
+          </button>
         </div>
       </div>
-      <div
-        className="mt-3 h-3 overflow-hidden rounded-full bg-purple-950"
-        role="progressbar"
-        aria-label="Sanidade atual"
-        aria-valuenow={current}
-        aria-valuemin={0}
-        aria-valuemax={max}
-      >
-        <div
-          className={cn(
-            "h-full rounded-full transition-all",
-            critical ? "bg-fuchsia-500 shadow-[0_0_14px_rgba(217,70,239,0.65)]" : "bg-purple-500",
-          )}
-          style={{ width: `${percent}%` }}
-        />
+
+      <div className="rounded-lg border border-border/80 bg-card p-3 shadow-sm">
+        <div className="mb-2 flex items-center justify-between">
+          <span className="font-display text-sm font-bold uppercase tracking-wider text-foreground">
+            💧 Sede
+          </span>
+          <span
+            className={cn(
+              "rounded border px-2 py-0.5 text-xs font-semibold",
+              thirst === "satisfeito"
+                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                : thirst === "amarelo"
+                  ? "border-amber-500/30 bg-amber-500/10 text-amber-400"
+                  : "border-red-500/30 bg-red-500/10 text-red-400",
+            )}
+          >
+            {thirst === "satisfeito"
+              ? "Hidratado"
+              : thirst === "amarelo"
+                ? "Com Sede (-1 En, -1 Fís/Mot)"
+                : "Desidratado (-2 Fís/Mot)"}
+          </span>
+        </div>
+        <div className="grid grid-cols-3 gap-1.5">
+          <button
+            type="button"
+            onClick={() => onThirstChange("satisfeito")}
+            className={cn(
+              "rounded border px-2 py-1 text-xs font-semibold transition-colors",
+              thirst === "satisfeito"
+                ? "border-emerald-500 bg-emerald-500/20 text-emerald-300"
+                : "border-transparent bg-muted/40 text-muted-foreground hover:bg-muted",
+            )}
+          >
+            Hidratado
+          </button>
+          <button
+            type="button"
+            onClick={() => onThirstChange("amarelo")}
+            className={cn(
+              "rounded border px-2 py-1 text-xs font-semibold transition-colors",
+              thirst === "amarelo"
+                ? "border-amber-500 bg-amber-500/20 text-amber-300"
+                : "border-transparent bg-muted/40 text-muted-foreground hover:bg-muted",
+            )}
+          >
+            Com Sede
+          </button>
+          <button
+            type="button"
+            onClick={() => onThirstChange("vermelho")}
+            className={cn(
+              "rounded border px-2 py-1 text-xs font-semibold transition-colors",
+              thirst === "vermelho"
+                ? "border-red-500 bg-red-500/20 text-red-300"
+                : "border-transparent bg-muted/40 text-muted-foreground hover:bg-muted",
+            )}
+          >
+            Desidratado
+          </button>
+        </div>
       </div>
-      {level === "disturbed" && (
-        <Badge
-          variant="outline"
-          className="mt-3 border-amber-500/70 bg-amber-950/30 text-amber-200"
-        >
-          Perturbado — −2 em perícias de precisão
-        </Badge>
-      )}
-      {level === "insane" && (
-        <Badge
-          variant="outline"
-          className="mt-3 border-destructive/70 bg-destructive/10 text-destructive"
-        >
-          Enlouquecido — mestre pode impor alucinações e ações involuntárias
-        </Badge>
-      )}
-      {critical && level !== "disturbed" && level !== "insane" && (
-        <Badge
-          variant="outline"
-          className="mt-3 border-purple-500/70 bg-purple-950/60 text-purple-200"
-        >
-          Mente Instável (−2 em testes de Intelecto e Psique)
-        </Badge>
-      )}
     </section>
   );
 }

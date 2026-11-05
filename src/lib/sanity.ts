@@ -26,17 +26,7 @@ export function isSanityCritical(current: number, max: number) {
   return current <= 2 || current / Math.max(1, max) <= 0.25;
 }
 
-export function sanityMentalPenalty(character: SanityValues, attributeOrSkillKey: string) {
-  const skill = ALL_SKILLS.find((item) => item.key === attributeOrSkillKey);
-  const attribute = skill?.attribute ?? attributeOrSkillKey;
-  const current = character.sanity_current ?? 10;
-  const max = character.sanity_max ?? 10;
-  if (
-    sanityLevel(current, max) === "disturbed" &&
-    ["calculo_visual", "coordenacao_motora", "interacao"].includes(attributeOrSkillKey)
-  ) {
-    return -2;
-  }
-  if (attribute !== "intelecto" && attribute !== "psique") return 0;
-  return isSanityCritical(current, max) ? -2 : 0;
+export function sanityMentalPenalty(_character: SanityValues, _attributeOrSkillKey: string) {
+  // Mecânica de sanidade removida do jogo
+  return 0;
 }

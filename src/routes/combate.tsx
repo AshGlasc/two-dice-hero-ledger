@@ -6,10 +6,15 @@ import {
   ChevronRight,
   Crown,
   Dices,
+  Film,
+  Ghost,
+  Grid,
   Lock,
   Minus,
   PackageOpen,
   Plus,
+  RotateCcw,
+  Tag,
   Trash2,
   X,
 } from "lucide-react";
@@ -102,7 +107,6 @@ import {
   type BattleMapItem,
 } from "@/lib/rpg-queries";
 import { roll2d6, rollD6 } from "@/lib/skills";
-import { SANITY_LEVEL_LABELS, sanityLevel } from "@/lib/sanity";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/combate")({
@@ -187,6 +191,13 @@ function CombatPage() {
     conditions: string[];
     damageRolls: number[];
   } | null>(null);
+
+  // Módulo 3 & 4: Teatro da Mente, Condições Post-it, Presença Perturbadora
+  const [viewMode, setViewMode] = useState<"grid" | "theater">("grid");
+  const [customConditionModal, setCustomConditionModal] = useState<{ combatantId: string; name: string } | null>(null);
+  const [newConditionText, setNewConditionText] = useState("");
+  const [disturbingPresenceOpen, setDisturbingPresenceOpen] = useState(false);
+  const [disturbingPresenceDc, setDisturbingPresenceDc] = useState(12);
 
   const order = sortByInitiative(combat.combatants);
   const slots = order.map((x) => ({ id: x.id, out: x.kind === "monster" && x.hp_current <= 0 }));
@@ -441,10 +452,10 @@ function CombatPage() {
     x.kind === "character" && x.character_id
       ? attackOptionsForCharacter(group, x.character_id)
       : attackOptionsForMonster(
-          x.monster_id,
-          monsters.find((m) => m.id === x.monster_id)?.attacks,
-          x.attack_bonus,
-        );
+        x.monster_id,
+        monsters.find((m) => m.id === x.monster_id)?.attacks,
+        x.attack_bonus,
+      );
 
   /** Alvos possíveis: quem está do outro lado e ainda de pé, com a distância no mapa. */
   const attackTargetsOf = (x: Combatant): AttackTarget[] =>
@@ -494,10 +505,91 @@ function CombatPage() {
         distance: distanceBetween(x, target),
       }));
 
-  const isCollapsed = (combatant: Combatant) =>
-    combatant.kind === "character" &&
-    group.characters.find((character) => character.id === combatant.character_id)
-      ?.sanity_current === 0;
+  const isCollapsed = (_combatant: Combatant) => false;
+
+  // Condições em post-it
+  const addCustomCondition = async (combatantId: string, text: string) => {
+    if (!text.trim()) return;
+    const target = combat.combatants.find((item) => item.id === combatantId);
+    if (!target) return;
+    const current = ((target.custom_conditions as string[]) ?? []);
+    const next = [...current, text.trim()];
+    await supabase.from("combatants").update({ custom_conditions: next }).eq("id", combatantId);
+    await qc.invalidateQueries({ queryKey: ["combat"] });
+    toast.success(`Condição "${text.trim()}" adicionada a ${target.name}!`);
+    setCustomConditionModal(null);
+    setNewConditionText("");
+  };
+
+  const removeCustomCondition = async (combatantId: string, index: number) => {
+    const target = combat.combatants.find((item) => item.id === combatantId);
+    if (!target) return;
+    const current = ((target.custom_conditions as string[]) ?? []);
+    const next = current.filter((_, i) => i !== index);
+    await supabase.from("combatants").update({ custom_conditions: next }).eq("id", combatantId);
+    await qc.invalidateQueries({ queryKey: ["combat"] });
+    toast.success(`Condição removida de ${target.name}.`);
+  };
+
+  // Rastreador de ações por turno
+  const turnActions = (state.active_turn_actions ?? {}) as Record<string, { action?: boolean; move?: boolean }>;
+
+  const toggleTurnAction = async (combatantId: string, type: "action" | "move") => {
+    const nextState = { ...turnActions };
+    const current = nextState[combatantId] ?? {};
+    nextState[combatantId] = {
+      ...current,
+      [type]: !current[type],
+    };
+    await supabase.from("combat_state").update({ active_turn_actions: nextState }).eq("id", 1);
+    await qc.invalidateQueries({ queryKey: ["combat"] });
+  };
+
+  const resetTurnActions = async () => {
+    await supabase.from("combat_state").update({ active_turn_actions: {} }).eq("id", 1);
+    await qc.invalidateQueries({ queryKey: ["combat"] });
+    toast.success("Ações da rodada resetadas!");
+  };
+
+  // Presença Perturbadora (Opcional do Mestre)
+  const fireDisturbingPresence = async (dc: number) => {
+    const playerCombatants = combat.combatants.filter((item) => item.kind === "character" && item.character_id);
+    let failuresCount = 0;
+
+    for (const cbt of playerCombatants) {
+      const char = group.characters.find((entry) => entry.id === cbt.character_id);
+      if (!char) continue;
+      const vigorBonus = group.skills.find((s) => s.character_id === char.id && s.skill_key === "vigor")?.bonus ?? 0;
+      const compBonus = group.skills.find((s) => s.character_id === char.id && s.skill_key === "compostura")?.bonus ?? 0;
+      const rollMod = Math.max(char.fisico + vigorBonus, char.motor + compBonus);
+      const roll = roll2d6(rollMod, dc);
+
+      if (roll.outcome === "failure" || roll.outcome === "critical-failure") {
+        failuresCount++;
+        const currentConds = ((cbt.custom_conditions as string[]) ?? []);
+        if (!currentConds.includes("Abalado (-1 atk 1ª rodada)")) {
+          const updated = [...currentConds, "Abalado (-1 atk 1ª rodada)"];
+          await supabase.from("combatants").update({ custom_conditions: updated }).eq("id", cbt.id);
+        }
+        await supabase.from("combat_events").insert({
+          character_id: char.id,
+          character_name: char.name,
+          description: `Falhou no teste de Presença Perturbadora (CD ${dc}) e ficou Abalado (-1 atk 1ª rodada).`,
+        });
+      } else {
+        await supabase.from("combat_events").insert({
+          character_id: char.id,
+          character_name: char.name,
+          description: `Resistiu à Presença Perturbadora (CD ${dc}) com sucesso!`,
+        });
+      }
+    }
+
+    await qc.invalidateQueries({ queryKey: ["combat"] });
+    await qc.invalidateQueries({ queryKey: ["combat_events"] });
+    toast.warning(`Presença Perturbadora disparada! (${failuresCount} personagem(ns) abalados).`);
+    setDisturbingPresenceOpen(false);
+  };
 
   /** Por que o ⚔️ está bloqueado agora (null = liberado). O mestre age a qualquer hora. */
   const attackBlockedReason = (x: Combatant) => {
@@ -622,14 +714,14 @@ function CombatPage() {
       resistanceValue == null
         ? null
         : Math.max(
-            2,
-            resistanceValue +
-              target.temporary_shield +
-              defendBonus -
-              targetPenalty +
-              masterBonus +
-              bodyTargetDefenseModifier(bodyTarget),
-          );
+          2,
+          resistanceValue +
+          target.temporary_shield +
+          defendBonus -
+          targetPenalty +
+          masterBonus +
+          bodyTargetDefenseModifier(bodyTarget),
+        );
     if (attackerPenalty || targetPenalty) {
       toast(`Penalidades aplicadas: ataque −${attackerPenalty}, defesa do alvo −${targetPenalty}.`);
     }
@@ -646,16 +738,16 @@ function CombatPage() {
         ? 0
         : target.character_id
           ? armorReductionForTarget(
-              group.backpack.filter((item) => item.character_id === target.character_id),
-              bodyTarget,
-            )
+            group.backpack.filter((item) => item.character_id === target.character_id),
+            bodyTarget,
+          )
           : armorPart && monsterArmor
             ? Math.max(
-                0,
-                monsterArmor[
-                  `armor_${armorPart}` as "armor_head" | "armor_torso" | "armor_arms" | "armor_legs"
-                ],
-              )
+              0,
+              monsterArmor[
+              `armor_${armorPart}` as "armor_head" | "armor_torso" | "armor_arms" | "armor_legs"
+              ],
+            )
             : 0;
     const rolledDamage = hit
       ? rollDamage(option.damage) + (crit ? 3 + (bodyTarget === "head" ? 3 : 0) : 0)
@@ -665,9 +757,9 @@ function CombatPage() {
       hit && target.character_id
         ? mentalHit
           ? mentalReduction(
-              skillValueFor(group, target.character_id, "vontade"),
-              skillValueFor(group, target.character_id, "compostura"),
-            )
+            skillValueFor(group, target.character_id, "vontade"),
+            skillValueFor(group, target.character_id, "compostura"),
+          )
           : option.damageType === "Mágico"
             ? 0
             : painReduction(skillValueFor(group, target.character_id, "limiar_dor"))
@@ -762,27 +854,26 @@ function CombatPage() {
       {
         characterId: attacker.character_id,
         characterName: attacker.name,
-        label: `${option.name} em ${target.name}${
-          !hit
+        label: `${option.name} em ${target.name}${!hit
             ? " — errou"
             : dodged
               ? " — esquivado"
               : ` — ${damage} ${sanityDamage ? "de dano à Sanidade" : "de dano"}${passiveText}${effectsText}`
-        }`,
+          }`,
         result: r,
         ...(masterBonus !== 0 ? { masterBonus } : {}),
       },
       ...(dodgeRoll
         ? [
-            {
-              characterId: target.character_id,
-              characterName: target.name,
-              label: dodged
-                ? `${target.name} esquivou do ataque!`
-                : `Esquiva de ${target.name} — não conseguiu desviar`,
-              result: dodgeRoll,
-            },
-          ]
+          {
+            characterId: target.character_id,
+            characterName: target.name,
+            label: dodged
+              ? `${target.name} esquivou do ataque!`
+              : `Esquiva de ${target.name} — não conseguiu desviar`,
+            result: dodgeRoll,
+          },
+        ]
         : []),
     ]);
 
@@ -827,20 +918,20 @@ function CombatPage() {
       bodyTarget === "right_arm" ? "right" : bodyTarget === "left_arm" ? "left" : null;
     const disarmedWeapon =
       hit &&
-      !dodged &&
-      (damage - shieldAbsorbed >= 5 ||
-        conditionAdded === "Atordoado" ||
-        conditionAdded === "Caído") &&
-      struckHand &&
-      target.character_id &&
-      target.pos_x != null &&
-      target.pos_y != null
+        !dodged &&
+        (damage - shieldAbsorbed >= 5 ||
+          conditionAdded === "Atordoado" ||
+          conditionAdded === "Caído") &&
+        struckHand &&
+        target.character_id &&
+        target.pos_x != null &&
+        target.pos_y != null
         ? group.weapons.find(
-            (weapon) =>
-              weapon.character_id === target.character_id &&
-              !isCustomAttack(weapon) &&
-              (weapon.hand_slot === struckHand || weapon.hand_slot === "two_hands"),
-          )
+          (weapon) =>
+            weapon.character_id === target.character_id &&
+            !isCustomAttack(weapon) &&
+            (weapon.hand_slot === struckHand || weapon.hand_slot === "two_hands"),
+        )
         : undefined;
     if (disarmedWeapon) {
       const { data: droppedItem, error: dropError } = await supabase
@@ -932,9 +1023,9 @@ function CombatPage() {
     const defenderModifier =
       target.kind === "character" && targetCharacterId
         ? Math.max(
-            skillValueFor(group, targetCharacterId, "vontade"),
-            skillValueFor(group, targetCharacterId, "compostura"),
-          ) - conditionPenalty(target.conditions)
+          skillValueFor(group, targetCharacterId, "vontade"),
+          skillValueFor(group, targetCharacterId, "compostura"),
+        ) - conditionPenalty(target.conditions)
         : (target.defense ?? 0);
     const attackerRoll = roll2d6(attackerModifier, null);
     const defenderRoll = roll2d6(defenderModifier, null);
@@ -1047,9 +1138,9 @@ function CombatPage() {
     const defense =
       target.kind === "character" && targetCharacterId
         ? Math.max(
-            skillValueFor(group, targetCharacterId, "vontade"),
-            skillValueFor(group, targetCharacterId, "compostura"),
-          ) - conditionPenalty(target.conditions)
+          skillValueFor(group, targetCharacterId, "vontade"),
+          skillValueFor(group, targetCharacterId, "compostura"),
+        ) - conditionPenalty(target.conditions)
         : (target.defense ?? 0);
     const defenderRoll = roll2d6(defense, null);
     const success =
@@ -1133,19 +1224,19 @@ function CombatPage() {
     const inventoryUpdate =
       nextQuantity > 0
         ? await supabase
-            .from("backpack_items")
-            .update({ quantity: nextQuantity })
-            .eq("id", item.id)
-            .eq("quantity", item.quantity)
-            .select("id")
-            .maybeSingle()
+          .from("backpack_items")
+          .update({ quantity: nextQuantity })
+          .eq("id", item.id)
+          .eq("quantity", item.quantity)
+          .select("id")
+          .maybeSingle()
         : await supabase
-            .from("backpack_items")
-            .delete()
-            .eq("id", item.id)
-            .eq("quantity", item.quantity)
-            .select("id")
-            .maybeSingle();
+          .from("backpack_items")
+          .delete()
+          .eq("id", item.id)
+          .eq("quantity", item.quantity)
+          .select("id")
+          .maybeSingle();
     if (inventoryUpdate.error) {
       toast.error(`Não foi possível consumir o item: ${inventoryUpdate.error.message}`);
       return;
@@ -1173,9 +1264,9 @@ function CombatPage() {
       const restoreInventory =
         nextQuantity > 0
           ? await supabase
-              .from("backpack_items")
-              .update({ quantity: item.quantity })
-              .eq("id", item.id)
+            .from("backpack_items")
+            .update({ quantity: item.quantity })
+            .eq("id", item.id)
           : await supabase.from("backpack_items").insert({ ...item, quantity: item.quantity });
       if (restoreInventory.error) {
         console.error(
@@ -1648,6 +1739,39 @@ function CombatPage() {
               </Button>
               <Button
                 size="sm"
+                variant={viewMode === "theater" ? "secondary" : "outline"}
+                onClick={() => setViewMode((m) => (m === "theater" ? "grid" : "theater"))}
+                className="gap-1 text-xs"
+              >
+                {viewMode === "theater" ? (
+                  <>
+                    <Grid className="size-3.5" /> Grade
+                  </>
+                ) : (
+                  <>
+                    <Film className="size-3.5 text-amber-400" /> Teatro da Mente
+                  </>
+                )}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1 text-xs"
+                onClick={resetTurnActions}
+                title="Resetar toggles de Ação e Movimento para a próxima rodada"
+              >
+                <RotateCcw className="size-3.5" /> Resetar Rodada
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1 text-xs border-amber-500/50 text-amber-300 hover:bg-amber-500/10"
+                onClick={() => setDisturbingPresenceOpen(true)}
+              >
+                <Ghost className="size-3.5" /> Presença
+              </Button>
+              <Button
+                size="sm"
                 variant="destructive"
                 onClick={() => confirm("Encerrar combate?") && c.end.mutate()}
               >
@@ -1672,19 +1796,110 @@ function CombatPage() {
 
       <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
         <div className="overflow-auto rounded-lg border border-border bg-card p-2">
-          <BattleMap
-            map={map}
-            tokens={tokens}
-            combatActive={state.active}
-            currentCombatantId={state.current_combatant_id}
-            onMove={moveCombatant}
-            items={mapItemsWithIcons}
-            onPickItem={(itemId, tokenId) => void pickupMapItem(itemId, tokenId)}
-            onPushItem={(itemId, tokenId) => void pushMapItem(itemId, tokenId)}
-            onOpenChest={openChest}
-            placement={
-              isMaster && placing
-                ? {
+          {viewMode === "theater" ? (
+            <div className="relative min-h-[560px] overflow-hidden rounded-lg bg-zinc-950 p-6 flex flex-col justify-between">
+              {map.background_url ? (
+                <div
+                  className="absolute inset-0 bg-cover bg-center opacity-40 filter blur-xs pointer-events-none"
+                  style={{ backgroundImage: `url(${map.background_url})` }}
+                />
+              ) : (
+                <div className="absolute inset-0 bg-gradient-to-b from-zinc-900 via-zinc-950 to-black opacity-90 pointer-events-none" />
+              )}
+              <div className="relative z-10 flex items-center justify-between border-b border-white/10 pb-3">
+                <div>
+                  <span className="font-display text-xs font-bold uppercase tracking-widest text-amber-400">
+                    🎭 Teatro da Mente
+                  </span>
+                  <h2 className="font-display text-2xl font-bold uppercase text-white drop-shadow">
+                    Cena de Combate — Rodada {state.round}
+                  </h2>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-1 text-xs border-white/20 text-white hover:bg-white/10"
+                  onClick={() => setViewMode("grid")}
+                >
+                  <Grid className="size-3.5" /> Grade Tática
+                </Button>
+              </div>
+
+              {/* Combatentes na Cena */}
+              <div className="relative z-10 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 my-6">
+                {order.map((x) => (
+                  <div
+                    key={x.id}
+                    className={cn(
+                      "flex flex-col items-center rounded-xl border p-3 text-center backdrop-blur-md transition-all",
+                      x.id === state.current_combatant_id
+                        ? "border-primary bg-primary/20 ring-2 ring-primary shadow-[0_0_20px_rgba(234,179,8,0.3)] scale-105"
+                        : "border-white/10 bg-black/60",
+                      x.hp_current <= 0 && "opacity-40 grayscale",
+                    )}
+                  >
+                    <Avatar
+                      src={avatarOf(x)}
+                      name={x.name}
+                      tone={x.kind === "monster" ? "monster" : "player"}
+                      className="size-14 text-sm mb-2 shadow-lg"
+                    />
+                    <span className="font-display text-sm font-bold uppercase truncate max-w-full text-white">
+                      {x.name}
+                    </span>
+                    <span className="text-[11px] font-semibold text-emerald-400">
+                      HP {x.hp_current}/{x.hp_max}
+                    </span>
+                    {/* Ações e Movimento */}
+                    <div className="mt-2 flex gap-1">
+                      <button
+                        type="button"
+                        onClick={() => toggleTurnAction(x.id, "action")}
+                        className={cn(
+                          "px-1.5 py-0.5 rounded text-[9px] font-bold uppercase border transition-colors",
+                          turnActions[x.id]?.action
+                            ? "bg-emerald-500/30 text-emerald-300 border-emerald-500/60"
+                            : "bg-white/5 text-white/40 border-transparent hover:bg-white/10",
+                        )}
+                      >
+                        Ação {turnActions[x.id]?.action ? "✓" : "○"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => toggleTurnAction(x.id, "move")}
+                        className={cn(
+                          "px-1.5 py-0.5 rounded text-[9px] font-bold uppercase border transition-colors",
+                          turnActions[x.id]?.move
+                            ? "bg-sky-500/30 text-sky-300 border-sky-500/60"
+                            : "bg-white/5 text-white/40 border-transparent hover:bg-white/10",
+                        )}
+                      >
+                        Mov {turnActions[x.id]?.move ? "✓" : "○"}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="relative z-10 border-t border-white/10 pt-3 text-xs text-white/60">
+                Visualização narrativa focada na imaginação e descrição. Realize ataques e ações no painel lateral.
+              </div>
+            </div>
+          ) : (
+            <BattleMap
+              map={map}
+              tokens={tokens}
+              combatActive={state.active}
+              currentCombatantId={state.current_combatant_id}
+              onMove={moveCombatant}
+              items={mapItemsWithIcons}
+              onPickItem={(itemId, tokenId) => void pickupMapItem(itemId, tokenId)}
+              onPushItem={(itemId, tokenId) => void pushMapItem(itemId, tokenId)}
+              onOpenChest={openChest}
+              placement={
+                isMaster && placing
+                  ? {
                     label: placing.label,
                     onCancel: () => setPlacing(null),
                     onPlace: (x, y) => {
@@ -1696,9 +1911,10 @@ function CombatPage() {
                       setPlacing(null);
                     },
                   }
-                : null
-            }
-          />
+                  : null
+              }
+            />
+          )}
         </div>
 
         <aside className="space-y-2">
@@ -1802,7 +2018,7 @@ function CombatPage() {
                 x.id === state.current_combatant_id && "border-primary ring-2 ring-primary",
                 x.hp_current <= 0 && "opacity-50",
                 isCollapsed(x) &&
-                  "border-2 border-destructive/80 bg-destructive/5 shadow-[0_0_26px_rgba(127,29,29,0.28)] animate-pulse",
+                "border-2 border-destructive/80 bg-destructive/5 shadow-[0_0_26px_rgba(127,29,29,0.28)] animate-pulse",
               )}
             >
               <div className="flex items-center gap-2">
@@ -2105,17 +2321,17 @@ function CombatPage() {
           const retreat =
             defender.pos_x != null && defender.pos_y != null && foe.pos_x != null && foe.pos_y != null
               ? (() => {
-                  const occ = occupied();
-                  for (const mapItem of mapItems) occ.add(cellKey(mapItem.x, mapItem.y));
-                  return intimidationRetreatCell(
-                    { x: foe.pos_x, y: foe.pos_y },
-                    { x: defender.pos_x, y: defender.pos_y },
-                    map.cols,
-                    map.rows,
-                    terrain,
-                    occ,
-                  );
-                })()
+                const occ = occupied();
+                for (const mapItem of mapItems) occ.add(cellKey(mapItem.x, mapItem.y));
+                return intimidationRetreatCell(
+                  { x: foe.pos_x, y: foe.pos_y },
+                  { x: defender.pos_x, y: defender.pos_y },
+                  map.cols,
+                  map.rows,
+                  terrain,
+                  occ,
+                );
+              })()
               : null;
           return (
             <div className="fixed inset-0 z-[70] grid place-items-center bg-black/70 p-4" role="presentation">
@@ -2232,11 +2448,11 @@ function CombatPage() {
           combat.combatants.find((x) => x.id === chestView?.tokenId)?.character_id ?? null;
         const takers = isMaster
           ? [...group.characters]
-              .sort((a, b) => Number(b.id === tokenCharacterId) - Number(a.id === tokenCharacterId))
-              .map((ch) => ({ id: ch.id, name: ch.name }))
+            .sort((a, b) => Number(b.id === tokenCharacterId) - Number(a.id === tokenCharacterId))
+            .map((ch) => ({ id: ch.id, name: ch.name }))
           : group.characters
-              .filter((ch) => ch.id === tokenCharacterId)
-              .map((ch) => ({ id: ch.id, name: ch.name }));
+            .filter((ch) => ch.id === tokenCharacterId)
+            .map((ch) => ({ id: ch.id, name: ch.name }));
         return (
           <ChestDialog
             key={chestView?.itemId ?? "none"}

@@ -37,6 +37,7 @@ import {
 } from "@/lib/rpg-queries";
 import { cn } from "@/lib/utils";
 import { fileToSmallImage } from "@/lib/image";
+import { RegionalMapViewer } from "@/components/rpg/RegionalMap";
 
 export const Route = createFileRoute("/celular")({
   head: () => ({
@@ -66,12 +67,12 @@ type Screen =
   | { app: "chats" }
   | { app: "chat"; with: string }
   | { app: "news" }
-  | { app: "gallery" };
+  | { app: "gallery" }
+  | { app: "map" };
 
 type MessageInsert = Database["public"]["Tables"]["messages"]["Insert"];
 
 const FUTURE_APPS = [
-  { emoji: "🗺️", name: "Mapa" },
   { emoji: "📻", name: "Rádio" },
 ];
 
@@ -323,6 +324,13 @@ function PhonePage() {
               error={photosError?.message}
               back={() => setScreen({ app: "home" })}
             />
+          ) : screen.app === "map" ? (
+            <div>
+              <AppHeader title="Mapa da Região" back={() => setScreen({ app: "home" })} />
+              <div className="p-2">
+                <RegionalMapViewer isMaster={isMaster} />
+              </div>
+            </div>
           ) : null}
         </div>
       </div>
@@ -390,6 +398,7 @@ function Home({
         )}
         <AppIcon emoji="📷" name="Câmera / Galeria" onClick={() => open({ app: "gallery" })} />
         <AppIcon emoji="📰" name="Notícias / Pistas" onClick={() => open({ app: "news" })} />
+        <AppIcon emoji="🗺️" name="Mapa da Região" onClick={() => open({ app: "map" })} />
         {FUTURE_APPS.map((a) => (
           <AppIcon
             key={a.name}
