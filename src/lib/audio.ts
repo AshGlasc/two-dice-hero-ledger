@@ -30,6 +30,7 @@ if (typeof window !== "undefined") {
 
 const listeners = new Set<(p: AudioPrefs) => void>();
 function notify() {
+  prefs = { ...prefs };
   listeners.forEach((l) => l(prefs));
   if (typeof window !== "undefined") {
     try {
@@ -337,12 +338,11 @@ export function setVolume(volume: number) {
 }
 
 export function getAudioPrefs(): AudioPrefs {
-  return { ...prefs };
+  return prefs;
 }
 
 export function subscribeAudioPrefs(callback: (p: AudioPrefs) => void) {
   listeners.add(callback);
-  callback(prefs);
   return () => {
     listeners.delete(callback);
   };
