@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { MasterAudioSection } from "@/components/rpg/MasterAudioSection";
 import { BackupSection } from "@/components/rpg/BackupSection";
+import { NpcGenerator } from "@/components/rpg/NpcGenerator";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 
@@ -162,6 +163,7 @@ function GmPageContent({ onLock }: { onLock: () => void }) {
 
       <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
         <div className="space-y-6">
+          <NpcGenerator />
           <PassivePerceptions group={group} />
           <GroupTest group={group} />
           <PartyOverview group={group} />
