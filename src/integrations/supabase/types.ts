@@ -16,27 +16,21 @@ export type Database = {
     Tables: {
       app_settings: {
         Row: {
-          audio_settings: Json
           difficulty_modifiers: Json
           discord_webhook: string
           id: number
-          music_tracks: Json
           updated_at: string
         }
         Insert: {
-          audio_settings?: Json
           difficulty_modifiers?: Json
           discord_webhook?: string
           id?: number
-          music_tracks?: Json
           updated_at?: string
         }
         Update: {
-          audio_settings?: Json
           difficulty_modifiers?: Json
           discord_webhook?: string
           id?: number
-          music_tracks?: Json
           updated_at?: string
         }
         Relationships: []
@@ -60,7 +54,6 @@ export type Database = {
           quantity: number
           restore_energy: number
           skill_bonuses: Json
-          survival_tag: string
           temp_shield: number
         }
         Insert: {
@@ -81,7 +74,6 @@ export type Database = {
           quantity?: number
           restore_energy?: number
           skill_bonuses?: Json
-          survival_tag?: string
           temp_shield?: number
         }
         Update: {
@@ -102,7 +94,6 @@ export type Database = {
           quantity?: number
           restore_energy?: number
           skill_bonuses?: Json
-          survival_tag?: string
           temp_shield?: number
         }
         Relationships: [
@@ -282,7 +273,6 @@ export type Database = {
           restore_energy: number
           skill_bonuses: Json
           skill_key: string | null
-          survival_tag: string
           temp_shield: number | null
           uses_max: number | null
         }
@@ -308,7 +298,6 @@ export type Database = {
           restore_energy?: number
           skill_bonuses?: Json
           skill_key?: string | null
-          survival_tag?: string
           temp_shield?: number | null
           uses_max?: number | null
         }
@@ -334,7 +323,6 @@ export type Database = {
           restore_energy?: number
           skill_bonuses?: Json
           skill_key?: string | null
-          survival_tag?: string
           temp_shield?: number | null
           uses_max?: number | null
         }
@@ -782,7 +770,6 @@ export type Database = {
       phone_clues: {
         Row: {
           body: string
-          category: string
           created_at: string
           headline: string
           id: string
@@ -790,7 +777,6 @@ export type Database = {
         }
         Insert: {
           body?: string
-          category?: string
           created_at?: string
           headline: string
           id?: string
@@ -798,7 +784,6 @@ export type Database = {
         }
         Update: {
           body?: string
-          category?: string
           created_at?: string
           headline?: string
           id?: string
@@ -926,24 +911,18 @@ export type Database = {
           created_at: string
           id: string
           message: string
-          skill_key: string | null
-          skill_name: string | null
         }
         Insert: {
           character_id: string
           created_at?: string
           id?: string
           message: string
-          skill_key?: string | null
-          skill_name?: string | null
         }
         Update: {
           character_id?: string
           created_at?: string
           id?: string
           message?: string
-          skill_key?: string | null
-          skill_name?: string | null
         }
         Relationships: [
           {
@@ -1013,30 +992,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      whisper_presets: {
-        Row: {
-          created_at: string
-          id: string
-          message: string
-          skill_key: string
-          title: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          message: string
-          skill_key: string
-          title: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          message?: string
-          skill_key?: string
-          title?: string
-        }
-        Relationships: []
       }
     }
     Views: {
