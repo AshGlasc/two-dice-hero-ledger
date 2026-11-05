@@ -338,16 +338,23 @@ export const regionalMapPinsQuery = (mapId?: string | null, isMaster: boolean = 
   queryOptions({
     queryKey: ["regional_map_pins", mapId ?? "all", isMaster ? "master" : "player"],
     queryFn: async () => {
-      let query = supabase.from("regional_map_pins").select("*");
-      if (mapId) {
-        query = query.eq("map_id", mapId);
+      if (isMaster) {
+        let query = supabase.from("regional_map_pins").select("*");
+        if (mapId) query = query.eq("map_id", mapId);
+        const { data, error } = await query.order("created_at", { ascending: true });
+        if (error) throw error;
+        return data ?? [];
       }
-      if (!isMaster) {
-        // STRICT CONSTRAINTS: NEVER expose pins where is_revealed = false to players!
-        query = query.eq("is_revealed", true);
-      }
+
+      let query = supabase
+        .from("regional_map_pins")
+        .select(
+          "id,map_id,name,photo_url,description,x_percent,y_percent,is_revealed,linked_battle_layout_id,created_at",
+        )
+        .eq("is_revealed", true);
+      if (mapId) query = query.eq("map_id", mapId);
       const { data, error } = await query.order("created_at", { ascending: true });
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []).map((pin) => ({ ...pin, secret_gm_notes: "" }));
     },
   });

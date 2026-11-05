@@ -55,9 +55,9 @@ type ItemForm = {
   ammo: string;
   uses_max: string;
   heal_hp: string;
-  heal_sanity: string;
   restore_energy: string;
   temp_shield: string;
+  survival_tag: string;
   skill_bonuses: Record<string, number>;
   armor_part: string;
   armor_reduction: string;
@@ -79,9 +79,9 @@ const emptyForm: ItemForm = {
   ammo: "",
   uses_max: "0",
   heal_hp: "0",
-  heal_sanity: "0",
   restore_energy: "0",
   temp_shield: "0",
+  survival_tag: "",
   skill_bonuses: {},
   armor_part: "",
   armor_reduction: "0",
@@ -151,9 +151,9 @@ function ItemsPageContent() {
         ammo: values.ammo.trim() || null,
         uses_max: Number(values.uses_max) || 0,
         heal_hp: Number(values.heal_hp) || 0,
-        heal_sanity: Number(values.heal_sanity) || 0,
         restore_energy: Number(values.restore_energy) || 0,
         temp_shield: Number(values.temp_shield) || 0,
+        survival_tag: values.survival_tag,
         skill_bonuses: values.skill_bonuses,
         armor_part: values.armor_part,
         armor_reduction: Number(values.armor_reduction) || 0,
@@ -229,9 +229,9 @@ function ItemsPageContent() {
       ammo: item.ammo ?? "",
       uses_max: String(item.uses_max ?? 0),
       heal_hp: String(item.heal_hp ?? 0),
-      heal_sanity: String(item.heal_sanity ?? 0),
       restore_energy: String(item.restore_energy ?? 0),
       temp_shield: String(item.temp_shield ?? 0),
+      survival_tag: item.survival_tag ?? "",
       skill_bonuses:
         item.skill_bonuses &&
         typeof item.skill_bonuses === "object" &&
@@ -412,17 +412,23 @@ function ItemsPageContent() {
                 onChange={(heal_hp) => setForm({ ...form, heal_hp })}
               />
               <Field
-                label="Cura sanidade"
-                type="number"
-                value={form.heal_sanity}
-                onChange={(heal_sanity) => setForm({ ...form, heal_sanity })}
-              />
-              <Field
                 label="Recupera energia"
                 type="number"
                 value={form.restore_energy}
                 onChange={(restore_energy) => setForm({ ...form, restore_energy })}
               />
+              <label className="space-y-1">
+                <span className="label-caps text-muted-foreground">Sobrevivência</span>
+                <select
+                  className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+                  value={form.survival_tag}
+                  onChange={(event) => setForm({ ...form, survival_tag: event.target.value })}
+                >
+                  <option value="">Sem efeito</option>
+                  <option value="Ração">Ração</option>
+                  <option value="Hidratação">Hidratação</option>
+                </select>
+              </label>
               <Field
                 label="Escudo temporário"
                 type="number"
@@ -629,8 +635,8 @@ function ItemsPageContent() {
                   <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
                     {item.damage && <span>Dano: {item.damage}</span>}
                     {(item.heal_hp ?? 0) > 0 && <span>PV +{item.heal_hp ?? 0}</span>}
-                    {(item.heal_sanity ?? 0) > 0 && <span>Sanidade +{item.heal_sanity ?? 0}</span>}
                     {item.restore_energy > 0 && <span>Energia +{item.restore_energy}</span>}
+                    {item.survival_tag && <span>{item.survival_tag}</span>}
                     {(item.temp_shield ?? 0) > 0 && <span>Escudo +{item.temp_shield ?? 0}</span>}
                   </div>
                   <div className="flex gap-2 border-t border-border pt-3">

@@ -43,7 +43,13 @@ type BackpackInput = Pick<BackpackItem, "name" | "quantity" | "notes"> &
   Partial<
     Pick<
       BackpackItem,
-      "skill_bonuses" | "armor_part" | "armor_reduction" | "equipped" | "hand_slot" | "image_url"
+      | "skill_bonuses"
+      | "armor_part"
+      | "armor_reduction"
+      | "equipped"
+      | "hand_slot"
+      | "image_url"
+      | "survival_tag"
     >
   >;
 

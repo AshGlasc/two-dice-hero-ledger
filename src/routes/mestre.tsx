@@ -68,6 +68,7 @@ import {
 } from "@/lib/difficulty";
 import { cn } from "@/lib/utils";
 import { passiveScore, ROLEPLAY_PASSIVES } from "@/lib/passives";
+import { maxEnergyFor } from "@/lib/survival";
 
 export const Route = createFileRoute("/mestre")({
   head: () => ({
@@ -187,19 +188,28 @@ function PartyRestButton({ group }: { group: GroupData }) {
     mutationFn: async () => {
       // 1. Restaura energia e dá +2 PV de fôlego para cada personagem
       for (const ch of group.characters) {
-        const energyMax = ch.energia_maxima ?? 10;
-        await supabase
+        const vigorBonus =
+          group.skills.find((skill) => skill.character_id === ch.id && skill.skill_key === "vigor")
+            ?.bonus ?? 0;
+        const willBonus =
+          group.skills.find((skill) => skill.character_id === ch.id && skill.skill_key === "vontade")
+            ?.bonus ?? 0;
+        const energyMax = maxEnergyFor(ch, vigorBonus, willBonus);
+        const { error } = await supabase
           .from("characters")
           .update({
             energia_atual: energyMax,
+            energia_maxima: energyMax,
           })
           .eq("id", ch.id);
+        if (error) throw error;
       }
       // 2. Limpa condições temporárias dos combatentes
-      await supabase
+      const { error } = await supabase
         .from("combatants")
         .update({ conditions: [] })
         .neq("id", "00000000-0000-0000-0000-000000000000");
+      if (error) throw error;
     },
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ["characters"] });
@@ -723,17 +733,20 @@ function VoiceRequestListener() {
     if (!replyText.trim()) return;
     setIsSending(true);
     try {
-      await supabase.from("sanity_whispers").insert({
+      const { error } = await supabase.from("sanity_whispers").insert({
         character_id: activeRequest.characterId,
         skill_key: activeRequest.skillKey,
         skill_name: activeRequest.skillLabel,
         message: replyText.trim(),
       });
+      if (error) throw error;
       toast.success(`Monólogo de ${activeRequest.skillLabel} sussurrado para ${activeRequest.characterName}!`);
       setActiveRequest(null);
       setReplyText("");
-    } catch {
-      toast.error("Erro ao enviar resposta da voz.");
+    } catch (error) {
+      toast.error(
+        `Não foi possível enviar a resposta da voz: ${error instanceof Error ? error.message : "erro desconhecido"}`,
+      );
     } finally {
       setIsSending(false);
     }
@@ -777,16 +790,39 @@ function PartyOverview({ group }: { group: GroupData }) {
 
   const concederAlivio = async (char: GroupData["characters"][number]) => {
     const cur = char.energia_atual ?? 0;
-    const max = char.energia_maxima ?? 10;
+    const vigorBonus =
+      group.skills.find((skill) => skill.character_id === char.id && skill.skill_key === "vigor")
+        ?.bonus ?? 0;
+    const willBonus =
+      group.skills.find((skill) => skill.character_id === char.id && skill.skill_key === "vontade")
+        ?.bonus ?? 0;
+    const max = maxEnergyFor(char, vigorBonus, willBonus);
     const next = Math.min(cur + 2, max);
-    await supabase.from("characters").update({ energia_atual: next }).eq("id", char.id);
-    await supabase.from("combat_events").insert({
-      character_id: char.id,
-      character_name: char.name,
-      description: `${char.name} encontrou alívio em seu vício/conforto (+2 Energia: ${next}/${max}).`,
-    });
-    await qc.invalidateQueries({ queryKey: ["group"] });
-    toast.success(`Alívio concedido a ${char.name}! Energia: ${next}/${max}`);
+    try {
+      const { error } = await supabase
+        .from("characters")
+        .update({ energia_atual: next, energia_maxima: max })
+        .eq("id", char.id);
+      if (error) throw error;
+
+      const { error: eventError } = await supabase.from("combat_events").insert({
+        character_id: char.id,
+        character_name: char.name,
+        description: `${char.name} encontrou alívio em seu vício/conforto (+2 Energia: ${next}/${max}).`,
+      });
+      if (eventError) throw eventError;
+
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["group"] }),
+        qc.invalidateQueries({ queryKey: ["sheet", char.id] }),
+      ]);
+      toast.success(`Alívio concedido a ${char.name}! Energia: ${next}/${max}`);
+    } catch (error) {
+      console.error("Não foi possível conceder alívio.", error);
+      toast.error(
+        `Não foi possível conceder alívio: ${error instanceof Error ? error.message : "erro desconhecido"}`,
+      );
+    }
   };
 
   return (

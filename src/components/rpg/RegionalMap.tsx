@@ -56,6 +56,7 @@ export function RegionalMapViewer({ isMaster = false }: { isMaster?: boolean }) 
   // Modais
   const [selectedPin, setSelectedPin] = useState<RegionalMapPin | null>(null);
   const [createPinCoords, setCreatePinCoords] = useState<{ x: number; y: number } | null>(null);
+  const [editingPinId, setEditingPinId] = useState<string | null>(null);
   const [createMapOpen, setCreateMapOpen] = useState(false);
 
   // Form Pin
@@ -94,6 +95,7 @@ export function RegionalMapViewer({ isMaster = false }: { isMaster?: boolean }) 
     const x_percent = Math.max(0, Math.min(100, (clickX / rect.width) * 100));
     const y_percent = Math.max(0, Math.min(100, (clickY / rect.height) * 100));
 
+    setEditingPinId(null);
     setCreatePinCoords({ x: Number(x_percent.toFixed(2)), y: Number(y_percent.toFixed(2)) });
     setPinName("");
     setPinPhotoUrl("");
@@ -103,12 +105,23 @@ export function RegionalMapViewer({ isMaster = false }: { isMaster?: boolean }) 
     setPinLinkedLayoutId("");
   };
 
+  const editPin = (pin: RegionalMapPin) => {
+    setSelectedPin(null);
+    setEditingPinId(pin.id);
+    setCreatePinCoords({ x: pin.x_percent, y: pin.y_percent });
+    setPinName(pin.name);
+    setPinPhotoUrl(pin.photo_url);
+    setPinDescription(pin.description);
+    setPinSecretNotes(pin.secret_gm_notes);
+    setPinIsRevealed(pin.is_revealed);
+    setPinLinkedLayoutId(pin.linked_battle_layout_id?.toString() ?? "");
+  };
+
   // Salvar Pin
   const savePinMutation = useMutation({
     mutationFn: async () => {
       if (!activeMap || !createPinCoords) return;
-      const { error } = await supabase.from("regional_map_pins").insert({
-        map_id: activeMap.id,
+      const values = {
         name: pinName.trim() || "Ponto de Interesse",
         photo_url: pinPhotoUrl.trim(),
         description: pinDescription.trim(),
@@ -117,25 +130,45 @@ export function RegionalMapViewer({ isMaster = false }: { isMaster?: boolean }) 
         y_percent: createPinCoords.y,
         is_revealed: pinIsRevealed,
         linked_battle_layout_id: pinLinkedLayoutId ? Number(pinLinkedLayoutId) : null,
-      });
+      };
+      const result = editingPinId
+        ? await supabase.from("regional_map_pins").update(values).eq("id", editingPinId)
+        : await supabase
+            .from("regional_map_pins")
+            .insert({ ...values, map_id: activeMap.id });
+      const { error } = result;
       if (error) throw error;
     },
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ["regional_map_pins"] });
-      toast.success("Marcador criado no mapa!");
+      toast.success(editingPinId ? "Marcador atualizado." : "Marcador criado no mapa!");
       setCreatePinCoords(null);
+      setEditingPinId(null);
     },
-    onError: () => toast.error("Erro ao criar marcador."),
+    onError: (error) =>
+      toast.error(
+        `Não foi possível ${editingPinId ? "atualizar" : "criar"} o marcador: ${error.message}`,
+      ),
   });
 
   // Alternar Revelação do Pin (Mestre)
   const togglePinReveal = async (pin: RegionalMapPin) => {
     const next = !pin.is_revealed;
-    await supabase.from("regional_map_pins").update({ is_revealed: next }).eq("id", pin.id);
-    await qc.invalidateQueries({ queryKey: ["regional_map_pins"] });
-    toast.success(next ? "Marcador revelado aos jogadores!" : "Marcador ocultado dos jogadores.");
-    if (selectedPin && selectedPin.id === pin.id) {
-      setSelectedPin({ ...selectedPin, is_revealed: next });
+    try {
+      const { error } = await supabase
+        .from("regional_map_pins")
+        .update({ is_revealed: next })
+        .eq("id", pin.id);
+      if (error) throw error;
+      await qc.invalidateQueries({ queryKey: ["regional_map_pins"] });
+      toast.success(next ? "Marcador revelado aos jogadores!" : "Marcador ocultado dos jogadores.");
+      if (selectedPin && selectedPin.id === pin.id) {
+        setSelectedPin({ ...selectedPin, is_revealed: next });
+      }
+    } catch (error) {
+      toast.error(
+        `Não foi possível alterar a visibilidade: ${error instanceof Error ? error.message : "erro desconhecido"}`,
+      );
     }
   };
 
@@ -149,8 +182,10 @@ export function RegionalMapViewer({ isMaster = false }: { isMaster?: boolean }) 
       await qc.invalidateQueries({ queryKey: ["regional_map_pins"] });
       toast.success("Marcador removido.");
       setSelectedPin(null);
+      setCreatePinCoords(null);
+      setEditingPinId(null);
     },
-    onError: () => toast.error("Erro ao remover marcador."),
+    onError: (error) => toast.error(`Não foi possível remover o marcador: ${error.message}`),
   });
 
   // Criar Novo Mapa Regional (Mestre)
@@ -158,7 +193,11 @@ export function RegionalMapViewer({ isMaster = false }: { isMaster?: boolean }) 
     mutationFn: async () => {
       if (!newMapName.trim() || !newMapImageUrl.trim()) return;
       // Desativa os outros se este for ativo
-      await supabase.from("regional_maps").update({ is_active: false }).neq("id", "00000000-0000-0000-0000-000000000000");
+      const { error: deactivateError } = await supabase
+        .from("regional_maps")
+        .update({ is_active: false })
+        .neq("id", "00000000-0000-0000-0000-000000000000");
+      if (deactivateError) throw deactivateError;
       const { error } = await supabase.from("regional_maps").insert({
         name: newMapName.trim(),
         image_url: newMapImageUrl.trim(),
@@ -173,7 +212,10 @@ export function RegionalMapViewer({ isMaster = false }: { isMaster?: boolean }) 
       setNewMapName("");
       setNewMapImageUrl("");
     },
-    onError: () => toast.error("Erro ao salvar mapa regional."),
+    onError: (error) =>
+      toast.error(
+        `Não foi possível salvar o mapa regional: ${error instanceof Error ? error.message : "erro desconhecido"}`,
+      ),
   });
 
   // Carregar layout de batalha vinculado no battle_map
@@ -183,14 +225,22 @@ export function RegionalMapViewer({ isMaster = false }: { isMaster?: boolean }) 
       toast.error("Layout não encontrado.");
       return;
     }
-    await supabase.from("battle_map").update({
-      cols: layout.cols,
-      rows: layout.rows,
-      background_url: layout.background_url,
-      terrain: layout.terrain,
-      tile_images: layout.tile_images,
-      fog: layout.fog,
-    }).eq("id", 1);
+    const { error } = await supabase
+      .from("battle_map")
+      .update({
+        cols: layout.cols,
+        rows: layout.rows,
+        background_url: layout.background_url,
+        terrain: layout.terrain,
+        tile_images: layout.tile_images,
+        fog: layout.fog,
+      })
+      .eq("id", 1);
+    if (error) {
+      toast.error(`Não foi possível carregar o cenário: ${error.message}`);
+      return;
+    }
+    await qc.invalidateQueries({ queryKey: ["battle_map"] });
     toast.success(`Cenário tático "${layout.name}" carregado no combate!`);
     setSelectedPin(null);
   };
@@ -309,6 +359,12 @@ export function RegionalMapViewer({ isMaster = false }: { isMaster?: boolean }) 
                 <button
                   key={pin.id}
                   type="button"
+                  onContextMenu={(e: MouseEvent<HTMLButtonElement>) => {
+                    if (!isMaster) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    editPin(pin);
+                  }}
                   onClick={(e) => {
                     e.stopPropagation();
                     setSelectedPin(pin);
@@ -441,7 +497,8 @@ export function RegionalMapViewer({ isMaster = false }: { isMaster?: boolean }) 
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 font-display uppercase tracking-wider">
-              <Plus className="size-5 text-primary" /> Novo Marcador no Mapa
+              <Plus className="size-5 text-primary" />{" "}
+              {editingPinId ? "Editar Marcador" : "Novo Marcador no Mapa"}
             </DialogTitle>
             <DialogDescription>
               Posição: {createPinCoords?.x}% X, {createPinCoords?.y}% Y
@@ -520,7 +577,29 @@ export function RegionalMapViewer({ isMaster = false }: { isMaster?: boolean }) 
           </div>
 
           <DialogFooter className="gap-2 sm:justify-between">
-            <Button type="button" variant="outline" onClick={() => setCreatePinCoords(null)}>
+            {editingPinId && (
+              <Button
+                type="button"
+                variant="ghost"
+                className="mr-auto text-destructive hover:bg-destructive/10 hover:text-destructive"
+                disabled={deletePinMutation.isPending}
+                onClick={() => {
+                  if (confirm(`Excluir "${pinName}" do mapa?`)) {
+                    deletePinMutation.mutate(editingPinId);
+                  }
+                }}
+              >
+                <Trash2 className="mr-1 size-4" /> Excluir
+              </Button>
+            )}
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setCreatePinCoords(null);
+                setEditingPinId(null);
+              }}
+            >
               Cancelar
             </Button>
             <Button
@@ -529,7 +608,7 @@ export function RegionalMapViewer({ isMaster = false }: { isMaster?: boolean }) 
               disabled={savePinMutation.isPending || !pinName.trim()}
               onClick={() => savePinMutation.mutate()}
             >
-              Criar Marcador
+              {editingPinId ? "Salvar alterações" : "Criar Marcador"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -583,11 +662,25 @@ export function RegionalMapViewer({ isMaster = false }: { isMaster?: boolean }) 
                         className="h-6 text-[10px]"
                         disabled={m.is_active}
                         onClick={async () => {
-                          await supabase.from("regional_maps").update({ is_active: false }).neq("id", "00000000-0000-0000-0000-000000000000");
-                          await supabase.from("regional_maps").update({ is_active: true }).eq("id", m.id);
-                          await qc.invalidateQueries({ queryKey: ["regional_maps"] });
-                          toast.success(`Mapa "${m.name}" ativado!`);
-                          setCreateMapOpen(false);
+                          try {
+                            const { error: deactivateError } = await supabase
+                              .from("regional_maps")
+                              .update({ is_active: false })
+                              .neq("id", "00000000-0000-0000-0000-000000000000");
+                            if (deactivateError) throw deactivateError;
+                            const { error } = await supabase
+                              .from("regional_maps")
+                              .update({ is_active: true })
+                              .eq("id", m.id);
+                            if (error) throw error;
+                            await qc.invalidateQueries({ queryKey: ["regional_maps"] });
+                            toast.success(`Mapa "${m.name}" ativado!`);
+                            setCreateMapOpen(false);
+                          } catch (error) {
+                            toast.error(
+                              `Não foi possível ativar o mapa: ${error instanceof Error ? error.message : "erro desconhecido"}`,
+                            );
+                          }
                         }}
                       >
                         {m.is_active ? "Ativo" : "Ativar"}
@@ -617,4 +710,3 @@ export function RegionalMapViewer({ isMaster = false }: { isMaster?: boolean }) 
     </div>
   );
 }
-

@@ -72,20 +72,34 @@ export function SkillsSection({
 
   const requestVoice = (skillKey: string, skillName: string) => {
     const channel = supabase.channel("game-voices");
-    channel.subscribe((status) => {
+    channel.subscribe((status, error) => {
       if (status === "SUBSCRIBED") {
-        void channel.send({
-          type: "broadcast",
-          event: "VOICE_REQUEST",
-          payload: {
-            characterId: character.id,
-            characterName: character.name,
-            skillKey,
-            skillLabel: skillName,
-          },
-        });
-        toast.success(`Você chamou a voz interior de ${skillName}. Aguarde o mestre...`);
-        setTimeout(() => void supabase.removeChannel(channel), 1500);
+        void (async () => {
+          try {
+            const result = await channel.send({
+              type: "broadcast",
+              event: "VOICE_REQUEST",
+              payload: {
+                characterId: character.id,
+                characterName: character.name,
+                skillKey,
+                skillLabel: skillName,
+              },
+            });
+            if (result !== "ok") throw new Error(`Realtime retornou ${result}.`);
+            toast.success(`Você chamou a voz interior de ${skillName}. Aguarde o mestre...`);
+            setTimeout(() => void supabase.removeChannel(channel), 1500);
+          } catch (sendError) {
+            toast.error(
+              `Não foi possível chamar a voz: ${sendError instanceof Error ? sendError.message : "erro desconhecido"}`,
+            );
+            void supabase.removeChannel(channel);
+          }
+        })();
+      } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+        console.error("Não foi possível abrir o canal de vozes.", error);
+        toast.error("Não foi possível conectar às vozes. Tente de novo.");
+        void supabase.removeChannel(channel);
       }
     });
   };

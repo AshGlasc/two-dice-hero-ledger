@@ -86,11 +86,9 @@ const EMPTY_FORM: {
 export function AttacksSection({
   sheet,
   mutations,
-  collapsed = false,
 }: {
   sheet: CharacterSheet;
   mutations: Mutations;
-  collapsed?: boolean;
 }) {
   const { isMaster } = useMasterAuth();
   const [form, setForm] = useState(EMPTY_FORM);
@@ -118,7 +116,7 @@ export function AttacksSection({
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    if (collapsed || !form.name.trim()) return;
+    if (!form.name.trim()) return;
     if (overBudget && !isMaster) {
       toast.error(`Ataque passa do orçamento (${cost}/${budget}). Ajuste dano, alcance ou efeitos.`);
       return;
@@ -179,15 +177,7 @@ export function AttacksSection({
   };
 
   return (
-    <fieldset disabled={collapsed} className="w-full min-w-0 border-0 p-0">
-      {collapsed && (
-        <p
-          role="alert"
-          className="mb-4 rounded-lg border border-destructive/60 bg-destructive/10 p-3 text-sm text-destructive"
-        >
-          Colapso total: ações de ataque bloqueadas até a sanidade ser recuperada.
-        </p>
-      )}
+    <div className="w-full min-w-0">
       <div className="space-y-6">
         {/* Cabeçalho e botão de novo ataque */}
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -703,6 +693,6 @@ export function AttacksSection({
           </div>
         )}
       </div>
-    </fieldset>
+    </div>
   );
 }

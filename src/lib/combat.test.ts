@@ -284,20 +284,23 @@ describe("menu de ataques", () => {
     expect(attackOptionsForCharacter(group, "ch").some((option) => option.id === "w4")).toBe(false);
   });
 
-  it("aplica −2 nas skills mentais quando a sanidade está crítica", () => {
-    const unstable = {
+  it("aplica fome e sede a testes físicos e motores, sem afetar outras skills", () => {
+    const hungry = {
       ...group,
       characters: group.characters.map((character) => ({
         ...character,
-        sanity_current: 2,
-        sanity_max: 10,
+        hunger_state: "amarelo",
+        thirst_state: "vermelho",
       })),
     } as GroupData;
-    expect(skillValueFor(unstable, "ch", "autoridade")).toBe(
-      skillValueFor(group, "ch", "autoridade") - 2,
+    expect(skillValueFor(hungry, "ch", "ferramenta_fisica")).toBe(
+      skillValueFor(group, "ch", "ferramenta_fisica") - 3,
     );
-    expect(skillValueFor(unstable, "ch", "ferramenta_fisica")).toBe(
-      skillValueFor(group, "ch", "ferramenta_fisica"),
+    expect(skillValueFor(hungry, "ch", "coordenacao_motora")).toBe(
+      skillValueFor(group, "ch", "coordenacao_motora") - 3,
+    );
+    expect(skillValueFor(hungry, "ch", "autoridade")).toBe(
+      skillValueFor(group, "ch", "autoridade"),
     );
   });
 

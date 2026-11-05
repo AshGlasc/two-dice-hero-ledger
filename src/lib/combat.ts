@@ -6,8 +6,8 @@ import {
 } from "@/lib/custom-attacks";
 import type { GroupData } from "@/lib/rpg-queries";
 import { ALL_SKILLS, rollD6, roll2d6, skillTotal, type RollResult } from "@/lib/skills";
-import { sanityMentalPenalty } from "@/lib/sanity";
 import { levelDamageBonus } from "@/lib/passives";
+import { survivalSkillPenalty } from "@/lib/survival";
 
 export const CONDITIONS = [
   "Atordoado",
@@ -210,7 +210,7 @@ export function skillValueFor(group: GroupData, characterId: string, skillKey: s
   return (
     skillTotal(character[skill.attribute], bonus) +
     itemBonusFor(group.backpack ?? [], characterId, skillKey) +
-    sanityMentalPenalty(character, skillKey) -
+    survivalSkillPenalty(character.hunger_state, character.thirst_state, skillKey) -
     (character.energia_atual <= 0 ? 2 : 0)
   );
 }

@@ -18,7 +18,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { AttackDialog, type AttackTarget } from "@/components/rpg/AttackDialog";
@@ -40,6 +40,14 @@ import { MasterUnlockModal } from "@/components/rpg/MasterUnlockModal";
 import { QuickRollPanel } from "@/components/rpg/QuickRollPanel";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useMasterAuth } from "@/context/MasterAuthContext";
 import { useCombat } from "@/hooks/use-combat";
 import { supabase } from "@/integrations/supabase/client";
@@ -96,6 +104,7 @@ import {
   monsterBodyTargetOptions,
   monsterBodyType,
 } from "@/lib/monster-body";
+import { maxEnergyFor } from "@/lib/survival";
 import {
   battleMapQuery,
   battleMapItemsQuery,
@@ -198,6 +207,14 @@ function CombatPage() {
   const [newConditionText, setNewConditionText] = useState("");
   const [disturbingPresenceOpen, setDisturbingPresenceOpen] = useState(false);
   const [disturbingPresenceDc, setDisturbingPresenceDc] = useState(12);
+  const [presencePrompt, setPresencePrompt] = useState<{ promptId: string; dc: number } | null>(
+    null,
+  );
+  const [presenceSkill, setPresenceSkill] = useState<"vigor" | "compostura">("vigor");
+  const presenceChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const activePresencePromptId = useRef<string | null>(null);
+  const processedPresenceResults = useRef(new Set<string>());
+  const seenPresencePrompts = useRef(new Set<string>());
 
   const order = sortByInitiative(combat.combatants);
   const slots = order.map((x) => ({ id: x.id, out: x.kind === "monster" && x.hp_current <= 0 }));
@@ -205,17 +222,139 @@ function CombatPage() {
   const terrain = (map.terrain ?? {}) as Terrain;
   const fog = (map.fog ?? {}) as Fog;
   const myId = getPlayerCharacterId();
+  const presenceContext = useRef({
+    isMaster,
+    myId,
+    combatants: combat.combatants,
+    characters: group.characters,
+  });
+  presenceContext.current = {
+    isMaster,
+    myId,
+    combatants: combat.combatants,
+    characters: group.characters,
+  };
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("combat-presence")
+      .on("broadcast", { event: "PRESENCE_PROMPT" }, ({ payload }) => {
+        const event = payload as { promptId?: unknown; dc?: unknown };
+        if (
+          typeof event.promptId !== "string" ||
+          typeof event.dc !== "number" ||
+          !Number.isFinite(event.dc)
+        )
+          return;
+        const { isMaster: master, myId: characterId, combatants } = presenceContext.current;
+        if (
+          master ||
+          !characterId ||
+          !combatants.some((combatant) => combatant.character_id === characterId) ||
+          seenPresencePrompts.current.has(event.promptId)
+        )
+          return;
+        seenPresencePrompts.current.add(event.promptId);
+        setPresenceSkill("vigor");
+        setPresencePrompt({ promptId: event.promptId, dc: event.dc });
+      })
+      .on("broadcast", { event: "PRESENCE_RESULT" }, async ({ payload }) => {
+        const event = payload as {
+          promptId?: unknown;
+          characterId?: unknown;
+          skill?: unknown;
+          total?: unknown;
+          dc?: unknown;
+          success?: unknown;
+        };
+        if (
+          typeof event.promptId !== "string" ||
+          typeof event.characterId !== "string" ||
+          (event.skill !== "vigor" && event.skill !== "compostura") ||
+          typeof event.total !== "number" ||
+          typeof event.dc !== "number" ||
+          typeof event.success !== "boolean" ||
+          !presenceContext.current.isMaster ||
+          event.promptId !== activePresencePromptId.current
+        )
+          return;
+        const resultKey = `${event.promptId}:${event.characterId}`;
+        if (processedPresenceResults.current.has(resultKey)) return;
+        const { combatants, characters } = presenceContext.current;
+        const combatant = combatants.find((item) => item.character_id === event.characterId);
+        const character = characters.find((item) => item.id === event.characterId);
+        if (!combatant || !character) return;
+        processedPresenceResults.current.add(resultKey);
+
+        try {
+          const description = event.success
+            ? `${character.name} resistiu à Presença Perturbadora (${event.skill}, ${event.total} vs CD ${event.dc}).`
+            : `${character.name} falhou na Presença Perturbadora (${event.skill}, ${event.total} vs CD ${event.dc}) e ficou Abalado (-1 atk 1ª rodada).`;
+          if (!event.success) {
+            const conditions = Array.isArray(combatant.custom_conditions)
+              ? combatant.custom_conditions.filter(
+                  (condition): condition is string => typeof condition === "string",
+                )
+              : [];
+            const shaken = "Abalado (-1 atk 1ª rodada)";
+            if (!conditions.includes(shaken)) {
+              const { error } = await supabase
+                .from("combatants")
+                .update({ custom_conditions: [...conditions, shaken] })
+                .eq("id", combatant.id);
+              if (error) throw error;
+            }
+          }
+          const { error } = await supabase.from("combat_events").insert({
+            character_id: character.id,
+            character_name: character.name,
+            description,
+          });
+          if (error) throw error;
+          await Promise.all([
+            qc.invalidateQueries({ queryKey: ["combat"] }),
+            qc.invalidateQueries({ queryKey: ["combat_events"] }),
+          ]);
+          toast[event.success ? "success" : "warning"](description);
+        } catch (error) {
+          processedPresenceResults.current.delete(resultKey);
+          toast.error(
+            `Não foi possível registrar o teste: ${error instanceof Error ? error.message : "erro desconhecido"}`,
+          );
+        }
+      })
+      .subscribe((status, error) => {
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          console.error("O canal de Presença Perturbadora falhou.", error);
+          toast.error("Não foi possível conectar ao canal de Presença Perturbadora.");
+        }
+      });
+    presenceChannelRef.current = channel;
+    return () => {
+      presenceChannelRef.current = null;
+      void supabase.removeChannel(channel);
+    };
+  }, [qc]);
 
   const energyValue = (characterId: string, key: "vigor" | "vontade") => {
     const character = group.characters.find((item) => item.id === characterId);
     if (!character) return 0;
     return skillValueFor(group, characterId, key) + (character.energia_atual <= 0 ? 2 : 0);
   };
-  const maxEnergy = (characterId: string) =>
-    Math.max(
-      1,
-      10 + 2 * energyValue(characterId, "vigor") + 2 * energyValue(characterId, "vontade"),
-    );
+  const maxEnergy = (
+    characterId: string,
+    survivalOverrides?: { hunger_state?: string | null; thirst_state?: string | null },
+  ) => {
+    const character = group.characters.find((item) => item.id === characterId);
+    if (!character) return 1;
+    const vigorBonus =
+      group.skills.find((skill) => skill.character_id === characterId && skill.skill_key === "vigor")
+        ?.bonus ?? 0;
+    const willBonus =
+      group.skills.find((skill) => skill.character_id === characterId && skill.skill_key === "vontade")
+        ?.bonus ?? 0;
+    return maxEnergyFor({ ...character, ...survivalOverrides }, vigorBonus, willBonus);
+  };
   const persistEnergy = async (characterId: string, value: number) => {
     const maximum = maxEnergy(characterId);
     const { error } = await supabase
@@ -505,30 +644,52 @@ function CombatPage() {
         distance: distanceBetween(x, target),
       }));
 
-  const isCollapsed = (_combatant: Combatant) => false;
-
   // Condições em post-it
   const addCustomCondition = async (combatantId: string, text: string) => {
     if (!text.trim()) return;
     const target = combat.combatants.find((item) => item.id === combatantId);
     if (!target) return;
-    const current = ((target.custom_conditions as string[]) ?? []);
+    const current = Array.isArray(target.custom_conditions)
+      ? target.custom_conditions.filter((condition): condition is string => typeof condition === "string")
+      : [];
     const next = [...current, text.trim()];
-    await supabase.from("combatants").update({ custom_conditions: next }).eq("id", combatantId);
-    await qc.invalidateQueries({ queryKey: ["combat"] });
-    toast.success(`Condição "${text.trim()}" adicionada a ${target.name}!`);
-    setCustomConditionModal(null);
-    setNewConditionText("");
+    try {
+      const { error } = await supabase
+        .from("combatants")
+        .update({ custom_conditions: next })
+        .eq("id", combatantId);
+      if (error) throw error;
+      await qc.invalidateQueries({ queryKey: ["combat"] });
+      toast.success(`Condição "${text.trim()}" adicionada a ${target.name}!`);
+      setCustomConditionModal(null);
+      setNewConditionText("");
+    } catch (error) {
+      toast.error(
+        `Não foi possível adicionar a condição: ${error instanceof Error ? error.message : "erro desconhecido"}`,
+      );
+    }
   };
 
   const removeCustomCondition = async (combatantId: string, index: number) => {
     const target = combat.combatants.find((item) => item.id === combatantId);
     if (!target) return;
-    const current = ((target.custom_conditions as string[]) ?? []);
+    const current = Array.isArray(target.custom_conditions)
+      ? target.custom_conditions.filter((condition): condition is string => typeof condition === "string")
+      : [];
     const next = current.filter((_, i) => i !== index);
-    await supabase.from("combatants").update({ custom_conditions: next }).eq("id", combatantId);
-    await qc.invalidateQueries({ queryKey: ["combat"] });
-    toast.success(`Condição removida de ${target.name}.`);
+    try {
+      const { error } = await supabase
+        .from("combatants")
+        .update({ custom_conditions: next })
+        .eq("id", combatantId);
+      if (error) throw error;
+      await qc.invalidateQueries({ queryKey: ["combat"] });
+      toast.success(`Condição removida de ${target.name}.`);
+    } catch (error) {
+      toast.error(
+        `Não foi possível remover a condição: ${error instanceof Error ? error.message : "erro desconhecido"}`,
+      );
+    }
   };
 
   // Rastreador de ações por turno
@@ -541,54 +702,104 @@ function CombatPage() {
       ...current,
       [type]: !current[type],
     };
-    await supabase.from("combat_state").update({ active_turn_actions: nextState }).eq("id", 1);
-    await qc.invalidateQueries({ queryKey: ["combat"] });
+    try {
+      const { error } = await supabase
+        .from("combat_state")
+        .update({ active_turn_actions: nextState })
+        .eq("id", 1);
+      if (error) throw error;
+      await qc.invalidateQueries({ queryKey: ["combat"] });
+    } catch (error) {
+      toast.error(
+        `Não foi possível atualizar as ações do turno: ${error instanceof Error ? error.message : "erro desconhecido"}`,
+      );
+    }
   };
 
   const resetTurnActions = async () => {
-    await supabase.from("combat_state").update({ active_turn_actions: {} }).eq("id", 1);
-    await qc.invalidateQueries({ queryKey: ["combat"] });
-    toast.success("Ações da rodada resetadas!");
+    try {
+      const { error } = await supabase
+        .from("combat_state")
+        .update({ active_turn_actions: {} })
+        .eq("id", 1);
+      if (error) throw error;
+      await qc.invalidateQueries({ queryKey: ["combat"] });
+      toast.success("Ações da rodada resetadas!");
+    } catch (error) {
+      toast.error(
+        `Não foi possível resetar a rodada: ${error instanceof Error ? error.message : "erro desconhecido"}`,
+      );
+    }
   };
 
   // Presença Perturbadora (Opcional do Mestre)
   const fireDisturbingPresence = async (dc: number) => {
-    const playerCombatants = combat.combatants.filter((item) => item.kind === "character" && item.character_id);
-    let failuresCount = 0;
-
-    for (const cbt of playerCombatants) {
-      const char = group.characters.find((entry) => entry.id === cbt.character_id);
-      if (!char) continue;
-      const vigorBonus = group.skills.find((s) => s.character_id === char.id && s.skill_key === "vigor")?.bonus ?? 0;
-      const compBonus = group.skills.find((s) => s.character_id === char.id && s.skill_key === "compostura")?.bonus ?? 0;
-      const rollMod = Math.max(char.fisico + vigorBonus, char.motor + compBonus);
-      const roll = roll2d6(rollMod, dc);
-
-      if (roll.outcome === "failure" || roll.outcome === "critical-failure") {
-        failuresCount++;
-        const currentConds = ((cbt.custom_conditions as string[]) ?? []);
-        if (!currentConds.includes("Abalado (-1 atk 1ª rodada)")) {
-          const updated = [...currentConds, "Abalado (-1 atk 1ª rodada)"];
-          await supabase.from("combatants").update({ custom_conditions: updated }).eq("id", cbt.id);
-        }
-        await supabase.from("combat_events").insert({
-          character_id: char.id,
-          character_name: char.name,
-          description: `Falhou no teste de Presença Perturbadora (CD ${dc}) e ficou Abalado (-1 atk 1ª rodada).`,
-        });
-      } else {
-        await supabase.from("combat_events").insert({
-          character_id: char.id,
-          character_name: char.name,
-          description: `Resistiu à Presença Perturbadora (CD ${dc}) com sucesso!`,
-        });
+    try {
+      const channel = presenceChannelRef.current;
+      if (!channel) throw new Error("Canal de Presença Perturbadora indisponível.");
+      const promptId = crypto.randomUUID();
+      activePresencePromptId.current = promptId;
+      processedPresenceResults.current.clear();
+      const response = await channel.send({
+        type: "broadcast",
+        event: "PRESENCE_PROMPT",
+        payload: { promptId, dc },
+      });
+      if (response !== "ok") {
+        activePresencePromptId.current = null;
+        throw new Error(`O canal realtime respondeu: ${response}.`);
       }
+      toast.success(`Teste de Presença Perturbadora enviado aos jogadores (CD ${dc}).`);
+      setDisturbingPresenceOpen(false);
+    } catch (error) {
+      toast.error(
+        `Não foi possível enviar Presença Perturbadora: ${error instanceof Error ? error.message : "erro desconhecido"}`,
+      );
+    }
+  };
+
+  const respondToPresencePrompt = async () => {
+    if (!presencePrompt || !myId) return;
+    const character = group.characters.find((item) => item.id === myId);
+    const channel = presenceChannelRef.current;
+    if (!character || !channel) {
+      toast.error("Não foi possível iniciar o teste de Presença Perturbadora.");
+      return;
     }
 
-    await qc.invalidateQueries({ queryKey: ["combat"] });
-    await qc.invalidateQueries({ queryKey: ["combat_events"] });
-    toast.warning(`Presença Perturbadora disparada! (${failuresCount} personagem(ns) abalados).`);
-    setDisturbingPresenceOpen(false);
+    const roll = roll2d6(skillValueFor(group, character.id, presenceSkill), presencePrompt.dc);
+    const success = roll.outcome === "success" || roll.outcome === "critical-success";
+    try {
+      const response = await channel.send({
+        type: "broadcast",
+        event: "PRESENCE_RESULT",
+        payload: {
+          promptId: presencePrompt.promptId,
+          characterId: character.id,
+          skill: presenceSkill,
+          total: roll.total,
+          dc: presencePrompt.dc,
+          success,
+        },
+      });
+      if (response !== "ok") throw new Error(`O canal realtime respondeu: ${response}.`);
+      void logRolls([
+        {
+          characterId: character.id,
+          characterName: character.name,
+          label: `Presença Perturbadora: ${presenceSkill === "vigor" ? "Vigor" : "Compostura"} (CD ${presencePrompt.dc})`,
+          result: roll,
+        },
+      ]);
+      toast[success ? "success" : "warning"](
+        `Presença Perturbadora: ${roll.total} vs CD ${presencePrompt.dc}.`,
+      );
+      setPresencePrompt(null);
+    } catch (error) {
+      toast.error(
+        `Não foi possível enviar o resultado: ${error instanceof Error ? error.message : "erro desconhecido"}`,
+      );
+    }
   };
 
   /** Por que o ⚔️ está bloqueado agora (null = liberado). O mestre age a qualquer hora. */
@@ -771,7 +982,6 @@ function CombatPage() {
     const damage = hit
       ? Math.max(0, rolledDamage - armorReduction - passiveReduction)
       : 0;
-    const sanityDamage = target.character_id && option.damageType === "Mental" ? damage : 0;
 
     // Esquiva: só em acerto comum (duplo 6 nunca é esquivado) e só quem tem a skill (personagens).
     let dodgeRoll: ReturnType<typeof roll2d6> | null = null;
@@ -788,39 +998,6 @@ function CombatPage() {
       );
     }
     const dodged = dodgeRoll !== null && dodges(r.total, dodgeRoll.total);
-
-    if (hit && !dodged && sanityDamage > 0 && target.character_id) {
-      const character = group.characters.find((entry) => entry.id === target.character_id);
-      if (!character) {
-        toast.error("Não foi possível aplicar dano à Sanidade: personagem não encontrado.");
-        if (consumeAction && state.active && state.current_combatant_id === attacker.id)
-          advanceTurn();
-        return;
-      }
-      const { error: sanityError } = await supabase
-        .from("characters")
-        .update({
-          sanity_current: Math.max(0, (character.sanity_current ?? 10) - sanityDamage),
-        })
-        .eq("id", character.id);
-      if (sanityError) {
-        console.error("Não foi possível aplicar dano à Sanidade.", sanityError);
-        void logRolls([
-          {
-            characterId: attacker.character_id,
-            characterName: attacker.name,
-            label: `${option.name} acertou ${target.name}, mas o dano à Sanidade não pôde ser salvo.`,
-            result: r,
-          },
-        ]);
-        toast.error(`Dano à Sanidade não aplicado; esquema indisponível (${sanityError.message}).`);
-        if (consumeAction && state.active && state.current_combatant_id === attacker.id)
-          advanceTurn();
-        return;
-      }
-      void qc.invalidateQueries({ queryKey: ["group"] });
-      void qc.invalidateQueries({ queryKey: ["sheet", character.id] });
-    }
 
     let conditionAdded: string | null = null;
     const nextConditions = [...target.conditions];
@@ -858,7 +1035,7 @@ function CombatPage() {
             ? " — errou"
             : dodged
               ? " — esquivado"
-              : ` — ${damage} ${sanityDamage ? "de dano à Sanidade" : "de dano"}${passiveText}${effectsText}`
+              : ` — ${damage} de dano${passiveText}${effectsText}`
           }`,
         result: r,
         ...(masterBonus !== 0 ? { masterBonus } : {}),
@@ -892,7 +1069,7 @@ function CombatPage() {
       return;
     }
 
-    const shieldAbsorbed = sanityDamage > 0 ? 0 : Math.min(target.temporary_shield, damage);
+    const shieldAbsorbed = Math.min(target.temporary_shield, damage);
     const durationMap = conditionDurationsOf(target);
     if (conditionAdded && option.durationRounds != null && option.durationRounds > 0) {
       durationMap[conditionAdded] = option.durationRounds;
@@ -903,7 +1080,7 @@ function CombatPage() {
         patch: {
           hp_current: changeHp(
             target.hp_current,
-            -(sanityDamage > 0 ? 0 : damage - shieldAbsorbed),
+            -(damage - shieldAbsorbed),
             target.hp_max,
           ),
           temporary_shield: Math.max(0, target.temporary_shield - shieldAbsorbed),
@@ -986,7 +1163,7 @@ function CombatPage() {
     }
 
     toast.success(
-      `${attacker.name} acertou ${target.name} em ${BODY_TARGETS.find((part) => part.key === bodyTarget)?.label ?? "Geral"}: −${sanityDamage > 0 ? sanityDamage + " SAN" : damage - shieldAbsorbed + " PV"}${armorReduction && sanityDamage === 0 ? ` (${armorReduction} RD)` : ""}${shieldAbsorbed ? ` (${shieldAbsorbed} absorvido pelo escudo)` : ""}${effectsText}.`,
+      `${attacker.name} acertou ${target.name} em ${BODY_TARGETS.find((part) => part.key === bodyTarget)?.label ?? "Geral"}: −${damage - shieldAbsorbed} PV${armorReduction ? ` (${armorReduction} RD)` : ""}${shieldAbsorbed ? ` (${shieldAbsorbed} absorvido pelo escudo)` : ""}${effectsText}.`,
     );
     if (consumeAction && state.active && state.current_combatant_id === attacker.id) advanceTurn();
   };
@@ -1246,18 +1423,19 @@ function CombatPage() {
       void qc.invalidateQueries({ queryKey: ["group"] });
       return;
     }
-    const energyMax = maxEnergy(character.id);
+    const hunger_state =
+      item.survival_tag === "Ração" ? "satisfeito" : character.hunger_state;
+    const thirst_state =
+      item.survival_tag === "Hidratação" ? "satisfeito" : character.thirst_state;
+    const energyMax = maxEnergy(character.id, { hunger_state, thirst_state });
     const nextEnergy = Math.min(energyMax, character.energia_atual + item.restore_energy);
-    const nextSanity = Math.min(
-      character.sanity_max,
-      character.sanity_current + (item.heal_sanity ?? 0),
-    );
     const { error: characterError } = await supabase
       .from("characters")
       .update({
         energia_atual: nextEnergy,
         energia_maxima: energyMax,
-        sanity_current: nextSanity,
+        hunger_state,
+        thirst_state,
       })
       .eq("id", character.id);
     if (characterError) {
@@ -1290,7 +1468,13 @@ function CombatPage() {
     void qc.invalidateQueries({ queryKey: ["group"] });
     void qc.invalidateQueries({ queryKey: ["sheet", character.id] });
     toast.success(`${character.name} usou ${item.name}.`);
-    void logCombatEvent(combatant, `${character.name} usou ${item.name}.`);
+    const survivalEffect =
+      item.survival_tag === "Ração"
+        ? " Fome saciada."
+        : item.survival_tag === "Hidratação"
+          ? " Sede saciada."
+          : "";
+    void logCombatEvent(combatant, `${character.name} usou ${item.name}.${survivalEffect}`);
     if (state.active && state.current_combatant_id === combatant.id) advanceTurn();
   };
 
@@ -1431,9 +1615,9 @@ function CombatPage() {
       quantity: 1,
       skill_bonuses: catalogItem?.skill_bonuses ?? {},
       heal_hp: catalogItem?.heal_hp ?? 0,
-      heal_sanity: catalogItem?.heal_sanity ?? 0,
       restore_energy: catalogItem?.restore_energy ?? 0,
       temp_shield: catalogItem?.temp_shield ?? 0,
+      survival_tag: catalogItem?.survival_tag ?? "",
       image_url: catalogItem?.image_url ?? item.image_url,
       armor_part: catalogItem?.armor_part ?? "",
       armor_reduction: catalogItem?.armor_reduction ?? 0,
@@ -1666,6 +1850,77 @@ function CombatPage() {
 
   /** Mestre controla todos; jogador só o próprio personagem. */
   const mine = (x: Combatant) => isMaster || (!!myId && x.character_id === myId);
+  const customConditionsOf = (x: Combatant) =>
+    Array.isArray(x.custom_conditions)
+      ? x.custom_conditions.filter((condition): condition is string => typeof condition === "string")
+      : [];
+  const renderCustomConditions = (x: Combatant) => {
+    const conditions = customConditionsOf(x);
+    return (
+      <div className="mt-1 flex flex-wrap items-center justify-center gap-1">
+        {conditions.map((condition, index) => (
+          <span
+            key={`${condition}-${index}`}
+            className="inline-flex items-center gap-1 rounded-full border border-amber-400/50 bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-200"
+          >
+            {condition}
+            {mine(x) && (
+              <button
+                type="button"
+                aria-label={`Remover condição ${condition} de ${x.name}`}
+                className="font-bold text-amber-100 hover:text-white"
+                onClick={() => void removeCustomCondition(x.id, index)}
+              >
+                ×
+              </button>
+            )}
+          </span>
+        ))}
+        {mine(x) && (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-6 gap-1 px-2 text-[10px] text-muted-foreground"
+            onClick={() => {
+              setNewConditionText("");
+              setCustomConditionModal({ combatantId: x.id, name: x.name });
+            }}
+          >
+            <Tag className="size-3" /> Adicionar Condição
+          </Button>
+        )}
+      </div>
+    );
+  };
+  const renderTurnActionBadges = (x: Combatant) => (
+    <div className="mt-2 flex justify-center gap-1">
+      {(
+        [
+          ["action", "Ação", "border-emerald-500/60 bg-emerald-500/20 text-emerald-200"],
+          ["move", "Movimento", "border-sky-500/60 bg-sky-500/20 text-sky-200"],
+        ] as const
+      ).map(([type, label, activeClass]) => {
+        const active = turnActions[x.id]?.[type];
+        return (
+          <button
+            key={type}
+            type="button"
+            disabled={!mine(x)}
+            onClick={() => void toggleTurnAction(x.id, type)}
+            className={cn(
+              "rounded border px-2 py-0.5 text-[10px] font-bold uppercase disabled:cursor-default",
+              active
+                ? activeClass
+                : "border-border bg-white/5 text-muted-foreground disabled:opacity-70",
+            )}
+          >
+            [{label}] {active ? "✓" : "○"}
+          </button>
+        );
+      })}
+    </div>
+  );
 
   const inCombat = new Set(combat.combatants.map((x) => x.character_id));
 
@@ -1768,7 +2023,7 @@ function CombatPage() {
                 className="gap-1 text-xs border-amber-500/50 text-amber-300 hover:bg-amber-500/10"
                 onClick={() => setDisturbingPresenceOpen(true)}
               >
-                <Ghost className="size-3.5" /> Presença
+                <Ghost className="size-3.5" /> Disparar Presença Perturbadora
               </Button>
               <Button
                 size="sm"
@@ -1851,33 +2106,22 @@ function CombatPage() {
                     <span className="text-[11px] font-semibold text-emerald-400">
                       HP {x.hp_current}/{x.hp_max}
                     </span>
-                    {/* Ações e Movimento */}
-                    <div className="mt-2 flex gap-1">
-                      <button
-                        type="button"
-                        onClick={() => toggleTurnAction(x.id, "action")}
-                        className={cn(
-                          "px-1.5 py-0.5 rounded text-[9px] font-bold uppercase border transition-colors",
-                          turnActions[x.id]?.action
-                            ? "bg-emerald-500/30 text-emerald-300 border-emerald-500/60"
-                            : "bg-white/5 text-white/40 border-transparent hover:bg-white/10",
-                        )}
-                      >
-                        Ação {turnActions[x.id]?.action ? "✓" : "○"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => toggleTurnAction(x.id, "move")}
-                        className={cn(
-                          "px-1.5 py-0.5 rounded text-[9px] font-bold uppercase border transition-colors",
-                          turnActions[x.id]?.move
-                            ? "bg-sky-500/30 text-sky-300 border-sky-500/60"
-                            : "bg-white/5 text-white/40 border-transparent hover:bg-white/10",
-                        )}
-                      >
-                        Mov {turnActions[x.id]?.move ? "✓" : "○"}
-                      </button>
-                    </div>
+                    {x.kind === "character" &&
+                      x.character_id &&
+                      (() => {
+                        const character = group.characters.find(
+                          (entry) => entry.id === x.character_id,
+                        );
+                        if (!character) return null;
+                        const maximum = maxEnergy(character.id);
+                        return (
+                          <span className="text-[11px] font-semibold text-sky-300">
+                            Energia {Math.min(maximum, character.energia_atual)}/{maximum}
+                          </span>
+                        );
+                      })()}
+                    {renderCustomConditions(x)}
+                    {renderTurnActionBadges(x)}
                   </div>
                 ))}
               </div>
@@ -2017,8 +2261,6 @@ function CombatPage() {
                 "rounded-lg border border-border bg-card p-3",
                 x.id === state.current_combatant_id && "border-primary ring-2 ring-primary",
                 x.hp_current <= 0 && "opacity-50",
-                isCollapsed(x) &&
-                "border-2 border-destructive/80 bg-destructive/5 shadow-[0_0_26px_rgba(127,29,29,0.28)] animate-pulse",
               )}
             >
               <div className="flex items-center gap-2">
@@ -2070,24 +2312,8 @@ function CombatPage() {
                     {" · "}Atq +{x.attack_bonus}
                     {conditionPenalty(x.conditions) > 0 && ` (−${conditionPenalty(x.conditions)})`}
                   </p>
-                  {x.kind === "character" &&
-                    x.character_id &&
-                    (() => {
-                      const character = group.characters.find(
-                        (entry) => entry.id === x.character_id,
-                      );
-                      if (!character) return null;
-                      const level = sanityLevel(
-                        character.sanity_current ?? 10,
-                        character.sanity_max ?? 10,
-                      );
-                      return (
-                        <p className="text-[11px] text-purple-300">
-                          SAN {character.sanity_current ?? 10}/{character.sanity_max ?? 10} ·{" "}
-                          {SANITY_LEVEL_LABELS[level]}
-                        </p>
-                      );
-                    })()}
+                  {renderCustomConditions(x)}
+                  {renderTurnActionBadges(x)}
                 </div>
                 {mine(x) && (
                   <>
@@ -2097,11 +2323,6 @@ function CombatPage() {
                       targets={attackTargetsOf(x)}
                       canIgnoreRange={isMaster}
                       disabledReason={attackBlockedReason(x)}
-                      attackDisabledReason={
-                        isCollapsed(x)
-                          ? "Colapso total: ataques bloqueados até a sanidade voltar."
-                          : null
-                      }
                       getSkillValue={(skillKey) =>
                         x.character_id
                           ? skillValueFor(group, x.character_id, skillKey)
@@ -2117,13 +2338,13 @@ function CombatPage() {
                         <IntimidateDialog
                           attackerName={x.name}
                           targets={intimidationTargetsOf(x)}
-                          disabled={!!attackBlockedReason(x) || isCollapsed(x)}
+                          disabled={!!attackBlockedReason(x)}
                           onIntimidate={(targetId) => resolveIntimidation(x, targetId)}
                         />
                         <ConvinceDialog
                           attackerName={x.name}
                           targets={intimidationTargetsOf(x)}
-                          disabled={!!attackBlockedReason(x) || isCollapsed(x)}
+                          disabled={!!attackBlockedReason(x)}
                           onConvince={(targetId) => resolveConvince(x, targetId)}
                         />
                       </>
@@ -2142,11 +2363,6 @@ function CombatPage() {
                   </Button>
                 )}
               </div>
-              {isCollapsed(x) && (
-                <p className="mt-2 text-xs font-bold uppercase text-destructive">
-                  Colapso de Sanidade — ataques bloqueados
-                </p>
-              )}
               {x.kind === "character" &&
                 x.character_id &&
                 (() => {
@@ -2309,6 +2525,94 @@ function CombatPage() {
           ))}
         </aside>
       </div>
+      <Dialog
+        open={Boolean(presencePrompt)}
+        onOpenChange={(open) => {
+          if (!open) setPresencePrompt(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Presença Perturbadora</DialogTitle>
+            <DialogDescription>
+              Escolha Vigor ou Compostura e faça o teste contra CD {presencePrompt?.dc}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-2">
+            {(["vigor", "compostura"] as const).map((skill) => (
+              <Button
+                key={skill}
+                type="button"
+                variant={presenceSkill === skill ? "default" : "outline"}
+                onClick={() => setPresenceSkill(skill)}
+              >
+                {skill === "vigor" ? "Vigor" : "Compostura"}
+                {myId && ` (+${skillValueFor(group, myId, skill)})`}
+              </Button>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setPresencePrompt(null)}>
+              Ignorar
+            </Button>
+            <Button type="button" onClick={() => void respondToPresencePrompt()}>
+              <Dices className="mr-1 size-4" /> Rolar teste
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {customConditionModal && (
+        <div className="fixed inset-0 z-[80] grid place-items-center bg-black/70 p-4">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="custom-condition-title"
+            className="w-full max-w-sm space-y-4 rounded-xl border border-amber-400/40 bg-card p-5 shadow-paint"
+          >
+            <div>
+              <p className="label-caps text-amber-300">Post-it no avatar</p>
+              <h2
+                id="custom-condition-title"
+                className="font-display text-2xl font-bold uppercase"
+              >
+                Adicionar Condição
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Escreva uma condição para {customConditionModal.name}.
+              </p>
+            </div>
+            <form
+              className="space-y-3"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void addCustomCondition(customConditionModal.combatantId, newConditionText);
+              }}
+            >
+              <input
+                autoFocus
+                className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+                value={newConditionText}
+                onChange={(event) => setNewConditionText(event.target.value)}
+                placeholder="Ex.: Braço Quebrado -2"
+                aria-label="Texto da condição"
+                maxLength={120}
+              />
+              <div className="flex justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setCustomConditionModal(null)}
+                >
+                  Cancelar
+                </Button>
+                <Button type="submit" variant="paint" disabled={!newConditionText.trim()}>
+                  Adicionar
+                </Button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
       {reaction &&
         (() => {
           const defender = combat.combatants.find((x) => x.id === reaction.defenderId);

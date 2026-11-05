@@ -31,7 +31,7 @@ import { useSheetMutations } from "@/hooks/use-sheet-mutations";
 import { supabase } from "@/integrations/supabase/client";
 import { clearPlayerCharacterId, getPlayerCharacterId } from "@/lib/player-character";
 import { sheetQuery } from "@/lib/rpg-queries";
-import { skillTotal } from "@/lib/skills";
+import { maxEnergyFor } from "@/lib/survival";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/personagem/$id")({
@@ -84,17 +84,8 @@ function CharacterPage() {
   const canAccessSheet = isMaster || ownsCharacter;
   const characterVigor = sheet?.skills.find((skill) => skill.skill_key === "vigor")?.bonus ?? 0;
   const characterWill = sheet?.skills.find((skill) => skill.skill_key === "vontade")?.bonus ?? 0;
-  const hungerPenalty = sheet?.character.hunger_state === "amarelo" ? 1 : 0;
-  const thirstPenalty = sheet?.character.thirst_state === "amarelo" ? 1 : 0;
   const energyMax = sheet
-    ? Math.max(
-      1,
-      10 +
-      2 * skillTotal(sheet.character.fisico, characterVigor) +
-      2 * skillTotal(sheet.character.psique, characterWill) -
-      hungerPenalty -
-      thirstPenalty,
-    )
+    ? maxEnergyFor(sheet.character, characterVigor, characterWill)
     : 10;
   const energyCurrent = Math.min(sheet?.character.energia_atual ?? 10, energyMax);
 
@@ -153,16 +144,34 @@ function CharacterPage() {
   if (!sheet) return null;
   if (!isMaster && (!ownsCharacter || masterAuthLoading)) return null;
   const { character } = sheet;
+  const updateSurvival = (patch: { hunger_state?: string; thirst_state?: string }) => {
+    const nextCharacter = { ...character, ...patch };
+    const nextMax = maxEnergyFor(nextCharacter, characterVigor, characterWill);
+    mutations.updateCharacter.mutate({
+      ...patch,
+      energia_atual: Math.min(character.energia_atual, nextMax),
+      energia_maxima: nextMax,
+    });
+  };
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-6 md:px-6 md:py-8 print:p-2 print:max-w-none">
       <style>{`
         @media print {
-          body { background: #fff !important; color: #111 !important; }
+          @page { size: A4; margin: 12mm; }
+          html, body { background: #fff !important; color: #111 !important; }
+          main { max-width: none !important; padding: 0 !important; }
           nav, header.sticky, .print\\:hidden, button:not(.print\\:inline) { display: none !important; }
+          [role="tablist"] { display: none !important; }
+          [role="tabpanel"], [role="tabpanel"][hidden] {
+            display: block !important;
+            break-inside: avoid-page;
+          }
+          [role="dialog"], [data-radix-popper-content-wrapper] { display: none !important; }
           .shadow-paint, .shadow-sm { box-shadow: none !important; }
           .border-border { border-color: #cbd5e1 !important; }
           .bg-card { background: #fff !important; border: 1px solid #cbd5e1 !important; }
+          * { color-adjust: exact; print-color-adjust: exact; }
         }
       `}</style>
 
@@ -333,8 +342,8 @@ function CharacterPage() {
       <SurvivalStatusBars
         hunger={character.hunger_state ?? "satisfeito"}
         thirst={character.thirst_state ?? "satisfeito"}
-        onHungerChange={(hunger_state) => mutations.updateCharacter.mutate({ hunger_state })}
-        onThirstChange={(thirst_state) => mutations.updateCharacter.mutate({ thirst_state })}
+        onHungerChange={(hunger_state) => updateSurvival({ hunger_state })}
+        onThirstChange={(thirst_state) => updateSurvival({ thirst_state })}
       />
 
       <EnergyBar
@@ -390,7 +399,7 @@ function CharacterPage() {
           <WeaponsSection sheet={sheet} mutations={mutations} />
         </TabsContent>
         <TabsContent value="ataques">
-          <AttacksSection sheet={sheet} mutations={mutations} collapsed={false} />
+          <AttacksSection sheet={sheet} mutations={mutations} />
         </TabsContent>
         <TabsContent value="mochila">
           <BackpackSection sheet={sheet} mutations={mutations} />
@@ -432,7 +441,7 @@ function SurvivalStatusBars({
               ? "Alimentado"
               : hunger === "amarelo"
                 ? "Faminto (-1 En, -1 Fís/Mot)"
-                : "Desnutrido (-2 Fís/Mot)"}
+                : "Desnutrido (-2 En, -2 Fís/Mot)"}
           </span>
         </div>
         <div className="grid grid-cols-3 gap-1.5">
@@ -494,7 +503,7 @@ function SurvivalStatusBars({
               ? "Hidratado"
               : thirst === "amarelo"
                 ? "Com Sede (-1 En, -1 Fís/Mot)"
-                : "Desidratado (-2 Fís/Mot)"}
+                : "Desidratado (-2 En, -2 Fís/Mot)"}
           </span>
         </div>
         <div className="grid grid-cols-3 gap-1.5">

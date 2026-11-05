@@ -1,4 +1,4 @@
-import { ALL_SKILLS } from "@/lib/skills";
+import { ALL_SKILLS, skillTotal } from "@/lib/skills";
 
 export type SurvivalState = "satisfeito" | "amarelo" | "vermelho";
 
@@ -15,7 +15,7 @@ export const HUNGER_LABELS: Record<SurvivalState, { label: string; badge: string
   },
   vermelho: {
     label: "Desnutrido",
-    badge: "Desnutrido (-2 Fís/Mot)",
+    badge: "Desnutrido (-2 En, -2 Fís/Mot)",
     color: "bg-red-500/15 text-red-400 border-red-500/30",
   },
 };
@@ -33,7 +33,7 @@ export const THIRST_LABELS: Record<SurvivalState, { label: string; badge: string
   },
   vermelho: {
     label: "Desidratado",
-    badge: "Desidratado (-2 Fís/Mot)",
+    badge: "Desidratado (-2 En, -2 Fís/Mot)",
     color: "bg-red-500/15 text-red-400 border-red-500/30",
   },
 };
@@ -63,7 +63,27 @@ export function survivalMaxEnergyPenalty(
 ): number {
   let penalty = 0;
   if (hungerState === "amarelo") penalty += 1;
+  else if (hungerState === "vermelho") penalty += 2;
   if (thirstState === "amarelo") penalty += 1;
+  else if (thirstState === "vermelho") penalty += 2;
   return penalty;
 }
 
+export function maxEnergyFor(
+  character: {
+    fisico: number;
+    psique: number;
+    hunger_state?: string | null;
+    thirst_state?: string | null;
+  },
+  vigorBonus: number,
+  willBonus: number,
+): number {
+  return Math.max(
+    1,
+    10 +
+      2 * skillTotal(character.fisico, vigorBonus) +
+      2 * skillTotal(character.psique, willBonus) -
+      survivalMaxEnergyPenalty(character.hunger_state, character.thirst_state),
+  );
+}

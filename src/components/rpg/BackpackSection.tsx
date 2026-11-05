@@ -35,6 +35,7 @@ import {
 import { ALL_SKILLS, roll2d6, skillTotal } from "@/lib/skills";
 import { itemBonusFor } from "@/lib/combat";
 import { logRolls } from "@/lib/roll-log";
+import { maxEnergyFor, survivalSkillPenalty } from "@/lib/survival";
 
 type Mutations = ReturnType<typeof useSheetMutations>;
 
@@ -50,6 +51,7 @@ export function BackpackSection({
   const [name, setName] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [notes, setNotes] = useState("");
+  const [survivalTag, setSurvivalTag] = useState("");
 
   // Modais de Sobrevivência
   const [improviseItem, setImproviseItem] = useState<BackpackItem | null>(null);
@@ -63,15 +65,41 @@ export function BackpackSection({
     e.preventDefault();
     if (!name.trim()) return;
     mutations.addItem.mutate(
-      { name: name.trim(), quantity, notes: notes.trim() },
+      {
+        name: name.trim(),
+        quantity,
+        notes: notes.trim(),
+        survival_tag: survivalTag,
+      },
       {
         onSuccess: () => {
           setName("");
           setQuantity(1);
           setNotes("");
+          setSurvivalTag("");
         },
       },
     );
+  };
+
+  const removeUnit = (item: BackpackItem) => {
+    if (item.quantity > 1) {
+      mutations.updateItem.mutate({ id: item.id, quantity: item.quantity - 1 });
+    } else {
+      mutations.deleteItem.mutate(item.id);
+    }
+  };
+
+  const updateSurvival = (patch: { hunger_state?: string; thirst_state?: string }) => {
+    const character = sheet.character;
+    const vigorBonus = sheet.skills.find((skill) => skill.skill_key === "vigor")?.bonus ?? 0;
+    const willBonus = sheet.skills.find((skill) => skill.skill_key === "vontade")?.bonus ?? 0;
+    const energyMax = maxEnergyFor({ ...character, ...patch }, vigorBonus, willBonus);
+    mutations.updateCharacter.mutate({
+      ...patch,
+      energia_atual: Math.min(character.energia_atual, energyMax),
+      energia_maxima: energyMax,
+    });
   };
 
   const handleConsume = (it: BackpackItem) => {
@@ -85,10 +113,10 @@ export function BackpackSection({
       it.name.toLowerCase().includes("cantil");
 
     if (isFood) {
-      mutations.updateCharacter.mutate({ hunger_state: "satisfeito" });
+      updateSurvival({ hunger_state: "satisfeito" });
       toast.success(`${it.name} consumido. Fome saciada!`);
     } else if (isWater) {
-      mutations.updateCharacter.mutate({ thirst_state: "satisfeito" });
+      updateSurvival({ thirst_state: "satisfeito" });
       toast.success(`${it.name} consumido. Sede saciada!`);
     } else {
       toast.success(`1 unidade de ${it.name} consumida.`);
@@ -110,7 +138,14 @@ export function BackpackSection({
     const base = sheet.character[skill.attribute];
     const extra = sheet.skills.find((s) => s.skill_key === skill.key)?.bonus ?? 0;
     const itemBonus = itemBonusFor(sheet.backpack, sheet.character.id, skill.key);
-    const mod = skillTotal(base, extra) + itemBonus;
+    const mod =
+      skillTotal(base, extra) +
+      itemBonus +
+      survivalSkillPenalty(
+        sheet.character.hunger_state,
+        sheet.character.thirst_state,
+        skill.key,
+      );
     const roll = roll2d6(mod, improviseDifficulty);
 
     // Consome 1 unidade do item
@@ -124,7 +159,7 @@ export function BackpackSection({
       {
         characterId: sheet.character.id,
         characterName: sheet.character.name,
-        label: `Improviso com ${improviseItem.name}: ${skill.name}`,
+        label: `Improviso com ${improviseItem.name}: ${skill.name} (Resultado: ${roll.total} vs CD ${improviseDifficulty})`,
         result: roll,
       },
     ]);
@@ -157,8 +192,10 @@ export function BackpackSection({
       await qc.invalidateQueries({ queryKey: sheetQueryKey(sheet.character.id) });
       await qc.invalidateQueries({ queryKey: sheetQueryKey(transferTargetId) });
       toast.success(`${transferItem.name} entregue para ${target?.name ?? "o aliado"}!`);
-    } catch {
-      toast.error("Não foi possível transferir o item.");
+      await qc.invalidateQueries({ queryKey: ["group"] });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "erro desconhecido";
+      toast.error(`Não foi possível transferir o item: ${message}`);
     } finally {
       setTransferItem(null);
       setTransferTargetId("");
@@ -172,7 +209,7 @@ export function BackpackSection({
     <div className="space-y-6">
       <form
         onSubmit={submit}
-        className="grid gap-3 rounded-lg border border-border bg-card p-5 shadow-paint md:grid-cols-[2fr_auto_2fr_auto] md:items-end"
+        className="grid gap-3 rounded-lg border border-border bg-card p-5 shadow-paint md:grid-cols-[2fr_auto_2fr_1fr_auto] md:items-end"
       >
         <label className="space-y-1.5">
           <span className="label-caps text-muted-foreground">Novo item</span>
@@ -197,6 +234,18 @@ export function BackpackSection({
         <label className="space-y-1.5">
           <span className="label-caps text-muted-foreground">Notas</span>
           <Input placeholder="Opcional" value={notes} onChange={(e) => setNotes(e.target.value)} />
+        </label>
+        <label className="space-y-1.5">
+          <span className="label-caps text-muted-foreground">Sobrevivência</span>
+          <select
+            className="h-9 w-full rounded-md border border-border bg-card px-2 text-sm"
+            value={survivalTag}
+            onChange={(e) => setSurvivalTag(e.target.value)}
+          >
+            <option value="">Sem efeito</option>
+            <option value="Ração">Ração</option>
+            <option value="Hidratação">Hidratação</option>
+          </select>
         </label>
         <Button type="submit" variant="paint" disabled={mutations.addItem.isPending}>
           <Plus /> Colocar
@@ -239,8 +288,8 @@ export function BackpackSection({
                   <Button
                     variant="ghost"
                     size="icon"
-                    aria-label={`Remover ${it.name}`}
-                    onClick={() => mutations.deleteItem.mutate(it.id)}
+                    aria-label={`Remover uma unidade de ${it.name}`}
+                    onClick={() => removeUnit(it)}
                   >
                     <Trash2 />
                   </Button>
@@ -263,6 +312,21 @@ export function BackpackSection({
                     </Button>
                   </div>
                 )}
+                <label className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                  Sobrevivência
+                  <select
+                    className="h-7 rounded border border-border bg-card px-2"
+                    value={it.survival_tag ?? ""}
+                    onChange={(e) =>
+                      mutations.updateItem.mutate({ id: it.id, survival_tag: e.target.value })
+                    }
+                    aria-label={`Efeito de sobrevivência de ${it.name}`}
+                  >
+                    <option value="">Sem efeito</option>
+                    <option value="Ração">Ração</option>
+                    <option value="Hidratação">Hidratação</option>
+                  </select>
+                </label>
                 <ItemBonuses
                   item={it}
                   onSave={(skill_bonuses) =>

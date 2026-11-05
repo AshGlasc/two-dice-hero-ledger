@@ -58,7 +58,11 @@ export const ATTRIBUTES: AttributeDef[] = [
     key: "psique",
     name: "Psique",
     skills: [
-      { key: "vontade", name: "Vontade", description: "O que mantém sua moral e sanidade de pé." },
+      {
+        key: "vontade",
+        name: "Vontade",
+        description: "A determinação que mantém sua moral e sua capacidade de agir.",
+      },
       {
         key: "imperio_interior",
         name: "Império Interior",
