@@ -1,7 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Volume2, VolumeX } from "lucide-react";
-import { appSettingsQuery } from "@/lib/rpg-queries";
+import { appSettingsQuery } from "@/lib/difficulty";
 import {
   setAmbience,
   syncBackgroundMusic,

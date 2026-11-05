@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { appSettingsQuery } from "@/lib/rpg-queries";
+import { appSettingsQuery } from "@/lib/difficulty";
 import type { AmbienceType } from "@/lib/audio";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
