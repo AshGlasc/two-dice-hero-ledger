@@ -180,15 +180,11 @@ function PartyRestButton({ group }: { group: GroupData }) {
     mutationFn: async () => {
       // 1. Restaura energia e dá +2 PV de fôlego para cada personagem
       for (const ch of group.characters) {
-        const hpCurrent = ch.hp_current ?? ch.hp_max;
-        const hpMax = ch.hp_max;
-        const nextHp = Math.min(hpMax, hpCurrent + 2);
         const energyMax = ch.energia_maxima ?? 10;
         await supabase
           .from("characters")
           .update({
             energia_atual: energyMax,
-            hp_current: nextHp,
           })
           .eq("id", ch.id);
       }
