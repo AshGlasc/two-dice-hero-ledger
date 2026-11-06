@@ -295,7 +295,7 @@ export function BattleMap({
     const channel = supabase
       .channel("battle-map-chalk")
       .on("broadcast", { event: "CHALK_DRAW" }, (payload) => {
-        const { dataUrl } = payload.payload as { dataUrl: string };
+        const { dataUrl } = payload["payload"] as { dataUrl: string };
         const canvas = chalkCanvasRef.current;
         if (!canvas) return;
         const ctx = canvas.getContext("2d");
