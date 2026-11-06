@@ -660,7 +660,7 @@ export function RegionalMapViewer({ isMaster = false }: { isMaster?: boolean }) 
                         size="sm"
                         variant={m.is_active ? "secondary" : "outline"}
                         className="h-6 text-[10px]"
-                        disabled={m.is_active}
+                        disabled={m.is_active ?? false}
                         onClick={async () => {
                           try {
                             const { error: deactivateError } = await supabase
