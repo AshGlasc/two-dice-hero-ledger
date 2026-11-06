@@ -118,7 +118,7 @@ export function useCombat() {
     onMutate: () =>
       patchCache(() => ({
         combatants: [],
-        state: { id: 1, active: false, round: 1, current_combatant_id: null, updated_at: "" },
+        state: { id: 1, active: false, round: 1, current_combatant_id: null, active_turn_actions: {}, updated_at: "" },
       })),
     onError: fail("Não foi possível encerrar o combate."),
   });

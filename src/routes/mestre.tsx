@@ -721,7 +721,7 @@ function VoiceRequestListener() {
     const channel = supabase
       .channel("game-voices-gm")
       .on("broadcast", { event: "VOICE_REQUEST" }, (payload) => {
-        const data = payload.payload as {
+        const data = payload["payload"] as {
           characterId: string;
           characterName: string;
           skillKey: string;
@@ -918,7 +918,6 @@ function PartyOverview({ group }: { group: GroupData }) {
       )}
     </section>
   );
-}
 }
 
 function CharacterProgression({
