@@ -18,6 +18,7 @@ import {
 import { MasterAudioSection } from "@/components/rpg/MasterAudioSection";
 import { BackupSection } from "@/components/rpg/BackupSection";
 import { NpcGenerator } from "@/components/rpg/NpcGenerator";
+import { RegionalMapViewer } from "@/components/rpg/RegionalMap";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 
@@ -158,6 +159,16 @@ function GmPageContent({ onLock }: { onLock: () => void }) {
 
       {/* Controle de Áudio, Clima e Trilhas da Mesa */}
       <MasterAudioSection />
+
+      <section id="mapa-do-mundo" className="space-y-3">
+        <div>
+          <h2 className="font-display text-2xl font-bold uppercase">Mapa do Mundo</h2>
+          <p className="text-sm text-muted-foreground">
+            Configure o mapa da campanha e marque locais; jogadores veem apenas os pontos revelados.
+          </p>
+        </div>
+        <RegionalMapViewer isMaster />
+      </section>
 
       <DiscordWebhookSettings />
       <DifficultyControl group={group} />

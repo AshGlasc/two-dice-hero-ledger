@@ -326,7 +326,7 @@ function PhonePage() {
             />
           ) : screen.app === "map" ? (
             <div>
-              <AppHeader title="Mapa da Região" back={() => setScreen({ app: "home" })} />
+              <AppHeader title="Mapa do Mundo" back={() => setScreen({ app: "home" })} />
               <div className="p-2">
                 <RegionalMapViewer isMaster={isMaster} />
               </div>
@@ -398,7 +398,7 @@ function Home({
         )}
         <AppIcon emoji="📷" name="Câmera / Galeria" onClick={() => open({ app: "gallery" })} />
         <AppIcon emoji="📰" name="Notícias / Pistas" onClick={() => open({ app: "news" })} />
-        <AppIcon emoji="🗺️" name="Mapa da Região" onClick={() => open({ app: "map" })} />
+        <AppIcon emoji="🗺️" name="Mapa do Mundo" onClick={() => open({ app: "map" })} />
         {FUTURE_APPS.map((a) => (
           <AppIcon
             key={a.name}
