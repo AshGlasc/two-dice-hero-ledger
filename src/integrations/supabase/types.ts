@@ -635,6 +635,7 @@ export type Database = {
           created_at: string
           fog: Json
           id: string
+          items: Json
           name: string
           rows: number
           terrain: Json
@@ -646,6 +647,7 @@ export type Database = {
           created_at?: string
           fog?: Json
           id?: string
+          items?: Json
           name: string
           rows?: number
           terrain?: Json
@@ -657,6 +659,7 @@ export type Database = {
           created_at?: string
           fog?: Json
           id?: string
+          items?: Json
           name?: string
           rows?: number
           terrain?: Json
