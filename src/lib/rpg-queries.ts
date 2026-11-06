@@ -179,6 +179,7 @@ export const EMPTY_MAP: BattleMap = {
   cols: 16,
   rows: 12,
   background_url: "",
+  theater_background_url: "",
   terrain: {},
   tile_images: {},
   fog: {},

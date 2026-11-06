@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Brush,
   CloudFog,
@@ -111,6 +112,7 @@ export function BattleMap({
   placement?: { label: string; onPlace: (x: number, y: number) => void; onCancel: () => void } | null;
 }) {
   const saveMap = useBattleMap();
+  const qc = useQueryClient();
   const { isMaster } = useMasterAuth();
   const myCharacterId = usePlayerCharacterId();
   const [selected, setSelected] = useState<string | null>(null);
@@ -122,6 +124,7 @@ export function BattleMap({
   const [brush, setBrush] = useState<BrushKey>("wall");
   const [stamp, setStamp] = useState<string>("");
   const [draft, setDraft] = useState<Draft | null>(null);
+  const [clearingScene, setClearingScene] = useState(false);
   // Giz e Post-its
   const [chalkTool, setChalkTool] = useState<"none" | "white" | "red" | "eraser">("none");
   const chalkCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -214,6 +217,40 @@ export function BattleMap({
     painting.current = false;
     lastPainted.current = null;
     if (draft) saveMap.mutate(draft, { onSettled: () => setDraft(null) });
+  };
+
+  const clearScene = async () => {
+    if (!window.confirm("Limpar todo o cenário, incluindo terreno, névoa, notas e itens?")) return;
+    setClearingScene(true);
+    try {
+      const { error } = await supabase
+        .from("battle_map_items")
+        .delete()
+        .neq("id", "00000000-0000-0000-0000-000000000000");
+      if (error) throw error;
+    } catch (error) {
+      setClearingScene(false);
+      toast.error(
+        `Não foi possível remover os itens do mapa: ${error instanceof Error ? error.message : "erro desconhecido"}`,
+      );
+      return;
+    }
+
+    setDraft(null);
+    saveMap.mutate(
+      { terrain: {}, tile_images: {}, fog: {}, gm_tile_notes: {} },
+      {
+        onSuccess: async () => {
+          setDraft(null);
+          await qc.invalidateQueries({ queryKey: ["battle_map_items"] });
+          toast.success("Cenário limpo.");
+        },
+        onError: () => {
+          void qc.invalidateQueries({ queryKey: ["battle_map_items"] });
+        },
+        onSettled: () => setClearingScene(false),
+      },
+    );
   };
 
   /**
@@ -749,12 +786,10 @@ export function BattleMap({
             <Button
               size="sm"
               variant="ghost"
-              onClick={() =>
-                confirm("Limpar todo o terreno e as imagens das casas?") &&
-                saveMap.mutate({ terrain: {}, tile_images: {} })
-              }
+              disabled={clearingScene || saveMap.isPending}
+              onClick={() => void clearScene()}
             >
-              <Brush /> Limpar terreno
+              <Brush /> Limpar cenário
             </Button>
             <input
               ref={file}

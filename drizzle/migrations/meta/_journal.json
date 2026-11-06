@@ -169,6 +169,13 @@
       "when": 1793930000002,
       "tag": "0023_map_layout_items",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1793930000003,
+      "tag": "0024_theater_background",
+      "breakpoints": true
     }
   ]
 }

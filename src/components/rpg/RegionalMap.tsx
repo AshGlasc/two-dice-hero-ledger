@@ -29,6 +29,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
+import { fileToSmallImage } from "@/lib/image";
 import {
   activeRegionalMapQuery,
   mapLayoutsQuery,
@@ -70,6 +71,7 @@ export function RegionalMapViewer({ isMaster = false }: { isMaster?: boolean }) 
   // Form Novo Mapa
   const [newMapName, setNewMapName] = useState("");
   const [newMapImageUrl, setNewMapImageUrl] = useState("");
+  const newMapFileRef = useRef<HTMLInputElement>(null);
 
   // Pan Handlers
   const handleMouseDown = (e: MouseEvent<HTMLDivElement>) => {
@@ -622,7 +624,7 @@ export function RegionalMapViewer({ isMaster = false }: { isMaster?: boolean }) 
               <ImageIcon className="size-5 text-primary" /> Definir Mapa da Região
             </DialogTitle>
             <DialogDescription>
-              Cole a URL da imagem da cidade, distrito ou mapa regional.
+              Cole a URL da imagem ou selecione um arquivo do computador.
             </DialogDescription>
           </DialogHeader>
 
@@ -644,6 +646,30 @@ export function RegionalMapViewer({ isMaster = false }: { isMaster?: boolean }) 
                 onChange={(e) => setNewMapImageUrl(e.target.value)}
               />
             </label>
+            <div className="flex items-center gap-2">
+              <Button type="button" variant="outline" onClick={() => newMapFileRef.current?.click()}>
+                <ImageIcon /> Selecionar arquivo
+              </Button>
+              <span className="truncate text-xs text-muted-foreground">
+                {newMapImageUrl.startsWith("data:image/") ? "Imagem carregada do computador" : ""}
+              </span>
+              <input
+                ref={newMapFileRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={async (event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = "";
+                  if (!file) return;
+                  try {
+                    setNewMapImageUrl(await fileToSmallImage(file, 1600, 0.8));
+                  } catch {
+                    toast.error("Não consegui abrir essa imagem.");
+                  }
+                }}
+              />
+            </div>
 
             {allMaps && allMaps.length > 0 && (
               <div className="pt-2 border-t border-border">

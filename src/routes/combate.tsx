@@ -9,6 +9,7 @@ import {
   Film,
   Ghost,
   Grid,
+  ImagePlus,
   Lock,
   Minus,
   PackageOpen,
@@ -48,8 +49,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { useMasterAuth } from "@/context/MasterAuthContext";
 import { useCombat } from "@/hooks/use-combat";
+import { useBattleMap } from "@/hooks/use-battle-map";
 import { supabase } from "@/integrations/supabase/client";
 import {
   ATTACK_SKILLS,
@@ -105,6 +108,7 @@ import {
   monsterBodyType,
 } from "@/lib/monster-body";
 import { maxEnergyFor } from "@/lib/survival";
+import { fileToSmallImage } from "@/lib/image";
 import {
   battleMapQuery,
   battleMapItemsQuery,
@@ -179,6 +183,7 @@ function CombatPage() {
   const { data: appSettings } = useQuery(appSettingsQuery);
   const { isMaster } = useMasterAuth();
   const c = useCombat();
+  const saveMap = useBattleMap();
   const qc = useQueryClient();
   const [hpDelta, setHpDelta] = useState(1);
   const [quickRollOpen, setQuickRollOpen] = useState(false);
@@ -203,6 +208,9 @@ function CombatPage() {
 
   // Módulo 3 & 4: Teatro da Mente, Condições Post-it, Presença Perturbadora
   const [viewMode, setViewMode] = useState<"grid" | "theater">("grid");
+  const [theaterBackgroundDialogOpen, setTheaterBackgroundDialogOpen] = useState(false);
+  const [theaterBackgroundDraft, setTheaterBackgroundDraft] = useState("");
+  const theaterBackgroundFileRef = useRef<HTMLInputElement>(null);
   const [customConditionModal, setCustomConditionModal] = useState<{ combatantId: string; name: string } | null>(null);
   const [newConditionText, setNewConditionText] = useState("");
   const [disturbingPresenceOpen, setDisturbingPresenceOpen] = useState(false);
@@ -2053,15 +2061,18 @@ function CombatPage() {
         <div className="overflow-auto rounded-lg border border-border bg-card p-2">
           {viewMode === "theater" ? (
             <div className="relative min-h-[560px] overflow-hidden rounded-lg bg-zinc-950 p-6 flex flex-col justify-between">
-              {map.background_url ? (
+              {map.theater_background_url ? (
                 <div
-                  className="absolute inset-0 bg-cover bg-center opacity-40 filter blur-xs pointer-events-none"
-                  style={{ backgroundImage: `url(${map.background_url})` }}
+                  className="absolute inset-0 bg-cover bg-center opacity-60 pointer-events-none"
+                  style={{ backgroundImage: `url(${map.theater_background_url})` }}
                 />
               ) : (
                 <div className="absolute inset-0 bg-gradient-to-b from-zinc-900 via-zinc-950 to-black opacity-90 pointer-events-none" />
               )}
-              <div className="relative z-10 flex items-center justify-between border-b border-white/10 pb-3">
+              {map.theater_background_url && (
+                <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-black/40 to-black/80 pointer-events-none" />
+              )}
+              <div className="relative z-10 flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-3">
                 <div>
                   <span className="font-display text-xs font-bold uppercase tracking-widest text-amber-400">
                     🎭 Teatro da Mente
@@ -2070,16 +2081,115 @@ function CombatPage() {
                     Cena de Combate — Rodada {state.round}
                   </h2>
                 </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="gap-1 text-xs border-white/20 text-white hover:bg-white/10"
-                  onClick={() => setViewMode("grid")}
-                >
-                  <Grid className="size-3.5" /> Grade Tática
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  {isMaster && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="gap-1 text-xs border-white/20 text-white hover:bg-white/10"
+                      onClick={() => {
+                        setTheaterBackgroundDraft(map.theater_background_url ?? "");
+                        setTheaterBackgroundDialogOpen(true);
+                      }}
+                    >
+                      <ImagePlus className="size-3.5" /> Trocar Fundo da Cena
+                    </Button>
+                  )}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-1 text-xs border-white/20 text-white hover:bg-white/10"
+                    onClick={() => setViewMode("grid")}
+                  >
+                    <Grid className="size-3.5" /> Grade Tática
+                  </Button>
+                </div>
               </div>
+              <Dialog
+                open={theaterBackgroundDialogOpen}
+                onOpenChange={setTheaterBackgroundDialogOpen}
+              >
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Trocar Fundo da Cena</DialogTitle>
+                    <DialogDescription>
+                      Cole uma URL de imagem ou carregue um arquivo. Esse fundo não altera o mapa tático.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-3">
+                    <Input
+                      placeholder="https://..."
+                      value={theaterBackgroundDraft}
+                      onChange={(event) => setTheaterBackgroundDraft(event.target.value)}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => theaterBackgroundFileRef.current?.click()}
+                    >
+                      <ImagePlus /> Selecionar imagem do computador
+                    </Button>
+                    <input
+                      ref={theaterBackgroundFileRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={async (event) => {
+                        const file = event.target.files?.[0];
+                        event.target.value = "";
+                        if (!file) return;
+                        try {
+                          setTheaterBackgroundDraft(await fileToSmallImage(file, 1600, 0.8));
+                        } catch {
+                          toast.error("Não consegui abrir essa imagem.");
+                        }
+                      }}
+                    />
+                  </div>
+                  <DialogFooter>
+                    {map.theater_background_url && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        disabled={saveMap.isPending}
+                        onClick={() =>
+                          saveMap.mutate(
+                            { theater_background_url: "" },
+                            {
+                              onSuccess: () => {
+                                toast.success("Fundo da cena removido.");
+                                setTheaterBackgroundDialogOpen(false);
+                              },
+                            },
+                          )
+                        }
+                      >
+                        Remover fundo
+                      </Button>
+                    )}
+                    <Button
+                      type="button"
+                      variant="paint"
+                      disabled={saveMap.isPending || !theaterBackgroundDraft.trim()}
+                      onClick={() =>
+                        saveMap.mutate(
+                          { theater_background_url: theaterBackgroundDraft.trim() },
+                          {
+                            onSuccess: () => {
+                              toast.success("Fundo da cena atualizado.");
+                              setTheaterBackgroundDialogOpen(false);
+                            },
+                          },
+                        )
+                      }
+                    >
+                      Salvar fundo
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
 
               {/* Combatentes na Cena */}
               <div className="relative z-10 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 my-6">

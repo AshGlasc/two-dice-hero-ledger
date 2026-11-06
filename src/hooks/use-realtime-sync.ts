@@ -23,6 +23,7 @@ function isBattleMap(row: unknown): row is BattleMap {
     typeof value["cols"] === "number" &&
     typeof value["rows"] === "number" &&
     typeof value["background_url"] === "string" &&
+    typeof value["theater_background_url"] === "string" &&
     typeof value["updated_at"] === "string" &&
     typeof value["terrain"] === "object" &&
     value["terrain"] !== null &&
