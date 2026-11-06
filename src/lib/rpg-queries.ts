@@ -153,6 +153,7 @@ export const EMPTY_COMBAT_STATE: CombatState = {
   active: false,
   round: 1,
   current_combatant_id: null,
+  active_turn_actions: {},
   updated_at: "",
 };
 
