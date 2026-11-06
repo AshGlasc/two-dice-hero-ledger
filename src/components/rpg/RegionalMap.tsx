@@ -110,9 +110,9 @@ export function RegionalMapViewer({ isMaster = false }: { isMaster?: boolean }) 
     setEditingPinId(pin.id);
     setCreatePinCoords({ x: pin.x_percent, y: pin.y_percent });
     setPinName(pin.name);
-    setPinPhotoUrl(pin.photo_url);
-    setPinDescription(pin.description);
-    setPinSecretNotes(pin.secret_gm_notes);
+    setPinPhotoUrl(pin.photo_url ?? "");
+    setPinDescription(pin.description ?? "");
+    setPinSecretNotes(pin.secret_gm_notes ?? "");
     setPinIsRevealed(pin.is_revealed ?? false);
     setPinLinkedLayoutId(pin.linked_battle_layout_id?.toString() ?? "");
   };
