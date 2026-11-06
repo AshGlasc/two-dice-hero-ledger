@@ -182,6 +182,7 @@ export const EMPTY_MAP: BattleMap = {
   terrain: {},
   tile_images: {},
   fog: {},
+  gm_tile_notes: {},
   updated_at: "",
 };
 
