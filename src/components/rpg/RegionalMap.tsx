@@ -113,7 +113,7 @@ export function RegionalMapViewer({ isMaster = false }: { isMaster?: boolean }) 
     setPinPhotoUrl(pin.photo_url);
     setPinDescription(pin.description);
     setPinSecretNotes(pin.secret_gm_notes);
-    setPinIsRevealed(pin.is_revealed);
+    setPinIsRevealed(pin.is_revealed ?? false);
     setPinLinkedLayoutId(pin.linked_battle_layout_id?.toString() ?? "");
   };
 
@@ -220,7 +220,7 @@ export function RegionalMapViewer({ isMaster = false }: { isMaster?: boolean }) 
 
   // Carregar layout de batalha vinculado no battle_map
   const loadLinkedBattleLayout = async (layoutId: number) => {
-    const layout = layouts?.find((l) => l.id === layoutId);
+    const layout = layouts?.find((l) => String(l.id) === String(layoutId));
     if (!layout) {
       toast.error("Layout não encontrado.");
       return;
