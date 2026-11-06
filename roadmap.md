@@ -1,5 +1,9 @@
 # Roadmap
 
+- [ ] Fundo escolhido pelo mestre no Teatro da Mente
+- [ ] Arquivo de imagem do mapa da cidade salvo e reutilizável
+- [ ] Borracha do mapa remove também a névoa
+
 - [x] Fichas com Intelecto, armas e mochila
 - [x] Atributos Psique, Físico e Motor com skills
 - [x] Ícone pintado para cada skill (24)
