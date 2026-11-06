@@ -919,7 +919,6 @@ function PartyOverview({ group }: { group: GroupData }) {
     </section>
   );
 }
-}
 
 function CharacterProgression({
   characterId,
