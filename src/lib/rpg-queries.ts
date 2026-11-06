@@ -71,6 +71,7 @@ export type GroupData = {
   weapons: Weapon[];
   backpack: BackpackItem[];
 };
+export type CombatGroupData = Omit<GroupData, "body">;
 
 /** Todos os personagens com skills e corpo — para o painel do mestre. */
 export const groupQuery = queryOptions({
@@ -88,6 +89,27 @@ export const groupQuery = queryOptions({
       characters: characters.data ?? [],
       skills: skills.data ?? [],
       body: body.data ?? [],
+      weapons: weapons.data ?? [],
+      backpack: backpack.data ?? [],
+    };
+  },
+});
+
+export const combatGroupQuery = queryOptions({
+  queryKey: ["combat_group"],
+  queryFn: async (): Promise<CombatGroupData> => {
+    const [characters, skills, weapons, backpack] = await Promise.all([
+      supabase.from("characters").select("*").order("created_at", { ascending: true }),
+      supabase.from("character_skills").select("*"),
+      supabase.from("weapons").select("*").order("created_at", { ascending: true }),
+      supabase.from("backpack_items").select("*"),
+    ]);
+    for (const result of [characters, skills, weapons, backpack]) {
+      if (result.error) throw result.error;
+    }
+    return {
+      characters: characters.data ?? [],
+      skills: skills.data ?? [],
       weapons: weapons.data ?? [],
       backpack: backpack.data ?? [],
     };

@@ -294,23 +294,9 @@ function DiscordWebhookSettings() {
   );
 }
 
-/** Busca todas as armas do grupo para encontrar ataques pendentes. */
-const allWeaponsQueryKey = ["all_weapons"] as const;
-const allWeaponsQuery = {
-  queryKey: allWeaponsQueryKey,
-  queryFn: async () => {
-    const { data, error } = await supabase
-      .from("weapons")
-      .select("*")
-      .order("created_at", { ascending: true });
-    if (error) throw error;
-    return data ?? [];
-  },
-};
-
 function PendingAttacks({ group }: { group: GroupData }) {
   const qc = useQueryClient();
-  const { data: allWeapons = [] } = useQuery(allWeaponsQuery);
+  const allWeapons = group.weapons;
 
   const pending = allWeapons
     .filter(isCustomAttack)
@@ -348,7 +334,7 @@ function PendingAttacks({ group }: { group: GroupData }) {
     },
     onSuccess: (_, { status }) => {
       toast.success(status === "approved" ? "Ataque aprovado!" : "Ataque recusado.");
-      void qc.invalidateQueries({ queryKey: allWeaponsQueryKey });
+      void qc.invalidateQueries({ queryKey: ["group"] });
     },
     onError: () => toast.error("Erro ao atualizar ataque."),
   });

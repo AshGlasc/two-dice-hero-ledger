@@ -28,7 +28,7 @@ import { useMasterAuth } from "@/context/MasterAuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { giveCatalogItem } from "@/lib/give-item";
-import { groupQuery } from "@/lib/rpg-queries";
+import { charactersQuery } from "@/lib/rpg-queries";
 import { ALL_SKILLS } from "@/lib/skills";
 
 export const Route = createFileRoute("/itens")({
@@ -130,7 +130,7 @@ function ItemsPage() {
 function ItemsPageContent() {
   const qc = useQueryClient();
   const { data: items = [], isLoading, error } = useQuery(catalogItemsQuery);
-  const { data: group } = useQuery(groupQuery);
+  const { data: characters = [] } = useQuery(charactersQuery);
   const [form, setForm] = useState<ItemForm>(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<ItemCategory | "all">("all");
@@ -651,7 +651,7 @@ function ItemsPageContent() {
                           <DialogTitle>Entregar {item.name}</DialogTitle>
                         </DialogHeader>
                         <div className="max-h-72 space-y-2 overflow-y-auto">
-                          {(group?.characters ?? []).map((character) => (
+                          {characters.map((character) => (
                             <Button
                               key={character.id}
                               className="w-full justify-start"
@@ -664,7 +664,7 @@ function ItemsPageContent() {
                               {character.name}
                             </Button>
                           ))}
-                          {(group?.characters.length ?? 0) === 0 && (
+                          {characters.length === 0 && (
                             <p className="text-sm text-muted-foreground">
                               Não há personagens na mesa.
                             </p>

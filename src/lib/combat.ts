@@ -4,7 +4,7 @@ import {
   parseWeaponToAttack,
   type EffectCondition,
 } from "@/lib/custom-attacks";
-import type { GroupData } from "@/lib/rpg-queries";
+import type { CombatGroupData } from "@/lib/rpg-queries";
 import { ALL_SKILLS, rollD6, roll2d6, skillTotal, type RollResult } from "@/lib/skills";
 import { levelDamageBonus } from "@/lib/passives";
 import { survivalSkillPenalty } from "@/lib/survival";
@@ -200,7 +200,7 @@ export function itemBonusFor(
 }
 
 /** Total da skill de um personagem (atributo + pontos extras + itens). */
-export function skillValueFor(group: GroupData, characterId: string, skillKey: string) {
+export function skillValueFor(group: CombatGroupData, characterId: string, skillKey: string) {
   const skill = ALL_SKILLS.find((s) => s.key === skillKey);
   const character = group.characters.find((c) => c.id === characterId);
   if (!skill || !character) return 0;
@@ -352,7 +352,10 @@ export function basicAttacks(
  * Menu de ataques de um personagem: Soco e Chute (sempre), as armas do arsenal (acerto pela skill
  * ligada à arma, alcance e usos da própria arma) e os ataques especiais já aprovados pelo mestre.
  */
-export function attackOptionsForCharacter(group: GroupData, characterId: string): AttackOption[] {
+export function attackOptionsForCharacter(
+  group: CombatGroupData,
+  characterId: string,
+): AttackOption[] {
   const character = group.characters.find((c) => c.id === characterId);
   if (!character) return [];
   const options = basicAttacks(

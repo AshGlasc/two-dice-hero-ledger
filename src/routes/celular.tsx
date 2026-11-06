@@ -80,11 +80,15 @@ function PhonePage() {
   const [screen, setScreen] = useState<Screen>({ app: "home" });
   const { data: characters } = useSuspenseQuery(charactersQuery);
   const { data: messages } = useSuspenseQuery(messagesQuery);
+  const { isMaster } = useMasterAuth();
   const {
     data: contacts = [],
     error: contactsError,
     isPending: contactsPending,
-  } = useQuery(phoneContactsQuery);
+  } = useQuery({
+    ...phoneContactsQuery,
+    enabled: isMaster || screen.app === "chats" || screen.app === "chat",
+  });
   const {
     data: clues = [],
     isPending: cluesPending,
@@ -95,7 +99,6 @@ function PhonePage() {
     isPending: photosPending,
     error: photosError,
   } = useQuery({ ...phoneGalleryQuery, enabled: screen.app === "gallery" });
-  const { isMaster } = useMasterAuth();
   const [myId, setMyId] = useState<string | null>(null);
   const [asNpc, setAsNpc] = useState(false);
   const [npcName, setNpcName] = useState("Desconhecido");

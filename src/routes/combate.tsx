@@ -113,8 +113,8 @@ import {
   battleMapQuery,
   battleMapItemsQuery,
   combatQuery,
+  combatGroupQuery,
   combatEventsQuery,
-  groupQuery,
   monstersQuery,
   type Combatant,
   type BattleMapItem,
@@ -139,7 +139,7 @@ export const Route = createFileRoute("/combate")({
   loader: ({ context }) =>
     Promise.all([
       context.queryClient.ensureQueryData(combatQuery),
-      context.queryClient.ensureQueryData(groupQuery),
+      context.queryClient.ensureQueryData(combatGroupQuery),
       context.queryClient.ensureQueryData(monstersQuery),
       context.queryClient.ensureQueryData(battleMapQuery),
       context.queryClient.ensureQueryData(battleMapItemsQuery),
@@ -158,7 +158,7 @@ function CombatPage() {
       hp_max: x.hp_max ?? 0,
     })),
   };
-  const { data: group } = useSuspenseQuery(groupQuery);
+  const { data: group } = useSuspenseQuery(combatGroupQuery);
   const { data: monsters } = useSuspenseQuery(monstersQuery);
   const { data: map } = useSuspenseQuery(battleMapQuery);
   const { data: mapItems } = useSuspenseQuery(battleMapItemsQuery);

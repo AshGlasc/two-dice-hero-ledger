@@ -61,7 +61,7 @@ export function NpcGenerator() {
       toast.error("Não foi possível salvar no bestiário.");
       return;
     }
-    qc.invalidateQueries();
+    void qc.invalidateQueries({ queryKey: ["monsters"] });
     toast.success(`${npc.name} salvo no bestiário — já pode colocar no mapa pelo Combate.`);
   }
 
@@ -73,7 +73,7 @@ export function NpcGenerator() {
       toast.error("Não foi possível criar o contato.");
       return;
     }
-    qc.invalidateQueries();
+    void qc.invalidateQueries({ queryKey: ["phone_contacts"] });
     toast.success(`${npc.name} adicionado aos contatos do celular.`);
   }
 

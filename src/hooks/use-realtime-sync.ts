@@ -111,12 +111,15 @@ export function useRealtimeSync() {
     const handlers: Record<string, (p: Payload) => void> = {
       characters: (p) => {
         const row = pick(p, "id");
-        queue(["characters"], ["group"], row?.id ? ["sheet", row.id] : ["sheet"]);
+        queue(["characters"], ["group"], ["combat_group"], row?.id ? ["sheet", row.id] : ["sheet"]);
       },
-      character_skills: (p) => queue(["group"], sheetKey(pick(p, "character_id"))),
+      character_skills: (p) =>
+        queue(["group"], ["combat_group"], sheetKey(pick(p, "character_id"))),
       body_parts: (p) => queue(["group"], sheetKey(pick(p, "character_id"))),
-      weapons: (p) => queue(sheetKey(pick(p, "character_id")), ["all_weapons"], ["group"]),
-      backpack_items: (p) => queue(sheetKey(pick(p, "character_id")), ["group"]),
+      weapons: (p) =>
+        queue(sheetKey(pick(p, "character_id")), ["group"], ["combat_group"]),
+      backpack_items: (p) =>
+        queue(sheetKey(pick(p, "character_id")), ["group"], ["combat_group"]),
       map_layouts: () => queue(["map_layouts"]),
       rolls: (p) => {
         if (p.eventType === "INSERT") {
@@ -154,6 +157,33 @@ export function useRealtimeSync() {
       regional_map_pins: () => queue(["regional_map_pins"]),
     };
 
+    const reconnectQueries: Record<string, unknown[][]> = {
+      characters: [["characters"], ["group"], ["combat_group"], ["sheet"]],
+      character_skills: [["group"], ["combat_group"], ["sheet"]],
+      body_parts: [["group"], ["sheet"]],
+      weapons: [["group"], ["combat_group"], ["sheet"]],
+      backpack_items: [["group"], ["combat_group"], ["sheet"]],
+      map_layouts: [["map_layouts"]],
+      rolls: [["rolls"], ["public_rolls"]],
+      app_settings: [["app_settings"]],
+      gm_notes: [["gm_notes"]],
+      monsters: [["monsters"]],
+      combatants: [["combat"]],
+      combat_state: [["combat"]],
+      battle_map: [["battle_map"]],
+      battle_map_items: [["battle_map_items"]],
+      combat_events: [["combat_events"]],
+      messages: [["messages"]],
+      phone_contacts: [["phone_contacts"]],
+      phone_clues: [["phone_clues"]],
+      phone_gallery: [["phone_gallery"]],
+      catalog_items: [["catalog_items"]],
+      whisper_presets: [["whisper_presets"]],
+      sanity_whispers: [["sanity_whispers"]],
+      regional_maps: [["regional_maps"]],
+      regional_map_pins: [["regional_map_pins"]],
+    };
+
     const suffix = Math.random().toString(36).slice(2);
     let firstConnect = true;
     const channels = Object.entries(handlers).map(([table, handler]) =>
@@ -164,17 +194,16 @@ export function useRealtimeSync() {
         )
         .subscribe((status, error) => {
           if (status === "SUBSCRIBED") {
-            // Reconectou (ex.: celular dormiu): puxa os dados dessa parte de novo.
-            if (!firstConnect) void qc.invalidateQueries();
+            if (!firstConnect) queue(...(reconnectQueries[table] ?? []));
           } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
             console.error(`A sincronização ao vivo de "${table}" falhou.`, error);
           }
         }),
     );
-    // Depois do primeiro conectar, só reconexões disparam recarga geral.
+    // Confere as consultas sincronizadas depois da conexão inicial, para cobrir a janela de conexão.
     const firstTimer = setTimeout(() => {
       firstConnect = false;
-      void qc.invalidateQueries();
+      for (const keys of Object.values(reconnectQueries)) queue(...keys);
     }, 1500);
 
     // Celular voltou da tela bloqueada: atualiza na hora.

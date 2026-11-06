@@ -43,9 +43,12 @@ import { cn } from "@/lib/utils";
 export function RegionalMapViewer({ isMaster = false }: { isMaster?: boolean }) {
   const qc = useQueryClient();
   const { data: activeMap } = useQuery(activeRegionalMapQuery);
-  const { data: allMaps } = useQuery(regionalMapsQuery);
-  const { data: layouts } = useQuery(mapLayoutsQuery);
-  const { data: pins = [] } = useQuery(regionalMapPinsQuery(activeMap?.id, isMaster));
+  const { data: allMaps } = useQuery({ ...regionalMapsQuery, enabled: isMaster });
+  const { data: layouts } = useQuery({ ...mapLayoutsQuery, enabled: isMaster });
+  const { data: pins = [] } = useQuery({
+    ...regionalMapPinsQuery(activeMap?.id, isMaster),
+    enabled: !!activeMap?.id,
+  });
 
   // Pan & Zoom
   const [scale, setScale] = useState(1);
