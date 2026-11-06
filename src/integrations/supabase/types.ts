@@ -127,6 +127,7 @@ export type Database = {
           background_url: string
           cols: number
           fog: Json
+          gm_tile_notes: Json | null
           id: number
           rows: number
           terrain: Json
@@ -137,6 +138,7 @@ export type Database = {
           background_url?: string
           cols?: number
           fog?: Json
+          gm_tile_notes?: Json | null
           id?: number
           rows?: number
           terrain?: Json
@@ -147,6 +149,7 @@ export type Database = {
           background_url?: string
           cols?: number
           fog?: Json
+          gm_tile_notes?: Json | null
           id?: number
           rows?: number
           terrain?: Json
@@ -376,10 +379,12 @@ export type Database = {
         Row: {
           avatar_url: string
           concept: string
+          conforto: string | null
           created_at: string
           energia_atual: number
           energia_maxima: number
           fisico: number
+          hunger_state: string | null
           id: string
           intelecto: number
           level: number
@@ -394,15 +399,19 @@ export type Database = {
           sanity_current: number
           sanity_max: number
           skill_points: number
+          thirst_state: string | null
           updated_at: string
+          vicio: string | null
         }
         Insert: {
           avatar_url?: string
           concept?: string
+          conforto?: string | null
           created_at?: string
           energia_atual?: number
           energia_maxima?: number
           fisico?: number
+          hunger_state?: string | null
           id?: string
           intelecto?: number
           level?: number
@@ -417,15 +426,19 @@ export type Database = {
           sanity_current?: number
           sanity_max?: number
           skill_points?: number
+          thirst_state?: string | null
           updated_at?: string
+          vicio?: string | null
         }
         Update: {
           avatar_url?: string
           concept?: string
+          conforto?: string | null
           created_at?: string
           energia_atual?: number
           energia_maxima?: number
           fisico?: number
+          hunger_state?: string | null
           id?: string
           intelecto?: number
           level?: number
@@ -440,7 +453,9 @@ export type Database = {
           sanity_current?: number
           sanity_max?: number
           skill_points?: number
+          thirst_state?: string | null
           updated_at?: string
+          vicio?: string | null
         }
         Relationships: []
       }
@@ -479,6 +494,7 @@ export type Database = {
       combat_state: {
         Row: {
           active: boolean
+          active_turn_actions: Json | null
           current_combatant_id: string | null
           id: number
           round: number
@@ -486,6 +502,7 @@ export type Database = {
         }
         Insert: {
           active?: boolean
+          active_turn_actions?: Json | null
           current_combatant_id?: string | null
           id?: number
           round?: number
@@ -493,6 +510,7 @@ export type Database = {
         }
         Update: {
           active?: boolean
+          active_turn_actions?: Json | null
           current_combatant_id?: string | null
           id?: number
           round?: number
@@ -515,6 +533,7 @@ export type Database = {
           condition_durations: Json
           conditions: string[]
           created_at: string
+          custom_conditions: Json | null
           defending: boolean
           defense: number | null
           hp_current: number | null
@@ -536,6 +555,7 @@ export type Database = {
           condition_durations?: Json
           conditions?: string[]
           created_at?: string
+          custom_conditions?: Json | null
           defending?: boolean
           defense?: number | null
           hp_current?: number | null
@@ -557,6 +577,7 @@ export type Database = {
           condition_durations?: Json
           conditions?: string[]
           created_at?: string
+          custom_conditions?: Json | null
           defending?: boolean
           defense?: number | null
           hp_current?: number | null
@@ -866,6 +887,80 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      regional_map_pins: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          is_revealed: boolean | null
+          linked_battle_layout_id: number | null
+          map_id: string | null
+          name: string
+          photo_url: string | null
+          secret_gm_notes: string | null
+          x_percent: number
+          y_percent: number
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_revealed?: boolean | null
+          linked_battle_layout_id?: number | null
+          map_id?: string | null
+          name: string
+          photo_url?: string | null
+          secret_gm_notes?: string | null
+          x_percent: number
+          y_percent: number
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_revealed?: boolean | null
+          linked_battle_layout_id?: number | null
+          map_id?: string | null
+          name?: string
+          photo_url?: string | null
+          secret_gm_notes?: string | null
+          x_percent?: number
+          y_percent?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "regional_map_pins_map_id_fkey"
+            columns: ["map_id"]
+            isOneToOne: false
+            referencedRelation: "regional_maps"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      regional_maps: {
+        Row: {
+          created_at: string | null
+          id: string
+          image_url: string
+          is_active: boolean | null
+          name: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          image_url: string
+          is_active?: boolean | null
+          name: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          image_url?: string
+          is_active?: boolean | null
+          name?: string
+        }
+        Relationships: []
       }
       rolls: {
         Row: {
