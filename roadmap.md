@@ -29,11 +29,11 @@
 - [x] Modelos de sussurros e feed investigativo no celular
 
 ## Pedido 07/11
-- [ ] Combate: tirar marcadores Ação/Movimento
-- [ ] Combate: painel do personagem abaixo do mapa (itens, corpo, fome/sede, rolar subskills)
-- [ ] Só mestre altera fome/sede; mestre aplica em lote
-- [ ] Travar bônus/atributos base fora do level up
-- [ ] Ações com recarga maior dão mais pontos
-- [ ] Celular: corrigir envio de mensagem para contato
-- [ ] Layouts salvam/restauram baús e itens
-- [ ] Baú entrega direto a quem abriu
+- [x] Combate: tirar marcadores Ação/Movimento
+- [x] Combate: painel do personagem abaixo do mapa (itens, corpo, fome/sede, rolar subskills)
+- [x] Só mestre altera fome/sede; mestre aplica em lote
+- [x] Travar bônus/atributos base fora do level up
+- [x] Ações com recarga maior dão mais pontos
+- [x] Celular: corrigir envio de mensagem para contato
+- [x] Layouts salvam/restauram baús e itens
+- [x] Baú entrega direto a quem abriu
