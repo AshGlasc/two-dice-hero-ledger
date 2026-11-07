@@ -109,7 +109,7 @@ export function AttacksSection({
     return skillTotal(base, extra) + itemBonusFor(sheet.backpack, sheet.character.id, key);
   };
 
-  const budget = attackBudget(sheet.character.level ?? 1);
+  const budget = attackBudget(sheet.character.level ?? 1, form.turnsCost);
   const cost = attackCost(form);
   const breakdown = attackCostBreakdown(form);
   const overBudget = cost > budget;
@@ -509,7 +509,7 @@ export function AttacksSection({
                   Redução de defesa {breakdown.debuff} · Precisão {breakdown.accuracy}
                   {breakdown.area ? ` · Área ${breakdown.area}` : ""}
                   {breakdown.discount ? ` · Custo de energia ${breakdown.discount}` : ""}. Ganha +1
-                  ponto a cada 2 níveis.
+                  ponto a cada 2 níveis e +2 por turno extra de recarga.
                 </p>
               </div>
             </div>

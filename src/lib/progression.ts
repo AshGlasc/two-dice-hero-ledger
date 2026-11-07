@@ -19,8 +19,12 @@ export function attributeMaxFor(a: AttributeValues, key: AttributeKey) {
 }
 
 /** Orçamento de ataque: 10 pontos, +1 a cada 2 níveis (nível 2 = 11, nível 4 = 12). */
-export function attackBudget(level: number) {
-  return 10 + Math.floor(Math.max(1, level) / 2);
+/** Pontos extras por turno a mais de recarga: ações demoradas podem ser mais fortes. */
+export const SLOW_ACTION_POINTS_PER_TURN = 2;
+
+export function attackBudget(level: number, turnsCost = 1) {
+  const extraTurns = Math.max(0, Math.floor(Number(turnsCost) || 1) - 1);
+  return 10 + Math.floor(Math.max(1, level) / 2) + extraTurns * SLOW_ACTION_POINTS_PER_TURN;
 }
 
 const STRONG_EFFECTS: EffectCondition[] = ["stunned", "blind", "knocked_down"];
