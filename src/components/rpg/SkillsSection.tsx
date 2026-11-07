@@ -190,7 +190,7 @@ export function SkillsSection({
         <p className="text-sm text-muted-foreground">
           Pontos de atributo: {attributePoolUsed(character)}/{ATTRIBUTE_POOL} · máximo 7 em cada
         </p>
-        {(
+        {true && (
           <p className="text-sm text-muted-foreground">
             Atributos base são definidos na criação. Cada ponto de level-up permite +1 em uma perícia.
             Pontos disponíveis: {character.skill_points ?? 0}.
@@ -303,9 +303,6 @@ export function SkillsSection({
                                 mutations.updateCharacter.mutate({
                                   skill_points: (character.skill_points ?? 0) + 1,
                                 });
-                              }
-                              if (false) {
-                                allocateSkillPoint(skill.key, skill.name, bonus);
                               }
                             }}
                           />
