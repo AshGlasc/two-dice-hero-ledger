@@ -190,12 +190,10 @@ export function SkillsSection({
         <p className="text-sm text-muted-foreground">
           Pontos de atributo: {attributePoolUsed(character)}/{ATTRIBUTE_POOL} · máximo 7 em cada
         </p>
-        {!isMaster && (
           <p className="text-sm text-muted-foreground">
             Atributos base são definidos na criação. Cada ponto de level-up permite +1 em uma perícia.
             Pontos disponíveis: {character.skill_points ?? 0}.
           </p>
-        )}
 
         {ATTRIBUTES.map((attr) => {
           const attrValue = character[attr.key];
@@ -228,8 +226,8 @@ export function SkillsSection({
                     value={attrValue}
                     min={ATTRIBUTE_MIN}
                     max={Math.max(attrValue, attributeMaxFor(character, attr.key))}
-                    disabled={!isMaster}
-                    onChange={(v) => mutations.updateCharacter.mutate({ [attr.key]: v })}
+                    disabled
+                    onChange={() => undefined}
                   />
                 </div>
               </header>
@@ -290,16 +288,19 @@ export function SkillsSection({
                             max={BONUS_MAX}
                             decreaseDisabled={!isMaster}
                             increaseDisabled={
-                              !isMaster &&
                               ((character.skill_points ?? 0) <= 0 ||
                                 mutations.updateCharacter.isPending ||
                                 mutations.upsertSkill.isPending)
                             }
                             onChange={(v) => {
-                              if (isMaster) {
-                                mutations.setSkillBonus.mutate({ skillKey: skill.key, bonus: v });
-                              } else if (v === bonus + 1) {
+                              if (v === bonus + 1) {
                                 allocateSkillPoint(skill.key, skill.name, bonus);
+                              } else if (isMaster && v === bonus - 1) {
+                                // Mestre desfaz um ponto e devolve para a reserva.
+                                mutations.setSkillBonus.mutate({ skillKey: skill.key, bonus: v });
+                                mutations.updateCharacter.mutate({
+                                  skill_points: (character.skill_points ?? 0) + 1,
+                                });
                               }
                             }}
                           />

@@ -2802,13 +2802,9 @@ function CombatPage() {
         const chest = chestView ? (mapItemsWithIcons.find((x) => x.id === chestView.itemId) ?? null) : null;
         const tokenCharacterId =
           combat.combatants.find((x) => x.id === chestView?.tokenId)?.character_id ?? null;
-        const takers = isMaster
-          ? [...group.characters]
-            .sort((a, b) => Number(b.id === tokenCharacterId) - Number(a.id === tokenCharacterId))
-            .map((ch) => ({ id: ch.id, name: ch.name }))
-          : group.characters
-            .filter((ch) => ch.id === tokenCharacterId)
-            .map((ch) => ({ id: ch.id, name: ch.name }));
+        const takers = group.characters
+          .filter((ch) => ch.id === tokenCharacterId)
+          .map((ch) => ({ id: ch.id, name: ch.name }));
         return (
           <ChestDialog
             key={chestView?.itemId ?? "none"}

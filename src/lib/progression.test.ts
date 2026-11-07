@@ -40,3 +40,12 @@ describe("fila rotativa", () => {
     expect(rotateQueue(q, "b").map((x) => x.id)).toEqual(["b", "c", "a"]);
   });
 });
+
+describe("orçamento de ações demoradas", () => {
+  it("ação de 1 turno não ganha pontos extras", () => {
+    expect(attackBudget(1, 1)).toBe(attackBudget(1));
+  });
+  it("cada turno extra de recarga dá +2 pontos", () => {
+    expect(attackBudget(1, 3)).toBe(attackBudget(1) + 4);
+  });
+});

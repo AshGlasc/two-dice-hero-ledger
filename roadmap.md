@@ -27,3 +27,13 @@
 - [x] Subskills passivas: painel do mestre e redução de dano no combate
 - [x] Sussurros automáticos das habilidades em pop-up
 - [x] Modelos de sussurros e feed investigativo no celular
+
+## Pedido 07/11
+- [x] Combate: tirar marcadores Ação/Movimento
+- [x] Combate: painel do personagem abaixo do mapa (itens, corpo, fome/sede, rolar subskills)
+- [x] Só mestre altera fome/sede; mestre aplica em lote
+- [x] Travar bônus/atributos base fora do level up
+- [x] Ações com recarga maior dão mais pontos
+- [x] Celular: corrigir envio de mensagem para contato
+- [x] Layouts salvam/restauram baús e itens
+- [x] Baú entrega direto a quem abriu
