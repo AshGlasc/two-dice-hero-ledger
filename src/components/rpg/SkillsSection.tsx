@@ -8,6 +8,7 @@ import { DiceFace } from "@/components/rpg/DiceFace";
 import { SkillIcon } from "@/components/rpg/SkillIcon";
 import { Stepper } from "@/components/rpg/Stepper";
 import { Button } from "@/components/ui/button";
+import { useMasterAuth } from "@/context/MasterAuthContext";
 import {
   Select,
   SelectContent,
@@ -55,6 +56,7 @@ export function SkillsSection({
   const [difficulty, setDifficulty] = useState<string>("none");
   const [rolls, setRolls] = useState<LoggedRoll[]>([]);
   const { data: appSettings } = useQuery(appSettingsQuery);
+  const { isMaster } = useMasterAuth();
   const { character, skills } = sheet;
 
   const bonusOf = (key: string) => skills.find((s) => s.skill_key === key)?.bonus ?? 0;
@@ -188,6 +190,12 @@ export function SkillsSection({
         <p className="text-sm text-muted-foreground">
           Pontos de atributo: {attributePoolUsed(character)}/{ATTRIBUTE_POOL} · máximo 7 em cada
         </p>
+        {!isMaster && (
+          <p className="text-sm text-muted-foreground">
+            Atributos base são definidos na criação. Cada ponto de level-up permite +1 em uma perícia.
+            Pontos disponíveis: {character.skill_points ?? 0}.
+          </p>
+        )}
 
         {ATTRIBUTES.map((attr) => {
           const attrValue = character[attr.key];
@@ -220,6 +228,7 @@ export function SkillsSection({
                     value={attrValue}
                     min={ATTRIBUTE_MIN}
                     max={Math.max(attrValue, attributeMaxFor(character, attr.key))}
+                    disabled={!isMaster}
                     onChange={(v) => mutations.updateCharacter.mutate({ [attr.key]: v })}
                   />
                 </div>
@@ -279,9 +288,20 @@ export function SkillsSection({
                             value={bonus}
                             min={BONUS_MIN}
                             max={BONUS_MAX}
-                            onChange={(v) =>
-                              mutations.setSkillBonus.mutate({ skillKey: skill.key, bonus: v })
+                            decreaseDisabled={!isMaster}
+                            increaseDisabled={
+                              !isMaster &&
+                              ((character.skill_points ?? 0) <= 0 ||
+                                mutations.updateCharacter.isPending ||
+                                mutations.upsertSkill.isPending)
                             }
+                            onChange={(v) => {
+                              if (isMaster) {
+                                mutations.setSkillBonus.mutate({ skillKey: skill.key, bonus: v });
+                              } else if (v === bonus + 1) {
+                                allocateSkillPoint(skill.key, skill.name, bonus);
+                              }
+                            }}
                           />
                         </div>
                         <div className="text-center md:hidden">

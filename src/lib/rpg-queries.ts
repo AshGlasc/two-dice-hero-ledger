@@ -64,6 +64,19 @@ export const sheetQuery = (id: string) =>
     },
   });
 
+export const bodyPartsQuery = (characterId: string) =>
+  queryOptions({
+    queryKey: ["body_parts", characterId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("body_parts")
+        .select("*")
+        .eq("character_id", characterId);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
 export type GroupData = {
   characters: Character[];
   skills: CharacterSkill[];

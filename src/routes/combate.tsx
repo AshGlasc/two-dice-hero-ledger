@@ -14,7 +14,6 @@ import {
   Minus,
   PackageOpen,
   Plus,
-  RotateCcw,
   Tag,
   Trash2,
   X,
@@ -23,6 +22,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { AttackDialog, type AttackTarget } from "@/components/rpg/AttackDialog";
+import { BodyMap } from "@/components/rpg/BodyMap";
 import { rotateQueue } from "@/lib/progression";
 import {
   mentalReduction,
@@ -107,16 +107,21 @@ import {
   monsterBodyTargetOptions,
   monsterBodyType,
 } from "@/lib/monster-body";
-import { maxEnergyFor } from "@/lib/survival";
+import { HUNGER_LABELS, maxEnergyFor, THIRST_LABELS } from "@/lib/survival";
 import { fileToSmallImage } from "@/lib/image";
 import {
   battleMapQuery,
   battleMapItemsQuery,
+  bodyPartsQuery,
   combatQuery,
   combatGroupQuery,
   combatEventsQuery,
   monstersQuery,
   type Combatant,
+  type CombatGroupData,
+  type Character,
+  type BackpackItem,
+  type BodyPart,
   type BattleMapItem,
 } from "@/lib/rpg-queries";
 import { roll2d6, rollD6 } from "@/lib/skills";
@@ -162,6 +167,11 @@ function CombatPage() {
   const { data: monsters } = useSuspenseQuery(monstersQuery);
   const { data: map } = useSuspenseQuery(battleMapQuery);
   const { data: mapItems } = useSuspenseQuery(battleMapItemsQuery);
+  const myId = getPlayerCharacterId();
+  const { data: myBodyParts = [] } = useQuery({
+    ...bodyPartsQuery(myId ?? ""),
+    enabled: !!myId,
+  });
   const { data: catalogItems = [] } = useQuery({
     queryKey: ["catalog_items"],
     queryFn: async () => {
@@ -229,7 +239,6 @@ function CombatPage() {
   const { state } = combat;
   const terrain = (map.terrain ?? {}) as Terrain;
   const fog = (map.fog ?? {}) as Fog;
-  const myId = getPlayerCharacterId();
   const presenceContext = useRef({
     isMaster,
     myId,
@@ -696,46 +705,6 @@ function CombatPage() {
     } catch (error) {
       toast.error(
         `Não foi possível remover a condição: ${error instanceof Error ? error.message : "erro desconhecido"}`,
-      );
-    }
-  };
-
-  // Rastreador de ações por turno
-  const turnActions = (state.active_turn_actions ?? {}) as Record<string, { action?: boolean; move?: boolean }>;
-
-  const toggleTurnAction = async (combatantId: string, type: "action" | "move") => {
-    const nextState = { ...turnActions };
-    const current = nextState[combatantId] ?? {};
-    nextState[combatantId] = {
-      ...current,
-      [type]: !current[type],
-    };
-    try {
-      const { error } = await supabase
-        .from("combat_state")
-        .update({ active_turn_actions: nextState })
-        .eq("id", 1);
-      if (error) throw error;
-      await qc.invalidateQueries({ queryKey: ["combat"] });
-    } catch (error) {
-      toast.error(
-        `Não foi possível atualizar as ações do turno: ${error instanceof Error ? error.message : "erro desconhecido"}`,
-      );
-    }
-  };
-
-  const resetTurnActions = async () => {
-    try {
-      const { error } = await supabase
-        .from("combat_state")
-        .update({ active_turn_actions: {} })
-        .eq("id", 1);
-      if (error) throw error;
-      await qc.invalidateQueries({ queryKey: ["combat"] });
-      toast.success("Ações da rodada resetadas!");
-    } catch (error) {
-      toast.error(
-        `Não foi possível resetar a rodada: ${error instanceof Error ? error.message : "erro desconhecido"}`,
       );
     }
   };
@@ -1901,36 +1870,9 @@ function CombatPage() {
       </div>
     );
   };
-  const renderTurnActionBadges = (x: Combatant) => (
-    <div className="mt-2 flex justify-center gap-1">
-      {(
-        [
-          ["action", "Ação", "border-emerald-500/60 bg-emerald-500/20 text-emerald-200"],
-          ["move", "Movimento", "border-sky-500/60 bg-sky-500/20 text-sky-200"],
-        ] as const
-      ).map(([type, label, activeClass]) => {
-        const active = turnActions[x.id]?.[type];
-        return (
-          <button
-            key={type}
-            type="button"
-            disabled={!mine(x)}
-            onClick={() => void toggleTurnAction(x.id, type)}
-            className={cn(
-              "rounded border px-2 py-0.5 text-[10px] font-bold uppercase disabled:cursor-default",
-              active
-                ? activeClass
-                : "border-border bg-white/5 text-muted-foreground disabled:opacity-70",
-            )}
-          >
-            [{label}] {active ? "✓" : "○"}
-          </button>
-        );
-      })}
-    </div>
-  );
-
   const inCombat = new Set(combat.combatants.map((x) => x.character_id));
+  const myCombatant = combat.combatants.find((entry) => entry.character_id === myId) ?? null;
+  const canUseQuickItems = !!myCombatant && !attackBlockedReason(myCombatant);
 
   return (
     <div className="mx-auto max-w-7xl space-y-4 p-3 md:p-6">
@@ -2015,15 +1957,6 @@ function CombatPage() {
                     <Film className="size-3.5 text-amber-400" /> Teatro da Mente
                   </>
                 )}
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                className="gap-1 text-xs"
-                onClick={resetTurnActions}
-                title="Resetar toggles de Ação e Movimento para a próxima rodada"
-              >
-                <RotateCcw className="size-3.5" /> Resetar Rodada
               </Button>
               <Button
                 size="sm"
@@ -2231,7 +2164,6 @@ function CombatPage() {
                         );
                       })()}
                     {renderCustomConditions(x)}
-                    {renderTurnActionBadges(x)}
                   </div>
                 ))}
               </div>
@@ -2267,6 +2199,17 @@ function CombatPage() {
                   }
                   : null
               }
+            />
+          )}
+          {myId && !isMaster && (
+            <CombatCharacterPanel
+              character={group.characters.find((entry) => entry.id === myId) ?? null}
+              combatant={myCombatant}
+              backpack={group.backpack.filter((item) => item.character_id === myId)}
+              body={myBodyParts}
+              group={group}
+              canUseItems={canUseQuickItems}
+              onUseItem={(combatant, item) => void consumeItemInCombat(combatant, item)}
             />
           )}
         </div>
@@ -2423,7 +2366,6 @@ function CombatPage() {
                     {conditionPenalty(x.conditions) > 0 && ` (−${conditionPenalty(x.conditions)})`}
                   </p>
                   {renderCustomConditions(x)}
-                  {renderTurnActionBadges(x)}
                 </div>
                 {mine(x) && (
                   <>
@@ -2908,6 +2850,128 @@ function CombatPage() {
         );
       })()}
     </div>
+  );
+}
+
+function CombatCharacterPanel({
+  character,
+  combatant,
+  backpack,
+  body,
+  group,
+  canUseItems,
+  onUseItem,
+}: {
+  character: Character | null;
+  combatant: Combatant | null;
+  backpack: BackpackItem[];
+  body: BodyPart[];
+  group: CombatGroupData;
+  canUseItems: boolean;
+  onUseItem: (combatant: Combatant, item: BackpackItem) => void;
+}) {
+  if (!character) return null;
+
+  const maxEnergy = character.energia_maxima;
+  const consumables = backpack.filter(
+    (item) =>
+      item.quantity > 0 &&
+      ((item.heal_hp ?? 0) > 0 ||
+        (item.restore_energy ?? 0) > 0 ||
+        (item.temp_shield ?? 0) > 0 ||
+        item.survival_tag === "Ração" ||
+        item.survival_tag === "Hidratação"),
+  );
+  const hunger =
+    character.hunger_state === "amarelo"
+      ? HUNGER_LABELS.amarelo
+      : character.hunger_state === "vermelho"
+        ? HUNGER_LABELS.vermelho
+        : HUNGER_LABELS.satisfeito;
+  const thirst =
+    character.thirst_state === "amarelo"
+      ? THIRST_LABELS.amarelo
+      : character.thirst_state === "vermelho"
+        ? THIRST_LABELS.vermelho
+        : THIRST_LABELS.satisfeito;
+
+  return (
+    <section className="mt-3 space-y-3 rounded-lg border border-border bg-card p-3">
+      <header className="flex flex-wrap items-center gap-3 border-b border-border pb-3">
+        <Avatar src={character.avatar_url} name={character.name} className="size-12" />
+        <div className="min-w-0 flex-1">
+          <h2 className="truncate font-display text-xl font-bold uppercase">{character.name}</h2>
+          <p className="text-xs text-muted-foreground">
+            {combatant
+              ? `PV ${combatant.hp_current}/${combatant.hp_max}`
+              : "Fora do combate — PV indisponíveis"}
+          </p>
+        </div>
+        <div className="min-w-32 flex-1">
+          <div className="mb-1 flex justify-between text-xs">
+            <span className="text-sky-300">Energia</span>
+            <span>{character.energia_atual}/{maxEnergy}</span>
+          </div>
+          <div className="h-2 overflow-hidden rounded bg-muted">
+            <div
+              className="h-full bg-sky-400"
+              style={{ width: `${Math.min(100, (character.energia_atual / Math.max(1, maxEnergy)) * 100)}%` }}
+            />
+          </div>
+        </div>
+      </header>
+
+      <div className="flex flex-wrap gap-2 text-xs">
+        <span className={cn("rounded border px-2 py-1", hunger.color)}>
+          Fome: {hunger.label}
+        </span>
+        <span className={cn("rounded border px-2 py-1", thirst.color)}>
+          Sede: {thirst.label}
+        </span>
+        <span className="rounded border border-border px-2 py-1 text-muted-foreground">
+          Fadiga: {character.energia_atual <= 0 ? "Exausto" : "Energia disponível"}
+        </span>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)]">
+        <div className="rounded border border-border p-2">
+          <h3 className="mb-1 label-caps text-muted-foreground">Condição corporal</h3>
+          <BodyMap characterId={character.id} body={body} compact readOnly />
+        </div>
+        <div className="space-y-3">
+          <div className="space-y-2 rounded border border-border p-2">
+            <h3 className="label-caps text-muted-foreground">Consumíveis rápidos</h3>
+            {consumables.length ? (
+              <div className="flex flex-wrap gap-1.5">
+                {consumables.map((item) => (
+                  <Button
+                    key={item.id}
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-xs"
+                    disabled={!combatant || !canUseItems}
+                    title={
+                      !combatant
+                        ? "Coloque seu personagem no combate para usar itens."
+                        : !canUseItems
+                          ? "Aguarde sua vez para usar itens."
+                          : undefined
+                    }
+                    onClick={() => combatant && onUseItem(combatant, item)}
+                  >
+                    Usar {item.name} ×{item.quantity}
+                  </Button>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">Nenhum consumível disponível.</p>
+            )}
+          </div>
+          <QuickRollPanel group={group} characterId={character.id} />
+        </div>
+      </div>
+    </section>
   );
 }
 

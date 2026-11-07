@@ -38,6 +38,11 @@ export const EFFECT_TO_CONDITION_NAME: Record<Exclude<EffectCondition, "none">, 
   knocked_down: "Caído",
 };
 
+export function slowActionAccuracyBonus(turnsCost: number) {
+  const turns = Number(turnsCost);
+  return Math.max(0, (Number.isFinite(turns) ? Math.floor(turns) : 1) - 1);
+}
+
 export type CustomAttack = {
   id: string;
   ownerId: string;

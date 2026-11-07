@@ -238,6 +238,8 @@ describe("menu de ataques", () => {
           is_custom_attack: true,
           skill_key: "ferramenta_fisica",
           dice_count: 3,
+          turns_cost: 3,
+          accuracy: 1,
           status: "approved",
         }),
         skill_key: "ferramenta_fisica",
@@ -319,7 +321,12 @@ describe("menu de ataques", () => {
       usesMax: 6,
     });
     expect(gun.damage).toEqual({ count: 1, sides: 6, bonus: 2 });
-    expect(options.find((o) => o.id === "w2")).toMatchObject({ kind: "custom", hitDice: 3 });
+    expect(options.find((o) => o.id === "w2")).toMatchObject({
+      kind: "custom",
+      hitDice: 3,
+      turnsCost: 3,
+      hitBonus: 12,
+    });
   });
 
   it("monstro sem ataques cadastrados usa um ataque simples de 1d6", () => {
@@ -338,8 +345,11 @@ describe("menu de ataques", () => {
 
   it("monstro exibe o slot escolhido no ataque", () => {
     const attacks = JSON.stringify([
-      { name: "Machado", damageFormula: "1d8", handSlot: "two_hands" },
+      { name: "Machado", damageFormula: "1d8", handSlot: "two_hands", turnsCost: 3 },
     ]);
-    expect(attackOptionsForMonster("m1", attacks, 5)[0]?.note).toContain("duas mãos");
+    const [option] = attackOptionsForMonster("m1", attacks, 5);
+    expect(option).toMatchObject({ hitBonus: 7, turnsCost: 3 });
+    expect(option?.note).toContain("duas mãos");
+    expect(option?.note).toContain("+2 precisão");
   });
 });

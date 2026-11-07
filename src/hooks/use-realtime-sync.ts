@@ -115,7 +115,10 @@ export function useRealtimeSync() {
       },
       character_skills: (p) =>
         queue(["group"], ["combat_group"], sheetKey(pick(p, "character_id"))),
-      body_parts: (p) => queue(["group"], sheetKey(pick(p, "character_id"))),
+      body_parts: (p) => {
+        const row = pick(p, "character_id");
+        queue(["group"], sheetKey(row), row?.character_id ? ["body_parts", row.character_id] : ["body_parts"]);
+      },
       weapons: (p) =>
         queue(sheetKey(pick(p, "character_id")), ["group"], ["combat_group"]),
       backpack_items: (p) =>
@@ -160,7 +163,7 @@ export function useRealtimeSync() {
     const reconnectQueries: Record<string, unknown[][]> = {
       characters: [["characters"], ["group"], ["combat_group"], ["sheet"]],
       character_skills: [["group"], ["combat_group"], ["sheet"]],
-      body_parts: [["group"], ["sheet"]],
+      body_parts: [["group"], ["sheet"], ["body_parts"]],
       weapons: [["group"], ["combat_group"], ["sheet"]],
       backpack_items: [["group"], ["combat_group"], ["sheet"]],
       map_layouts: [["map_layouts"]],

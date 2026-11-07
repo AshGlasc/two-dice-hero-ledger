@@ -14,6 +14,8 @@ import {
   X,
   Sparkles,
   Coffee,
+  Droplets,
+  Utensils,
 } from "lucide-react";
 import { MasterAudioSection } from "@/components/rpg/MasterAudioSection";
 import { BackupSection } from "@/components/rpg/BackupSection";
@@ -50,7 +52,13 @@ import {
 } from "@/lib/custom-attacks";
 import { skillValueFor } from "@/lib/combat";
 import { logRolls } from "@/lib/roll-log";
-import { gmNotesQuery, groupQuery, rollsQuery, type GroupData } from "@/lib/rpg-queries";
+import {
+  gmNotesQuery,
+  groupQuery,
+  rollsQuery,
+  type Character,
+  type GroupData,
+} from "@/lib/rpg-queries";
 import { loadDiscordWebhookUrl, saveDiscordWebhookUrl } from "@/lib/discord-webhook";
 import {
   ALL_SKILLS,
@@ -70,6 +78,7 @@ import {
 import { cn } from "@/lib/utils";
 import { passiveScore, ROLEPLAY_PASSIVES } from "@/lib/passives";
 import { maxEnergyFor } from "@/lib/survival";
+import type { SurvivalState } from "@/lib/survival";
 
 export const Route = createFileRoute("/mestre")({
   head: () => ({
@@ -172,6 +181,7 @@ function GmPageContent({ onLock }: { onLock: () => void }) {
 
       <DiscordWebhookSettings />
       <DifficultyControl group={group} />
+      <PartySurvivalControls group={group} />
 
       {/* Ataques pendentes — seção de aprovação */}
       <PendingAttacks group={group} />
@@ -190,6 +200,165 @@ function GmPageContent({ onLock }: { onLock: () => void }) {
         </div>
       </div>
     </main>
+  );
+}
+
+function PartySurvivalControls({ group }: { group: GroupData }) {
+  const qc = useQueryClient();
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [applying, setApplying] = useState<"hunger" | "thirst" | null>(null);
+
+  const advanceSurvival = async (kind: "hunger" | "thirst") => {
+    const selected = group.characters.filter((character) => selectedIds.includes(character.id));
+    if (!selected.length) {
+      toast.error("Selecione ao menos um personagem.");
+      return;
+    }
+
+    setApplying(kind);
+    type SurvivalPatch = Pick<Character, "energia_atual" | "energia_maxima"> &
+      Partial<Pick<Character, "hunger_state" | "thirst_state">>;
+    const patches = new Map<string, { ids: string[]; values: SurvivalPatch }>();
+    for (const character of selected) {
+      const stateKey = kind === "hunger" ? "hunger_state" : "thirst_state";
+      const current = character[stateKey] ?? "satisfeito";
+      const states: SurvivalState[] = ["satisfeito", "amarelo", "vermelho"];
+      const currentState = states.find((state) => state === current) ?? "satisfeito";
+      const currentIndex = states.indexOf(currentState);
+      if (currentIndex >= states.length - 1) continue;
+      const nextState = states[currentIndex + 1]!;
+
+      const vigorBonus =
+        group.skills.find(
+          (skill) => skill.character_id === character.id && skill.skill_key === "vigor",
+        )
+          ?.bonus ?? 0;
+      const willBonus =
+        group.skills.find(
+          (skill) => skill.character_id === character.id && skill.skill_key === "vontade",
+        )
+          ?.bonus ?? 0;
+      const nextVitals = { ...character, [stateKey]: nextState };
+      const energyMax = maxEnergyFor(nextVitals, vigorBonus, willBonus);
+      const values: SurvivalPatch =
+        kind === "hunger"
+          ? {
+              hunger_state: nextState,
+              energia_maxima: energyMax,
+              energia_atual: Math.min(character.energia_atual, energyMax),
+            }
+          : {
+              thirst_state: nextState,
+              energia_maxima: energyMax,
+              energia_atual: Math.min(character.energia_atual, energyMax),
+            };
+      const key = JSON.stringify(values);
+      const patch = patches.get(key) ?? { ids: [], values };
+      patch.ids.push(character.id);
+      patches.set(key, patch);
+    }
+
+    if (!patches.size) {
+      toast("Os personagens selecionados já estão no nível máximo.");
+      setApplying(null);
+      return;
+    }
+
+    try {
+      const results = await Promise.all(
+        [...patches.values()].map(({ ids, values }) =>
+          supabase.from("characters").update(values).in("id", ids),
+        ),
+      );
+      const errors = results.flatMap((result) => (result.error ? [result.error.message] : []));
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["group"] }),
+        qc.invalidateQueries({ queryKey: ["characters"] }),
+        qc.invalidateQueries({ queryKey: ["combat_group"] }),
+        qc.invalidateQueries({ queryKey: ["sheet"] }),
+      ]);
+      setSelectedIds([]);
+      if (errors.length) {
+        toast.error(`Alguns personagens não foram atualizados: ${errors.join("; ")}`);
+      } else {
+        toast.success(
+          kind === "hunger"
+            ? "Fome avançada para os selecionados."
+            : "Sede avançada para os selecionados.",
+        );
+      }
+    } catch (error) {
+      toast.error(
+        `Não foi possível aplicar a alteração: ${error instanceof Error ? error.message : "erro desconhecido"}`,
+      );
+    } finally {
+      setApplying(null);
+    }
+  };
+
+  return (
+    <section className="space-y-3 rounded-lg border border-border bg-card p-4">
+      <div>
+        <h2 className="font-display text-xl font-bold uppercase">Sobrevivência do grupo</h2>
+        <p className="text-sm text-muted-foreground">
+          Selecione personagens para avançar a fome ou a sede em um nível.
+        </p>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {group.characters.map((character) => {
+          const checked = selectedIds.includes(character.id);
+          return (
+            <label
+              key={character.id}
+              className="flex cursor-pointer items-center gap-2 rounded border border-border px-2 py-1.5 text-sm"
+            >
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={() =>
+                  setSelectedIds((ids) =>
+                    checked
+                      ? ids.filter((id) => id !== character.id)
+                      : [...ids, character.id],
+                  )
+                }
+              />
+              {character.name}
+            </label>
+          );
+        })}
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          onClick={() =>
+            setSelectedIds((ids) =>
+              ids.length === group.characters.length ? [] : group.characters.map((c) => c.id),
+            )
+          }
+        >
+          {selectedIds.length === group.characters.length ? "Desmarcar todos" : "Selecionar todos"}
+        </Button>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          disabled={!selectedIds.length || applying !== null}
+          onClick={() => void advanceSurvival("hunger")}
+        >
+          <Utensils /> Dar Fome
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={!selectedIds.length || applying !== null}
+          onClick={() => void advanceSurvival("thirst")}
+        >
+          <Droplets /> Dar Sede
+        </Button>
+      </div>
+    </section>
   );
 }
 

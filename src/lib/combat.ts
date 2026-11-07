@@ -2,6 +2,7 @@ import {
   isCustomAttack,
   parseMonsterAttacks,
   parseWeaponToAttack,
+  slowActionAccuracyBonus,
   type EffectCondition,
 } from "@/lib/custom-attacks";
 import type { CombatGroupData } from "@/lib/rpg-queries";
@@ -315,6 +316,7 @@ export type AttackOption = {
   durationRounds?: number;
   reach?: "corpo-a-corpo" | "distancia" | "adjacente" | "area";
   damageType?: "Físico" | "Mágico" | "Mental" | "Social/Moral";
+  turnsCost?: number;
 };
 
 /** Soco e Chute: todo jogador já começa com eles, baseados no Físico. */
@@ -380,20 +382,30 @@ export function attackOptionsForCharacter(
           return String(values[attribute.toLocaleLowerCase("pt-BR")] ?? 0);
         },
       );
+      const slowAccuracyBonus = slowActionAccuracyBonus(attack.turnsCost);
       options.push({
         id: w.id,
         name: `✨ ${attack.name}`,
         kind: "custom",
-        hitBonus: skillValueFor(group, characterId, attack.skillKey) + (attack.accuracy ?? 0),
+        hitBonus:
+          skillValueFor(group, characterId, attack.skillKey) +
+          (attack.accuracy ?? 0) +
+          slowAccuracyBonus,
         hitDice: attack.diceCount,
         range: attack.range,
+        turnsCost: attack.turnsCost,
         damage: parseDamage(damageFormula),
         energyCost: attack.energyCost,
         resistanceType: attack.resistanceType,
         durationRounds: attack.durationRounds,
         reach: attack.reach,
         damageType: attack.damageType,
-        note: `${attack.reach} · ${attack.damageType} · resist. ${attack.resistanceType}`,
+        note: [
+          `${attack.reach} · ${attack.damageType} · resist. ${attack.resistanceType}`,
+          attack.turnsCost > 1 ? `${attack.turnsCost} turnos · +${slowAccuracyBonus} precisão` : "",
+        ]
+          .filter(Boolean)
+          .join(" · "),
         ...(attack.effectCondition !== undefined
           ? { effectCondition: attack.effectCondition }
           : {}),
@@ -423,7 +435,7 @@ export function attackOptionsForCharacter(
       usesCurrent: w.uses_current,
       usesMax: w.uses_max,
     });
-      }
+  }
   const levelBonus = levelDamageBonus(character.level);
   if (levelBonus <= 0) return options;
   return options.map((o) => ({
@@ -460,6 +472,7 @@ export function attackOptionsForMonster(
     ];
   }
   return attacks.map((a) => {
+    const slowAccuracyBonus = slowActionAccuracyBonus(a.turnsCost);
     const handLabel = a.handSlot
       ? {
           right: "mão principal direita",
@@ -473,15 +486,21 @@ export function attackOptionsForMonster(
       id: a.id,
       name: a.name,
       kind: "custom" as const,
-      hitBonus: attackBonus,
+      hitBonus: attackBonus + slowAccuracyBonus,
       hitDice: 2,
       range: Math.max(1, a.range),
+      turnsCost: a.turnsCost,
       damage: parseDamage(a.description.match(DAMAGE_IN_TEXT)?.[0] || a.damageFormula),
       resistanceType: a.resistanceType,
       durationRounds: a.durationRounds,
       reach: a.reach,
       damageType: a.damageType,
-      note: `${a.reach} · ${a.damageType}${handLabel ? ` · ${handLabel}` : ""}`,
+      note: [
+        `${a.reach} · ${a.damageType}${handLabel ? ` · ${handLabel}` : ""}`,
+        a.turnsCost > 1 ? `${a.turnsCost} turnos · +${slowAccuracyBonus} precisão` : "",
+      ]
+        .filter(Boolean)
+        .join(" · "),
       ...(a.effectCondition !== undefined ? { effectCondition: a.effectCondition } : {}),
       ...(a.defenseDebuff !== undefined ? { defenseDebuff: a.defenseDebuff } : {}),
     };

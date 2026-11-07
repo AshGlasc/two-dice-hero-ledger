@@ -7,7 +7,7 @@ import { ATTRIBUTE_THEME } from "@/lib/attribute-theme";
 import { skillValueFor } from "@/lib/combat";
 import { usePlayerCharacterId } from "@/lib/player-character";
 import { logRolls } from "@/lib/roll-log";
-import type { GroupData } from "@/lib/rpg-queries";
+import type { CombatGroupData } from "@/lib/rpg-queries";
 import {
   ATTRIBUTES,
   DIFFICULTIES,
@@ -24,7 +24,13 @@ type Result = { name: string; result: RollResult };
  * Rolagem rápida: 4 linhas (uma por atributo) com as skills em texto pequeno e a dificuldade.
  * Jogador rola o próprio personagem; o mestre escolhe quem rola (rolagem em grupo).
  */
-export function QuickRollPanel({ group }: { group: GroupData }) {
+export function QuickRollPanel({
+  group,
+  characterId,
+}: {
+  group: CombatGroupData;
+  characterId?: string;
+}) {
   const { isMaster } = useMasterAuth();
   const myId = usePlayerCharacterId();
   const [difficulty, setDifficulty] = useState<number | null>(10);
@@ -32,9 +38,11 @@ export function QuickRollPanel({ group }: { group: GroupData }) {
   const [results, setResults] = useState<Result[]>([]);
   const [title, setTitle] = useState("");
 
-  const rollers = isMaster
-    ? group.characters.filter((c) => picked.includes(c.id))
-    : group.characters.filter((c) => c.id === myId);
+  const rollers = characterId
+    ? group.characters.filter((c) => c.id === characterId)
+    : isMaster
+      ? group.characters.filter((c) => picked.includes(c.id))
+      : group.characters.filter((c) => c.id === myId);
 
   const roll = (key: string, name: string) => {
     if (rollers.length === 0) {
@@ -42,7 +50,11 @@ export function QuickRollPanel({ group }: { group: GroupData }) {
       return;
     }
     const rolled = rollers
-      .map((c) => ({ id: c.id, name: c.name, result: roll2d6(skillValueFor(group, c.id, key), difficulty) }))
+      .map((c) => ({
+        id: c.id,
+        name: c.name,
+        result: roll2d6(skillValueFor(group, c.id, key), difficulty),
+      }))
       .sort((a, b) => b.result.total - a.result.total);
     setResults(rolled);
     setTitle(name);
@@ -66,7 +78,7 @@ export function QuickRollPanel({ group }: { group: GroupData }) {
         )}
       </div>
 
-      {isMaster && (
+      {isMaster && !characterId && (
         <div className="flex flex-wrap items-center gap-1">
           <span className="text-muted-foreground">Quem rola:</span>
           {group.characters.map((c) => {
@@ -78,7 +90,9 @@ export function QuickRollPanel({ group }: { group: GroupData }) {
                 onClick={() => setPicked((p) => (on ? p.filter((x) => x !== c.id) : [...p, c.id]))}
                 className={cn(
                   "rounded-full border px-2 py-0.5",
-                  on ? "border-primary bg-primary/15 text-primary" : "border-border text-muted-foreground",
+                  on
+                    ? "border-primary bg-primary/15 text-primary"
+                    : "border-border text-muted-foreground",
                 )}
               >
                 {on ? "✓ " : ""}

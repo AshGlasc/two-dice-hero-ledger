@@ -28,10 +28,12 @@ export function BodyMap({
   characterId,
   body,
   compact = false,
+  readOnly = false,
 }: {
   characterId: string;
   body: BodyPart[];
   compact?: boolean;
+  readOnly?: boolean;
 }) {
   const mutation = useBodyPart();
   const cycle = (key: string) =>
@@ -55,18 +57,24 @@ export function BodyMap({
           return (
             <g
               key={p.key}
-              role="button"
-              tabIndex={0}
+              role={readOnly ? undefined : "button"}
+              tabIndex={readOnly ? undefined : 0}
               aria-label={`${p.name}: ${BODY_STATES[state]}`}
-              onClick={() => cycle(p.key)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  cycle(p.key);
-                }
-              }}
+              onClick={readOnly ? undefined : () => cycle(p.key)}
+              onKeyDown={
+                readOnly
+                  ? undefined
+                  : (e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        cycle(p.key);
+                      }
+                    }
+              }
               className={cn(
-                "cursor-pointer stroke-border stroke-[1.5] outline-none transition-colors hover:stroke-foreground focus-visible:stroke-primary",
+                "stroke-border stroke-[1.5]",
+                !readOnly &&
+                  "cursor-pointer outline-none transition-colors hover:stroke-foreground focus-visible:stroke-primary",
                 FILL[state],
               )}
             >
@@ -84,8 +92,13 @@ export function BodyMap({
             <button
               key={p.key}
               type="button"
-              onClick={() => cycle(p.key)}
-              className="flex w-full items-center justify-between gap-2 rounded-sm px-1 py-0.5 text-left hover:bg-muted"
+              onClick={readOnly ? undefined : () => cycle(p.key)}
+              disabled={readOnly}
+              className={cn(
+                "flex w-full items-center justify-between gap-2 rounded-sm px-1 py-0.5 text-left",
+                !readOnly && "hover:bg-muted",
+                readOnly && "cursor-default opacity-100",
+              )}
             >
               <span className="flex items-center gap-2">
                 <span className={cn("h-2.5 w-2.5 rounded-full", DOT[state])} />
@@ -95,7 +108,7 @@ export function BodyMap({
             </button>
           );
         })}
-        {!compact && (
+        {!compact && !readOnly && (
           <Button
             variant="outline"
             size="sm"

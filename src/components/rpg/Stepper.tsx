@@ -11,9 +11,23 @@ type StepperProps = {
   label: string;
   size?: "sm" | "lg";
   className?: string;
+  disabled?: boolean;
+  decreaseDisabled?: boolean;
+  increaseDisabled?: boolean;
 };
 
-export function Stepper({ value, min, max, onChange, label, size = "sm", className }: StepperProps) {
+export function Stepper({
+  value,
+  min,
+  max,
+  onChange,
+  label,
+  size = "sm",
+  className,
+  disabled = false,
+  decreaseDisabled = false,
+  increaseDisabled = false,
+}: StepperProps) {
   return (
     <div className={cn("flex items-center gap-1.5", className)}>
       <Button
@@ -22,7 +36,7 @@ export function Stepper({ value, min, max, onChange, label, size = "sm", classNa
         size="icon"
         className={size === "sm" ? "h-7 w-7" : "h-9 w-9"}
         aria-label={`Diminuir ${label}`}
-        disabled={value <= min}
+        disabled={disabled || decreaseDisabled || value <= min}
         onClick={() => onChange(value - 1)}
       >
         <Minus />
@@ -42,7 +56,7 @@ export function Stepper({ value, min, max, onChange, label, size = "sm", classNa
         size="icon"
         className={size === "sm" ? "h-7 w-7" : "h-9 w-9"}
         aria-label={`Aumentar ${label}`}
-        disabled={value >= max}
+        disabled={disabled || increaseDisabled || value >= max}
         onClick={() => onChange(value + 1)}
       >
         <Plus />

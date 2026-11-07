@@ -342,6 +342,7 @@ function CharacterPage() {
       <SurvivalStatusBars
         hunger={character.hunger_state ?? "satisfeito"}
         thirst={character.thirst_state ?? "satisfeito"}
+        editable={isMaster}
         onHungerChange={(hunger_state) => updateSurvival({ hunger_state })}
         onThirstChange={(thirst_state) => updateSurvival({ thirst_state })}
       />
@@ -412,11 +413,13 @@ function CharacterPage() {
 function SurvivalStatusBars({
   hunger,
   thirst,
+  editable,
   onHungerChange,
   onThirstChange,
 }: {
   hunger: string;
   thirst: string;
+  editable: boolean;
   onHungerChange: (v: string) => void;
   onThirstChange: (v: string) => void;
 }) {
@@ -447,6 +450,7 @@ function SurvivalStatusBars({
         <div className="grid grid-cols-3 gap-1.5">
           <button
             type="button"
+            disabled={!editable}
             onClick={() => onHungerChange("satisfeito")}
             className={cn(
               "rounded border px-2 py-1 text-xs font-semibold transition-colors",
@@ -459,6 +463,7 @@ function SurvivalStatusBars({
           </button>
           <button
             type="button"
+            disabled={!editable}
             onClick={() => onHungerChange("amarelo")}
             className={cn(
               "rounded border px-2 py-1 text-xs font-semibold transition-colors",
@@ -471,6 +476,7 @@ function SurvivalStatusBars({
           </button>
           <button
             type="button"
+            disabled={!editable}
             onClick={() => onHungerChange("vermelho")}
             className={cn(
               "rounded border px-2 py-1 text-xs font-semibold transition-colors",
@@ -509,6 +515,7 @@ function SurvivalStatusBars({
         <div className="grid grid-cols-3 gap-1.5">
           <button
             type="button"
+            disabled={!editable}
             onClick={() => onThirstChange("satisfeito")}
             className={cn(
               "rounded border px-2 py-1 text-xs font-semibold transition-colors",
@@ -521,6 +528,7 @@ function SurvivalStatusBars({
           </button>
           <button
             type="button"
+            disabled={!editable}
             onClick={() => onThirstChange("amarelo")}
             className={cn(
               "rounded border px-2 py-1 text-xs font-semibold transition-colors",
@@ -533,6 +541,7 @@ function SurvivalStatusBars({
           </button>
           <button
             type="button"
+            disabled={!editable}
             onClick={() => onThirstChange("vermelho")}
             className={cn(
               "rounded border px-2 py-1 text-xs font-semibold transition-colors",
