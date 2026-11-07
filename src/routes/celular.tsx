@@ -107,7 +107,9 @@ function PhonePage() {
   const [npcContactId, setNpcContactId] = useState("");
   const qc = useQueryClient();
 
-  useEffect(() => setMyId(getPlayerCharacterId()), []);
+  useEffect(() => {
+    setMyId(getPlayerCharacterId());
+  }, []);
   useEffect(() => {
     if (!isMaster) setAsNpc(false);
   }, [isMaster]);
@@ -1235,7 +1237,9 @@ function Chat({
         ? "Número desconhecido"
         : (selectedContact?.name ?? characters.find((c) => c.id === other)?.name ?? "Conversa");
 
-  useEffect(() => end.current?.scrollIntoView({ block: "end" }), [list.length]);
+  useEffect(() => {
+    end.current?.scrollIntoView({ block: "end" });
+  }, [list.length]);
 
   const send = useMutation({
     mutationFn: async (body: string) => {
