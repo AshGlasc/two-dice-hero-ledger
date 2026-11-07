@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { useBattleMap } from "@/hooks/use-battle-map";
 import { supabase } from "@/integrations/supabase/client";
 import type { Fog, Terrain, TileImages } from "@/lib/combat";
-import { mapLayoutsQuery, type BattleMap } from "@/lib/rpg-queries";
+import type { Json } from "@/integrations/supabase/types";
+import { battleMapItemsQuery, mapLayoutsQuery, type BattleMap } from "@/lib/rpg-queries";
 
 /** Salvar e carregar cenários prontos do mapa (Bar, Beco, Esgoto…). */
 export function MapLayouts({ map }: { map: BattleMap }) {
@@ -19,7 +20,10 @@ export function MapLayouts({ map }: { map: BattleMap }) {
   const saveAs = async () => {
     const name = prompt("Nome do layout (ex.: Bar, Beco, Esgoto):")?.trim();
     if (!name) return;
+    const { data: current } = await supabase.from("battle_map_items").select("*");
+    const items = (current ?? []).map(({ id: _id, created_at: _c, ...rest }) => rest);
     const { error } = await supabase.from("map_layouts").insert({
+      items: items as unknown as Json,
       name,
       cols: map.cols,
       rows: map.rows,
@@ -36,10 +40,27 @@ export function MapLayouts({ map }: { map: BattleMap }) {
     qc.invalidateQueries({ queryKey: ["map_layouts"] });
   };
 
-  const load = () => {
+  const load = async () => {
     const l = layouts.find((x) => x.id === pick);
     if (!l) return;
-    if (!confirm(`Trocar o mapa atual por "${l.name}"?`)) return;
+    if (!confirm(`Trocar o mapa atual por "${l.name}"? Baús e itens atuais do mapa serão trocados pelos do layout.`)) return;
+    const saved = Array.isArray(l.items) ? (l.items as Record<string, unknown>[]) : [];
+    const { error: delError } = await supabase
+      .from("battle_map_items")
+      .delete()
+      .not("id", "is", null);
+    if (delError) {
+      toast.error("Não foi possível limpar os itens do mapa.");
+      return;
+    }
+    if (saved.length) {
+      const rows = saved.map(({ id: _id, created_at: _c, ...rest }) => rest);
+      const { error } = await supabase
+        .from("battle_map_items")
+        .insert(rows as never);
+      if (error) toast.error(`Alguns itens não voltaram: ${error.message}`);
+    }
+    qc.invalidateQueries({ queryKey: battleMapItemsQuery.queryKey });
     saveMap.mutate({
       cols: l.cols,
       rows: l.rows,
@@ -82,7 +103,7 @@ export function MapLayouts({ map }: { map: BattleMap }) {
           </option>
         ))}
       </select>
-      <Button size="sm" variant="ghost" disabled={!pick} onClick={load}>
+      <Button size="sm" variant="ghost" disabled={!pick} onClick={() => void load()}>
         <FolderOpen /> Carregar
       </Button>
       <Button size="sm" variant="ghost" disabled={!pick} onClick={remove} aria-label="Apagar layout">
