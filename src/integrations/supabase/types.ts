@@ -130,8 +130,8 @@ export type Database = {
           gm_tile_notes: Json | null
           id: number
           rows: number
-          theater_background_url: string
           terrain: Json
+          theater_background_url: string
           tile_images: Json
           updated_at: string
         }
@@ -142,8 +142,8 @@ export type Database = {
           gm_tile_notes?: Json | null
           id?: number
           rows?: number
-          theater_background_url?: string
           terrain?: Json
+          theater_background_url?: string
           tile_images?: Json
           updated_at?: string
         }
@@ -154,8 +154,8 @@ export type Database = {
           gm_tile_notes?: Json | null
           id?: number
           rows?: number
-          theater_background_url?: string
           terrain?: Json
+          theater_background_url?: string
           tile_images?: Json
           updated_at?: string
         }
