@@ -46,9 +46,8 @@ export function ChestDialog({
   onDelete: () => void;
 }) {
   const [addId, setAddId] = useState("");
-  const [takerId, setTakerId] = useState("");
   const file = useRef<HTMLInputElement>(null);
-  const taker = takers.find((t) => t.id === takerId) ?? takers[0];
+  const taker = takers[0];
 
   if (!chest) return null;
   const imageOf = (id: string) => catalogItems.find((c) => c.id === id)?.image_url;
@@ -108,21 +107,10 @@ export function ChestDialog({
           )}
         </div>
 
-        {takers.length > 1 && (
-          <label className="flex items-center gap-2 text-sm">
-            <span className="label-caps text-muted-foreground">Entregar para</span>
-            <select
-              className="h-9 flex-1 rounded-md border border-border bg-background px-2 text-sm"
-              value={taker?.id ?? ""}
-              onChange={(e) => setTakerId(e.target.value)}
-            >
-              {takers.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
-          </label>
+        {taker && (
+          <p className="text-sm text-muted-foreground">
+            Vai para <span className="font-semibold text-foreground">{taker.name}</span>.
+          </p>
         )}
 
         {entries.length === 0 ? (
