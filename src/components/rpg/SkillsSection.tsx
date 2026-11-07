@@ -190,12 +190,10 @@ export function SkillsSection({
         <p className="text-sm text-muted-foreground">
           Pontos de atributo: {attributePoolUsed(character)}/{ATTRIBUTE_POOL} · máximo 7 em cada
         </p>
-        {true && (
           <p className="text-sm text-muted-foreground">
             Atributos base são definidos na criação. Cada ponto de level-up permite +1 em uma perícia.
             Pontos disponíveis: {character.skill_points ?? 0}.
           </p>
-        )}
 
         {ATTRIBUTES.map((attr) => {
           const attrValue = character[attr.key];
