@@ -1243,6 +1243,14 @@ function Chat({
 
   const send = useMutation({
     mutationFn: async (body: string) => {
+      const isUuid = (v: string | null | undefined) =>
+        !!v && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+      const isContactThread = other.startsWith("contact:");
+      const contactId = selectedContact?.id ?? (isContactThread ? other.slice(8) : null);
+      const charTarget = characters.some((c) => c.id === other) ? other : null;
+      if (!npcMode && !me) throw new Error("Escolha seu personagem antes de enviar.");
+      const contactField =
+        contactsAvailable && isUuid(contactId) ? { contact_id: contactId } : {};
       const row: MessageInsert = npcMode
         ? {
             from_character_id: null,
@@ -1250,8 +1258,10 @@ function Chat({
             to_character_id:
               other === GROUP
                 ? null
-                : (selectedContact?.target_character_id ?? (selectedContact ? null : other)),
-            ...(contactsAvailable ? { contact_id: selectedContact?.id ?? null } : {}),
+                : isContactThread
+                  ? (selectedContact?.target_character_id ?? null)
+                  : charTarget,
+            ...contactField,
             body,
           }
         : {
@@ -1259,10 +1269,12 @@ function Chat({
             from_name: me!.name,
             // Resposta ao NPC fica endereçada a si mesmo (só o mestre e o jogador veem).
             to_character_id:
-              other === GROUP ? null : other === NPC ? me!.id : selectedContact ? me!.id : other,
-            ...(contactsAvailable ? { contact_id: selectedContact?.id ?? null } : {}),
+              other === GROUP ? null : other === NPC || isContactThread ? me!.id : charTarget,
+            ...contactField,
             body,
           };
+      if (!npcMode && other !== GROUP && other !== NPC && !isContactThread && !charTarget)
+        throw new Error("Contato não encontrado.");
       const { error } = await supabase.from("messages").insert(row);
       if (error) throw error;
     },
